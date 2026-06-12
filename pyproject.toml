@@ -1,0 +1,11 @@
+[project]
+name = "tcc-simple-pipeline"
+version = "0.1.0"
+description = "Daily ARAUCARIA CIS -> MDM extraction pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "oracledb>=3.4.2",
+    "polars>=1.38.1",
+    "sqlalchemy>=2.0.48",
+]

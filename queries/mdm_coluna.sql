@@ -8,7 +8,7 @@
 --
 -- Bind esperado:
 --   :DAYS_BACK -> numero de dias para voltar
---   :UCS       -> SYS.ODCIVARCHAR2LIST com a lista de medidores/NIOs
+--   :NIOS       -> SYS.ODCIVARCHAR2LIST com a lista de medidores/NIOs
 
 WITH params AS (
     SELECT :DAYS_BACK AS days_back
@@ -17,7 +17,7 @@ WITH params AS (
 selected_meters AS (
     SELECT DISTINCT
         COLUMN_VALUE AS meter_asset_no
-    FROM TABLE(CAST(:UCS AS SYS.ODCIVARCHAR2LIST))
+    FROM TABLE(CAST(:NIOS AS SYS.ODCIVARCHAR2LIST))
 ),
 catalogue AS (
     SELECT /*+ MATERIALIZE */

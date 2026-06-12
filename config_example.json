@@ -1,0 +1,39 @@
+{
+  "oracle": {
+    "ORCA": {
+      "user": "user",
+      "password": "password",
+      "host": "DBHEXPRD19",
+      "port": 1521,
+      "service_name": "HEXPRD19"
+    },
+    "ORCA_MEU": {
+      "user": "user",
+      "password": "password",
+      "host": "DBHEXPRD19",
+      "port": 1521,
+      "service_name": "HEXPRD19"
+    },
+    "CIS": {
+      "user": "user",
+      "password": "password",
+      "host": "dbcisdprd",
+      "port": 1521,
+      "service_name": "cisdprd"
+    },
+    "GEO": {
+      "user": "user",
+      "password": "password",
+      "host": "dbgeoprd",
+      "port": 1521,
+      "service_name": "geoprd"
+    },
+    "MEDPRD": {
+      "user": "user",
+      "password": "password",
+      "host": "exakmdb01",
+      "port": 1521,
+      "service_name": "medprd"
+    }
+  }
+}
