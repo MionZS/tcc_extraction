@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=Path("output"),
-        help="Directory where CSV/Parquet outputs will be written.",
+        help="Base output directory; raw/ and refined/ subfolders will be created under it.",
     )
     parser.add_argument(
         "--days-back",

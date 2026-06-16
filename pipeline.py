@@ -6,7 +6,10 @@ Flow
 2. Extract unique NIOs from that result.
 3. Feed those NIOs to the ORCA/MDM query through SQLAlchemy using
    ``SYS.ODCIVARCHAR2LIST``.
-4. Save CIS, MDM, and joined daily outputs as Parquet and CSV.
+4. Save outputs in a datalake-style layout:
+   - raw/CIS
+   - raw/ORCA
+   - refined/reports
 """
 
 from __future__ import annotations
@@ -30,6 +33,9 @@ QUERIES_DIR = Path(__file__).resolve().parent / "queries"
 CIS_QUERY_PATH = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
 MDM_QUERY_PATH = QUERIES_DIR / "mdm_coluna.sql"
 DEFAULT_OUTPUT_DIR = Path("output")
+DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_DIR / "raw" / "CIS"
+DEFAULT_RAW_ORCA_DIR = DEFAULT_OUTPUT_DIR / "raw" / "ORCA"
+DEFAULT_REFINED_REPORTS_DIR = DEFAULT_OUTPUT_DIR / "refined" / "reports"
 DEFAULT_MDM_BATCH_SIZE = 500
 DEFAULT_FETCH_SIZE = 1000
 
@@ -421,7 +427,14 @@ def run_daily_araucaria_pipeline(
     mdm_sql_path = Path(mdm_sql_path)
     report_day = _report_day_from_days_back(days_back)
 
+    raw_cis_dir = output_dir / "raw" / "CIS"
+    raw_orca_dir = output_dir / "raw" / "ORCA"
+    refined_reports_dir = output_dir / "refined" / "reports"
+
     output_dir.mkdir(parents=True, exist_ok=True)
+    raw_cis_dir.mkdir(parents=True, exist_ok=True)
+    raw_orca_dir.mkdir(parents=True, exist_ok=True)
+    refined_reports_dir.mkdir(parents=True, exist_ok=True)
 
     _log(f"Starting ARAUCARIA daily pipeline")
     _log(f"Target report day: {report_day.isoformat()} (days_back={days_back})")
@@ -429,8 +442,8 @@ def run_daily_araucaria_pipeline(
     _log(f"MDM query: {mdm_sql_path}")
 
     cis_df = _extract_cis_dataframe(cis_sql_path)
-    cis_parquet = output_dir / f"araucaria_cis_{_date_token(report_day)}.parquet"
-    cis_csv = output_dir / f"araucaria_cis_{_date_token(report_day)}.csv"
+    cis_parquet = raw_cis_dir / f"araucaria_cis_{_date_token(report_day)}.parquet"
+    cis_csv = raw_cis_dir / f"araucaria_cis_{_date_token(report_day)}.csv"
     _write_dataframe_outputs(cis_df, cis_parquet, cis_csv)
 
     nios = _extract_nios(cis_df)
@@ -439,7 +452,7 @@ def run_daily_araucaria_pipeline(
     mdm_result = _extract_mdm_dataframe(
         mdm_sql_path=mdm_sql_path,
         nios=nios,
-        output_dir=output_dir,
+        output_dir=raw_orca_dir,
         report_day=report_day,
         days_back=days_back,
         batch_size=mdm_batch_size,
@@ -450,7 +463,7 @@ def run_daily_araucaria_pipeline(
     joined_parquet, joined_csv = _build_joined_report(
         cis_df=cis_df,
         mdm_result=mdm_result,
-        output_dir=output_dir,
+        output_dir=refined_reports_dir,
         report_day=report_day,
     )
 

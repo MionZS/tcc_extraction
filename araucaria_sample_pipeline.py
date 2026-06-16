@@ -21,9 +21,10 @@ ROOT_DIR = Path(__file__).resolve().parent
 QUERIES_DIR = ROOT_DIR / "queries"
 DEFAULT_CIS_SQL = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
 DEFAULT_MDM_SQL = QUERIES_DIR / "mdm_coluna.sql"
-DEFAULT_CIS_OUTPUT_DIR = ROOT_DIR / "output" / "CIS"
-DEFAULT_ORCA_OUTPUT_DIR = ROOT_DIR / "output" / "ORCA"
-DEFAULT_JOINED_OUTPUT_DIR = ROOT_DIR / "output" / "JOINED"
+DEFAULT_OUTPUT_ROOT = ROOT_DIR / "output"
+DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_ROOT / "raw" / "CIS"
+DEFAULT_RAW_ORCA_DIR = DEFAULT_OUTPUT_ROOT / "raw" / "ORCA"
+DEFAULT_REFINED_REPORTS_DIR = DEFAULT_OUTPUT_ROOT / "refined" / "reports"
 DEFAULT_CIS_FETCH_SIZE = 1000
 DEFAULT_MDM_FETCH_SIZE = 100
 DEFAULT_SAMPLE_SIZE = 200
@@ -522,20 +523,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cis-output-dir",
         type=Path,
-        default=DEFAULT_CIS_OUTPUT_DIR,
-        help="Diretório de saída do CIS.",
+        default=DEFAULT_RAW_CIS_DIR,
+        help="Diretório base de saída do CIS (a amostra vai para uma subpasta sampleN).",
     )
     parser.add_argument(
         "--orca-output-dir",
         type=Path,
-        default=DEFAULT_ORCA_OUTPUT_DIR,
-        help="Diretório de saída do ORCA/MDM.",
+        default=DEFAULT_RAW_ORCA_DIR,
+        help="Diretório base de saída do ORCA/MDM (a amostra vai para uma subpasta sampleN).",
     )
     parser.add_argument(
         "--joined-output-dir",
         type=Path,
-        default=DEFAULT_JOINED_OUTPUT_DIR,
-        help="Diretório de saída do arquivo final joinado.",
+        default=DEFAULT_REFINED_REPORTS_DIR,
+        help="Diretório base de saída do arquivo final joinado (a amostra vai para uma subpasta sampleN).",
     )
     return parser
 
@@ -550,12 +551,17 @@ def main() -> int:
     cis_output_dir = args.cis_output_dir.resolve()
     orca_output_dir = args.orca_output_dir.resolve()
     joined_output_dir = args.joined_output_dir.resolve()
+    sample_tag = f"sample{args.sample_size}"
+
+    cis_sample_output_dir = cis_output_dir / sample_tag
+    orca_sample_output_dir = orca_output_dir / sample_tag
+    joined_sample_output_dir = joined_output_dir / sample_tag
 
     cis_csv_path = cis_output_dir / f"araucaria_cis_{token}.csv"
-    cis_sample_csv_path = cis_output_dir / f"araucaria_cis_sample_{args.sample_size}_{token}.csv"
-    nio_list_path = cis_output_dir / f"araucaria_sample_nios_{args.sample_size}_{token}.txt"
-    mdm_csv_path = orca_output_dir / f"araucaria_mdm_sample_{args.sample_size}_{token}.csv"
-    joined_csv_path = joined_output_dir / f"araucaria_model_input_sample_{args.sample_size}_{token}.csv"
+    cis_sample_csv_path = cis_sample_output_dir / f"araucaria_cis_sample_{args.sample_size}_{token}.csv"
+    nio_list_path = cis_sample_output_dir / f"araucaria_sample_nios_{args.sample_size}_{token}.txt"
+    mdm_csv_path = orca_sample_output_dir / f"araucaria_mdm_sample_{args.sample_size}_{token}.csv"
+    joined_csv_path = joined_sample_output_dir / f"araucaria_model_input_sample_{args.sample_size}_{token}.csv"
 
     _log("Starting standalone ARAUCARIA sample pipeline")
     _log(f"Target report day: {report_day.isoformat()} (days_back={args.days_back})")

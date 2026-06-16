@@ -7,10 +7,10 @@ This project now runs a chained daily extraction based on the same Oracle/SQLAlc
 1. Runs `queries/cis_araucaria_ml_extract_lightweight_alt.sql` on the **CIS** database.
 2. Reads the resulting `NIO` population for ARAUCARIA.
 3. Sends those NIOs in batches to `queries/mdm_coluna.sql` on the **ORCA/AMI** database using SQLAlchemy plus `SYS.ODCIVARCHAR2LIST`.
-4. Writes three daily outputs:
-   - `araucaria_cis_YYYYMMDD.{csv,parquet}`
-   - `araucaria_mdm_YYYYMMDD.{csv,parquet}`
-   - `araucaria_daily_report_YYYYMMDD.{csv,parquet}`
+4. Writes the daily outputs in a datalake-style layout:
+   - `output/raw/CIS/araucaria_cis_YYYYMMDD.{csv,parquet}`
+   - `output/raw/ORCA/araucaria_mdm_YYYYMMDD.{csv,parquet}`
+   - `output/refined/reports/araucaria_daily_report_YYYYMMDD.{csv,parquet}`
 
 The joined report is a left join from CIS to MDM on `NIO`, plus:
 - `REPORT_DAY`
@@ -68,10 +68,27 @@ python main.py \
 - Writes both CSV and Parquet outputs
 - Produces a final joined daily report
 
+## Sample pipeline
+
+For the 200-NIO sample flow, run:
+
+```bash
+python .\scripts\araucaria_sample_pipeline.py --days-back 1 --sample-size 200
+```
+
+That flow writes to:
+- `output/raw/CIS/` and `output/raw/CIS/sample200/`
+- `output/raw/ORCA/sample200/`
+- `output/refined/reports/sample200/`
+
+The sample join keeps only ORCA-returned rows (`RIGHT JOIN` behavior on the sample step).
+
 ## Files added
 
 - `db.py`
 - `pipeline.py`
+- `araucaria_sample_pipeline.py`
+- `scripts/araucaria_sample_pipeline.py`
 - updated `main.py`
 - `config_example.json`
 - `.gitignore`
