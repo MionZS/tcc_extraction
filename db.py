@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import quote_plus
 
+import oracledb
 from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 
 DatabaseTarget = Literal["orca", "cis"]
 ConfigKey = Literal["ORCA", "CIS"]
+
+oracledb.defaults.fetch_lobs = False
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 

@@ -91,9 +91,39 @@ def _date_token(report_day: date) -> str:
 
 
 
+def _materialize_scalar(value: Any) -> Any:
+    if value is None:
+        return None
+
+    reader = getattr(value, "read", None)
+    if callable(reader):
+        try:
+            value = reader()
+        except Exception:
+            return str(value)
+
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return value.decode("latin1", errors="replace")
+
+    return value
+
+
+
+def _materialize_rows(rows: Sequence[Any]) -> list[tuple[Any, ...]]:
+    return [tuple(_materialize_scalar(value) for value in row) for row in rows]
+
+
+
 def _rows_to_frame(rows: Sequence[Any], columns: Sequence[str]) -> pl.DataFrame:
+    if not rows:
+        return _build_empty_frame(columns)
+
+    materialized_rows = _materialize_rows(rows)
     return pl.DataFrame(
-        rows,
+        materialized_rows,
         schema=list(columns),
         orient="row",
         infer_schema_length=None,
@@ -196,8 +226,16 @@ def _extract_cis_dataframe(cis_sql_path: Path) -> pl.DataFrame:
     finally:
         engine.dispose()
 
-    if "NIO" not in dataframe.columns:
-        raise ValueError("CIS query output must contain an NIO column.")
+    nio_column = next(
+        (column for column in dataframe.columns if str(column).strip().upper() == "NIO"),
+        None,
+    )
+    if nio_column is None:
+        raise ValueError(
+            f"CIS query output must contain an NIO column. Returned columns: {dataframe.columns}"
+        )
+    if nio_column != "NIO":
+        dataframe = dataframe.rename({nio_column: "NIO"})
 
     dataframe = (
         _normalize_nio_column(dataframe, "NIO")
@@ -274,7 +312,7 @@ def _extract_mdm_dataframe(
                     text(mdm_sql),
                     {
                         "DAYS_BACK": days_back,
-                        "NIOS": oracle_list,
+                        "UCS": oracle_list,
                     },
                 )
 

@@ -8,7 +8,7 @@
 --
 -- Bind esperado:
 --   :DAYS_BACK -> numero de dias para voltar
---   :NIOS       -> SYS.ODCIVARCHAR2LIST com a lista de medidores/NIOs
+--   :UCS       -> SYS.ODCIVARCHAR2LIST com a lista de medidores/NIOs
 
 WITH params AS (
     SELECT :DAYS_BACK AS days_back
@@ -16,16 +16,17 @@ WITH params AS (
 ),
 selected_meters AS (
     SELECT DISTINCT
-        COLUMN_VALUE AS meter_asset_no
-    FROM TABLE(CAST(:NIOS AS SYS.ODCIVARCHAR2LIST))
+        NULLIF(LTRIM(REGEXP_REPLACE(TRIM(COLUMN_VALUE), '[^0-9]', ''), '0'), '') AS meter_asset_no
+    FROM TABLE(CAST(:UCS AS SYS.ODCIVARCHAR2LIST))
+    WHERE NULLIF(LTRIM(REGEXP_REPLACE(TRIM(COLUMN_VALUE), '[^0-9]', ''), '0'), '') IS NOT NULL
 ),
 catalogue AS (
-    SELECT /*+ MATERIALIZE */
+    SELECT
         a.data_id,
-        a.meter_asset_no
+        NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '') AS meter_asset_no
     FROM AMI.a_data_catalogue a
     JOIN selected_meters sm
-        ON sm.meter_asset_no = a.meter_asset_no
+        ON sm.meter_asset_no = NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '')
 ),
 time_grid AS (
     SELECT
