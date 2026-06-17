@@ -14,6 +14,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from db import create_engine
+from export_manager import DEFAULT_PUBLISH_TARGET, publish_to_target, print_publish_report
+from run_manifest import create_manifest
+from verify_output import verify_model_input, print_verification_report
 
 oracledb.defaults.fetch_lobs = False
 
@@ -25,6 +28,7 @@ DEFAULT_MDM_SQL = QUERIES_DIR / "mdm_coluna.sql"
 DEFAULT_OUTPUT_ROOT = ROOT_DIR / "output"
 DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_ROOT / "raw" / "CIS"
 DEFAULT_RAW_ORCA_DIR = DEFAULT_OUTPUT_ROOT / "raw" / "ORCA"
+DEFAULT_RAW_GEO_DIR = DEFAULT_OUTPUT_ROOT / "raw" / "GEO"
 DEFAULT_REFINED_REPORTS_DIR = DEFAULT_OUTPUT_ROOT / "refined" / "reports"
 DEFAULT_CIS_FETCH_SIZE = 1000
 DEFAULT_MDM_FETCH_SIZE = 100
@@ -648,10 +652,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Diretório base de saída do ORCA/MDM (a amostra vai para uma subpasta sampleN).",
     )
     parser.add_argument(
+        "--geo-output-dir",
+        type=Path,
+        default=DEFAULT_RAW_GEO_DIR,
+        help="Diretório base de saída do GEO (a amostra vai para uma subpasta sampleN).",
+    )
+    parser.add_argument(
         "--joined-output-dir",
         type=Path,
         default=DEFAULT_REFINED_REPORTS_DIR,
         help="Diretório base de saída do arquivo final joinado (a amostra vai para uma subpasta sampleN).",
+    )
+    parser.add_argument(
+        "--publish-target",
+        type=Path,
+        default=DEFAULT_PUBLISH_TARGET,
+        help="Diretório target para publicação (OneDrive).",
+    )
+    parser.add_argument(
+        "--no-publish",
+        action="store_true",
+        help="Pular etapa de publicação no OneDrive.",
+    )
+    parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="Pular etapa de verificação de integridade.",
     )
     return parser
 
@@ -663,20 +689,25 @@ def main() -> int:
     report_day = _report_day_from_days_back(args.days_back)
     token = _date_token(report_day)
 
+    # Criar manifest de rastreabilidade
+    manifest = create_manifest(report_day, args.sample_size)
+
     cis_output_dir = args.cis_output_dir.resolve()
     orca_output_dir = args.orca_output_dir.resolve()
+    geo_output_dir = args.geo_output_dir.resolve()
     joined_output_dir = args.joined_output_dir.resolve()
     sample_tag = f"sample{args.sample_size}"
 
     cis_sample_output_dir = cis_output_dir / sample_tag
     orca_sample_output_dir = orca_output_dir / sample_tag
+    geo_sample_output_dir = geo_output_dir / sample_tag
     joined_sample_output_dir = joined_output_dir / sample_tag
 
     cis_csv_path = cis_output_dir / f"araucaria_cis_{token}.csv"
     cis_sample_csv_path = cis_sample_output_dir / f"araucaria_cis_sample_{args.sample_size}_{token}.csv"
     cis_sample_geo_csv_path = cis_sample_output_dir / f"araucaria_cis_sample_{args.sample_size}_{token}_geo.csv"
     nio_list_path = cis_sample_output_dir / f"araucaria_sample_nios_{args.sample_size}_{token}.txt"
-    geo_csv_path = cis_sample_output_dir / f"araucaria_geo_ucs_sample_{args.sample_size}_{token}.csv"
+    geo_csv_path = geo_sample_output_dir / f"araucaria_geo_ucs_sample_{args.sample_size}_{token}.csv"
     mdm_csv_path = orca_sample_output_dir / f"araucaria_mdm_sample_{args.sample_size}_{token}.csv"
     joined_csv_path = joined_sample_output_dir / f"araucaria_model_input_sample_{args.sample_size}_{token}.csv"
 
@@ -686,11 +717,15 @@ def main() -> int:
     _log(f"GEO SQL: {Path(args.geo_sql).resolve()}")
     _log(f"MDM SQL: {Path(args.mdm_sql).resolve()}")
 
+    # Step 1: CIS extract
     cis_rows = _run_cis_extract(
         Path(args.cis_sql),
         cis_csv_path,
         fetch_size=args.cis_fetch_size,
     )
+    manifest.record_step("cis_extract", rows=cis_rows, output=str(cis_csv_path))
+
+    # Step 2: Sample selection
     selected_nios = _write_sample_inputs(
         cis_csv_path,
         cis_sample_csv_path,
@@ -698,12 +733,19 @@ def main() -> int:
         args.sample_size,
     )
     selected_ucs = _collect_unique_values(cis_sample_csv_path, "UC")
+    manifest.record_step("sample_selection", nio_count=len(selected_nios), uc_count=len(selected_ucs))
+
+    # Step 3: GEO extract
+    geo_sample_output_dir.mkdir(parents=True, exist_ok=True)
     geo_rows = _run_geo_extract(
         Path(args.geo_sql),
         selected_ucs,
         geo_csv_path,
         fetch_size=args.cis_fetch_size,
     )
+    manifest.record_step("geo_extract", rows=geo_rows, output=str(geo_csv_path))
+
+    # Step 4: GEO join
     _left_join_daily_files_by_column(
         cis_sample_csv_path,
         geo_csv_path,
@@ -712,6 +754,9 @@ def main() -> int:
         right_join_column="UC",
         right_prefix="GEO_",
     )
+    manifest.record_step("geo_join", output=str(cis_sample_geo_csv_path))
+
+    # Step 5: MDM extract
     mdm_rows = _run_mdm_extract(
         Path(args.mdm_sql),
         selected_nios,
@@ -719,7 +764,33 @@ def main() -> int:
         days_back=args.days_back,
         fetch_size=args.mdm_fetch_size,
     )
+    manifest.record_step("mdm_extract", rows=mdm_rows, output=str(mdm_csv_path))
+
+    # Step 6: Final join
     _join_daily_files(cis_sample_geo_csv_path, mdm_csv_path, joined_csv_path)
+    manifest.record_step("final_join", output=str(joined_csv_path))
+
+    # Step 7: Verify output
+    if not args.no_verify:
+        verification = verify_model_input(joined_csv_path, expected_rows=args.sample_size)
+        print_verification_report(verification)
+        manifest.record_step("verify", **verification.to_dict())
+        if not verification.passed:
+            manifest.add_error("Verificação de integridade falhou")
+            manifest.finalize()
+            manifest.save()
+            return 1
+
+    # Step 8: Publish to OneDrive target
+    if not args.no_publish:
+        publish_result = publish_to_target(joined_csv_path, args.publish_target.resolve())
+        print_publish_report(publish_result)
+        manifest.record_step("publish", target=str(publish_result.target), bytes=publish_result.bytes_copied)
+
+    # Step 9: Save run manifest
+    manifest.finalize()
+    manifest_path = manifest.save()
+    _log(f"Run manifest saved: {manifest_path}")
 
     print()
     print("Summary")
@@ -737,6 +808,7 @@ def main() -> int:
     print(f"Sample NIO list    : {nio_list_path}")
     print(f"MDM CSV            : {mdm_csv_path}")
     print(f"Joined CSV         : {joined_csv_path}")
+    print(f"Run manifest       : {manifest_path}")
 
     return 0
 
