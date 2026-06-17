@@ -1,0 +1,63 @@
+-- GEO / Hierarquia de alimentacao da UC
+-- Consulta filtrada pela lista de UCs recebida do Python.
+--
+-- Bind esperado:
+--   :UCS -> SYS.ODCIVARCHAR2LIST com a lista de UCs.
+
+WITH selected_ucs AS (
+    SELECT DISTINCT
+        NULLIF(LTRIM(TRIM(COLUMN_VALUE), '0'), '') AS uc_key
+    FROM TABLE(CAST(:UCS AS SYS.ODCIVARCHAR2LIST))
+    WHERE NULLIF(LTRIM(TRIM(COLUMN_VALUE), '0'), '') IS NOT NULL
+),
+geo_base AS (
+    SELECT DISTINCT
+        UC.ISN_UC               AS "UC",
+        UC.TIPO_SIT_UC          AS "SITUACAO",
+        UC.NUMERO_POSTO_UC      AS "POSTO_OPERACIONAL",
+        PT.POT_INST_POSTO       AS "POT_INST_KVA",
+        AG.NUM_GEDIS_ALIMG      AS "GEDIS_ALIMENTADOR",
+        AL.NOME_ALIM            AS "ALIMENTADOR",
+        AL.TENSAO_OPER_ALIM     AS "TENSAO_ALIMENTADOR",
+        SE.NOME_SE              AS "SUBESTACAO",
+        SE.SIGLA_SE             AS "SIGLA_SE",
+        SE.TENSAO_NOM_SE        AS "TENSAO_SE",
+        SE.CAR_SE               AS "CAR_SE",
+        MU.NOME_MUN             AS "MUNICIPIO_SE",
+        MU.COD_MUN              AS "COD_MUN_SE"
+    FROM CIS.UC_ENERGIA UC
+        JOIN selected_ucs SU
+            ON SU.uc_key = NULLIF(LTRIM(TRIM(TO_CHAR(UC.ISN_UC)), '0'), '')
+        JOIN GDG.POSTO_TRANSFORMADOR PT
+            ON UC.NUMERO_POSTO_UC = PT.NUM_OPER_POSTO
+        LEFT JOIN GDG.TRECHO_PRIMARIO TR
+            ON PT.NUM_GEO_TRECHO_PRIM_POSTO = TR.NUM_SEQ_GEO
+        LEFT JOIN GDG.ALIMENTADOR_GEO AG
+            ON TR.NUM_GEO_ALIM_TRPRIM = AG.NUM_SEQ_GEO
+        LEFT JOIN SNAP_USER.ALIMENTADOR AL
+            ON AL.NUM_GEDIS_ALIM = AG.NUM_GEDIS_ALIMG
+           AND AG.NUM_ALIM_ALIMG = AL.NUM_SEQ_ALIM
+        LEFT JOIN SNAP_USER.SUBESTACAO SE
+            ON AL.NUM_SEQ_SE_ALIM = SE.NUM_SEQ_SE
+        LEFT JOIN CIS.MUNICIPIO MU
+            ON SE.COD_MUN_SE = MU.COD_MUN
+    WHERE UC.NUMERO_POSTO_UC NOT LIKE '%PTMUN'
+      AND UC.TIPO_SIT_UC IN ('LG', 'CR', 'DS')
+)
+SELECT
+    UC,
+    SITUACAO,
+    POSTO_OPERACIONAL,
+    POT_INST_KVA,
+    GEDIS_ALIMENTADOR,
+    ALIMENTADOR,
+    TENSAO_ALIMENTADOR,
+    SUBESTACAO,
+    SIGLA_SE,
+    TENSAO_SE,
+    CAR_SE,
+    MUNICIPIO_SE,
+    COD_MUN_SE
+FROM geo_base
+ORDER BY UC;
+    

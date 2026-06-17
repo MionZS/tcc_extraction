@@ -12,8 +12,8 @@ from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 
-DatabaseTarget = Literal["orca", "cis"]
-ConfigKey = Literal["ORCA", "CIS"]
+DatabaseTarget = Literal["orca", "cis", "geo"]
+ConfigKey = Literal["ORCA", "CIS", "GEO"]
 
 oracledb.defaults.fetch_lobs = False
 
@@ -22,6 +22,7 @@ CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 _TARGET_CONFIG_KEYS: dict[DatabaseTarget, ConfigKey] = {
     "orca": "ORCA",
     "cis": "CIS",
+    "geo": "GEO",
 }
 
 
@@ -41,7 +42,7 @@ def _read_db_config(target: DatabaseTarget = "orca") -> dict[str, str]:
     """Read and validate the requested DB config from config.json."""
     config_key = _TARGET_CONFIG_KEYS.get(target)
     if config_key is None:
-        raise ValueError(f"Invalid database target: {target}. Use 'orca' or 'cis'.")
+        raise ValueError(f"Invalid database target: {target}. Use 'orca', 'cis', or 'geo'.")
 
     raw_config = _load_config()
     oracle_block = raw_config.get("oracle")
@@ -87,7 +88,7 @@ def _read_db_config(target: DatabaseTarget = "orca") -> dict[str, str]:
 
 
 def create_engine(target: DatabaseTarget = "orca") -> Engine:
-    """Create a new SQLAlchemy engine connected to ORCA or CIS Oracle DB."""
+    """Create a new SQLAlchemy engine connected to ORCA, CIS, or GEO Oracle DB."""
     config = _read_db_config(target)
 
     user = quote_plus(config["user"])

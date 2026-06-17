@@ -20,6 +20,7 @@ oracledb.defaults.fetch_lobs = False
 ROOT_DIR = Path(__file__).resolve().parent
 QUERIES_DIR = ROOT_DIR / "queries"
 DEFAULT_CIS_SQL = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
+DEFAULT_GEO_SQL = QUERIES_DIR / "geo_ucs.sql"
 DEFAULT_MDM_SQL = QUERIES_DIR / "mdm_coluna.sql"
 DEFAULT_OUTPUT_ROOT = ROOT_DIR / "output"
 DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_ROOT / "raw" / "CIS"
@@ -133,7 +134,10 @@ def _materialize_row(row: Sequence[Any]) -> list[Any]:
 
 
 def _build_oracle_string_list(connection: Connection, values: Sequence[str]):
-    driver_connection = connection.connection.driver_connection
+    raw_conn = connection.connection
+    assert raw_conn is not None, "Connection is not attached to a driver connection"
+    driver_connection = raw_conn.driver_connection
+    assert driver_connection is not None, "Driver connection is not available"
     object_type = driver_connection.gettype("SYS.ODCIVARCHAR2LIST")
     bind_object = object_type.newobject()
     bind_object.extend(list(values))
@@ -347,6 +351,8 @@ def _build_right_column_map(
     left_columns: Sequence[str],
     right_columns: Sequence[str],
     right_nio_column: str,
+    *,
+    prefix: str = "MDM_",
 ) -> tuple[list[str], dict[str, str]]:
     output_columns: list[str] = list(left_columns)
     rename_map: dict[str, str] = {}
@@ -357,10 +363,10 @@ def _build_right_column_map(
 
         output_name = column
         if output_name in output_columns:
-            output_name = f"MDM_{output_name}"
+            output_name = f"{prefix}{output_name}"
             suffix = 2
             while output_name in output_columns:
-                output_name = f"MDM_{column}_{suffix}"
+                output_name = f"{prefix}{column}_{suffix}"
                 suffix += 1
 
         rename_map[column] = output_name
@@ -408,6 +414,60 @@ def _join_daily_files(left_path: Path, right_path: Path, output_path: Path) -> P
     _log(
         f"Right join complete: {matched:,} matched / {right_only:,} ORCA-only / "
         f"{len(right_rows):,} output rows"
+    )
+    return output_path
+
+
+def _left_join_daily_files_by_column(
+    left_path: Path,
+    right_path: Path,
+    output_path: Path,
+    *,
+    join_column: str,
+    right_join_column: str | None = None,
+    right_prefix: str = "GEO_",
+) -> Path:
+    left_columns, left_rows = _read_csv_rows(left_path)
+    right_columns, right_rows = _read_csv_rows(right_path)
+
+    left_join_column = _ensure_column(left_columns, join_column, left_path)
+    right_join_column = _ensure_column(right_columns, right_join_column or join_column, right_path)
+
+    right_lookup = _build_lookup(right_rows, right_join_column, right_path.name)
+    output_columns, right_column_map = _build_right_column_map(
+        left_columns,
+        right_columns,
+        right_join_column,
+        prefix=right_prefix,
+    )
+
+    matched = 0
+    left_only = 0
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=output_columns, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+        writer.writeheader()
+
+        for left_row in left_rows:
+            key = _normalize_nio(left_row.get(left_join_column, ""))
+            right_row = right_lookup.get(key)
+
+            output_row = dict(left_row)
+            if right_row is None:
+                left_only += 1
+                for right_column, output_name in right_column_map.items():
+                    output_row[output_name] = ""
+            else:
+                matched += 1
+                for right_column, output_name in right_column_map.items():
+                    output_row[output_name] = right_row.get(right_column, "")
+
+            writer.writerow(output_row)
+
+    _log(
+        f"Left join complete: {matched:,} matched / {left_only:,} left-only / "
+        f"{len(left_rows):,} output rows"
     )
     return output_path
 
@@ -476,6 +536,55 @@ def _run_mdm_extract(
     return row_count
 
 
+def _collect_unique_values(path: Path, column_name: str) -> list[str]:
+    columns, rows = _read_csv_rows(path)
+    column = _ensure_column(columns, column_name, path)
+
+    seen: set[str] = set()
+    values: list[str] = []
+
+    for row in rows:
+        value = _normalize_nio(row.get(column, ""))
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+
+    return values
+
+
+def _run_geo_extract(
+    geo_sql_path: Path,
+    ucs: Sequence[str],
+    output_path: Path,
+    *,
+    fetch_size: int,
+) -> int:
+    if not ucs:
+        raise ValueError("Nenhuma UC foi selecionada para a extração GEO.")
+
+    geo_sql = _load_sql(geo_sql_path)
+    engine = create_engine("geo")
+    started_at = time.perf_counter()
+
+    try:
+        with engine.connect() as connection:
+            ucs_bind = _build_oracle_string_list(connection, ucs)
+            _, row_count = _export_query_to_csv(
+                connection,
+                geo_sql,
+                output_path,
+                params={"UCS": ucs_bind},
+                fetch_size=fetch_size,
+            )
+    finally:
+        engine.dispose()
+
+    elapsed = time.perf_counter() - started_at
+    _log(f"GEO extract complete: {row_count:,} rows in {elapsed:.1f}s -> {output_path}")
+    return row_count
+
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -513,6 +622,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_CIS_SQL,
         help="Arquivo SQL da extração CIS.",
+    )
+    parser.add_argument(
+        "--geo-sql",
+        type=Path,
+        default=DEFAULT_GEO_SQL,
+        help="Arquivo SQL da extração GEO por UC.",
     )
     parser.add_argument(
         "--mdm-sql",
@@ -559,13 +674,16 @@ def main() -> int:
 
     cis_csv_path = cis_output_dir / f"araucaria_cis_{token}.csv"
     cis_sample_csv_path = cis_sample_output_dir / f"araucaria_cis_sample_{args.sample_size}_{token}.csv"
+    cis_sample_geo_csv_path = cis_sample_output_dir / f"araucaria_cis_sample_{args.sample_size}_{token}_geo.csv"
     nio_list_path = cis_sample_output_dir / f"araucaria_sample_nios_{args.sample_size}_{token}.txt"
+    geo_csv_path = cis_sample_output_dir / f"araucaria_geo_ucs_sample_{args.sample_size}_{token}.csv"
     mdm_csv_path = orca_sample_output_dir / f"araucaria_mdm_sample_{args.sample_size}_{token}.csv"
     joined_csv_path = joined_sample_output_dir / f"araucaria_model_input_sample_{args.sample_size}_{token}.csv"
 
     _log("Starting standalone ARAUCARIA sample pipeline")
     _log(f"Target report day: {report_day.isoformat()} (days_back={args.days_back})")
     _log(f"CIS SQL: {Path(args.cis_sql).resolve()}")
+    _log(f"GEO SQL: {Path(args.geo_sql).resolve()}")
     _log(f"MDM SQL: {Path(args.mdm_sql).resolve()}")
 
     cis_rows = _run_cis_extract(
@@ -579,6 +697,21 @@ def main() -> int:
         nio_list_path,
         args.sample_size,
     )
+    selected_ucs = _collect_unique_values(cis_sample_csv_path, "UC")
+    geo_rows = _run_geo_extract(
+        Path(args.geo_sql),
+        selected_ucs,
+        geo_csv_path,
+        fetch_size=args.cis_fetch_size,
+    )
+    _left_join_daily_files_by_column(
+        cis_sample_csv_path,
+        geo_csv_path,
+        cis_sample_geo_csv_path,
+        join_column="UC",
+        right_join_column="UC",
+        right_prefix="GEO_",
+    )
     mdm_rows = _run_mdm_extract(
         Path(args.mdm_sql),
         selected_nios,
@@ -586,7 +719,7 @@ def main() -> int:
         days_back=args.days_back,
         fetch_size=args.mdm_fetch_size,
     )
-    _join_daily_files(cis_sample_csv_path, mdm_csv_path, joined_csv_path)
+    _join_daily_files(cis_sample_geo_csv_path, mdm_csv_path, joined_csv_path)
 
     print()
     print("Summary")
@@ -594,9 +727,13 @@ def main() -> int:
     print(f"Report day         : {report_day.isoformat()}")
     print(f"CIS rows           : {cis_rows:,}")
     print(f"Sampled NIOs       : {len(selected_nios):,}")
+    print(f"Sampled UCs        : {len(selected_ucs):,}")
+    print(f"GEO rows           : {geo_rows:,}")
     print(f"MDM rows           : {mdm_rows:,}")
     print(f"CIS CSV            : {cis_csv_path}")
     print(f"CIS sample CSV     : {cis_sample_csv_path}")
+    print(f"CIS+GEO sample CSV : {cis_sample_geo_csv_path}")
+    print(f"GEO CSV            : {geo_csv_path}")
     print(f"Sample NIO list    : {nio_list_path}")
     print(f"MDM CSV            : {mdm_csv_path}")
     print(f"Joined CSV         : {joined_csv_path}")
