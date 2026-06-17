@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_POLARS = False
 
-from daily_ucs_tracker import save_daily_ucs, load_daily_ucs, get_ucs_list
+from src.checks.daily_ucs_tracker import save_daily_ucs, load_daily_ucs, get_ucs_list
 
 
 pytestmark = pytest.mark.skipif(not HAS_POLARS, reason="polars not installed")

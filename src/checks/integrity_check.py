@@ -15,9 +15,9 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from daily_file_naming import validate_file_naming, extract_date_from_filename
-from period_coverage import get_file_dates, check_period_coverage, generate_date_range
-from file_size_analysis import collect_file_sizes, compute_size_stats, detect_size_outliers, format_size
+from src.checks.daily_file_naming import validate_file_naming, extract_date_from_filename
+from src.checks.period_coverage import get_file_dates, check_period_coverage, generate_date_range
+from src.checks.file_size_analysis import collect_file_sizes, compute_size_stats, detect_size_outliers, format_size
 
 
 ROOT_DIR = Path(__file__).resolve().parent

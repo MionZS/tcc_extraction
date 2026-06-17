@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from daily_file_naming import extract_date_from_filename
+from src.checks.daily_file_naming import extract_date_from_filename
 
 
 @dataclass(frozen=True)

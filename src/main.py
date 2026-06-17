@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from pipeline import run_daily_araucaria_pipeline
+from src.pipeline import run_daily_araucaria_pipeline
 
 
 

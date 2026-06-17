@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
-from daily_file_naming import extract_date_from_filename
+from src.checks.daily_file_naming import extract_date_from_filename
 
 
 def get_file_dates(

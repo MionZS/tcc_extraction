@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from period_coverage import (
+from src.checks.period_coverage import (
     get_file_dates,
     generate_date_range,
     check_period_coverage,

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from extract_by_days_back import (
+from src.checks.extract_by_days_back import (
     find_file_for_days_back,
     extract_file_by_days_back,
     extract_all_days,
@@ -55,7 +55,7 @@ class TestExtractFileByDaysBack:
         # Use extract_file_by_days_back with a known date
         # This test verifies the copy mechanism
         for f in found:
-            from daily_file_naming import extract_date_from_filename
+            from src.checks.daily_file_naming import extract_date_from_filename
             d = extract_date_from_filename(f.name)
             if d is None:
                 continue

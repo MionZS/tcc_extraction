@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from daily_file_naming import (
+from src.checks.daily_file_naming import (
     extract_date_from_filename,
     validate_file_naming,
     check_days_back_consistency,

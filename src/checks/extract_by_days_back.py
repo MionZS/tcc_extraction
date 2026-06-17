@@ -10,7 +10,7 @@ import shutil
 from datetime import date, timedelta
 from pathlib import Path
 
-from daily_file_naming import extract_date_from_filename
+from src.checks.daily_file_naming import extract_date_from_filename
 
 
 def _report_day_from_days_back(days_back: int) -> date:

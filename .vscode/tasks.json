@@ -1,90 +1,214 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "git: status",
-            "type": "shell",
-            "command": "git status",
-            "group": "none",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "git: create branch",
-            "type": "shell",
-            "command": "git checkout -b ${input:branchName}",
-            "group": "none",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "git: add all",
-            "type": "shell",
-            "command": "git add .",
-            "group": "none",
-            "presentation": { "reveal": "silent", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "git: commit",
-            "type": "shell",
-            "command": "git commit -m \"${input:commitMessage}\"",
-            "group": "none",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "git: push",
-            "type": "shell",
-            "command": "git push -u origin ${input:branchName}",
-            "group": "none",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "pytest: run all tests",
-            "type": "shell",
-            "command": "uv run pytest tests/ -v",
-            "group": "test",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "pytest: run with coverage",
-            "type": "shell",
-            "command": "uv run pytest tests/ -v --tb=short",
-            "group": "test",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "python: run pipeline sample",
-            "type": "shell",
-            "command": "uv run python araucaria_sample_pipeline.py --days-back 1",
-            "group": "none",
-            "presentation": { "reveal": "always", "panel": "dedicated" },
-            "problemMatcher": []
-        },
-        {
-            "label": "python: run integrity check",
-            "type": "shell",
-            "command": "uv run python -m integrity_check --base-dir output",
-            "group": "none",
-            "presentation": { "reveal": "always", "panel": "dedicated" },
-            "problemMatcher": []
-        }
-    ],
-    "inputs": [
-        {
-            "id": "branchName",
-            "type": "promptString",
-            "description": "Branch name",
-            "default": "main"
-        },
-        {
-            "id": "commitMessage",
-            "type": "promptString",
-            "description": "Commit message"
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "git: status",
+			"type": "shell",
+			"command": "git status",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: create branch",
+			"type": "shell",
+			"command": "git checkout -b ${input:branchName}",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: add all",
+			"type": "shell",
+			"command": "git add .",
+			"group": "none",
+			"presentation": {
+				"reveal": "silent",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: commit",
+			"type": "shell",
+			"command": "git commit -m \"${input:commitMessage}\"",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: push",
+			"type": "shell",
+			"command": "git push -u origin ${input:branchName}",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: branch",
+			"type": "shell",
+			"command": "git branch",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: checkout main",
+			"type": "shell",
+			"command": "git checkout main",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: checkout branch",
+			"type": "shell",
+			"command": "git checkout ${input:branchName}",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "restructure: move to src",
+			"type": "shell",
+			"command": "git mv araucaria_sample_pipeline.py src/ && git mv db.py src/ && git mv pipeline.py src/ && git mv main.py src/ && git mv verify_output.py src/ && git mv export_manager.py src/ && git mv run_manifest.py src/ && git mv daily_ucs_tracker.py src/",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "restructure: move checks",
+			"type": "shell",
+			"command": "git mv daily_file_naming.py src/checks/ && git mv period_coverage.py src/checks/ && git mv file_size_analysis.py src/checks/ && git mv extract_by_days_back.py src/checks/ && git mv integrity_check.py src/checks/",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run all tests",
+			"type": "shell",
+			"command": "uv run pytest tests/ -v",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run with coverage",
+			"type": "shell",
+			"command": "uv run pytest tests/ -v --tb=short",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "python: run pipeline sample",
+			"type": "shell",
+			"command": "uv run python araucaria_sample_pipeline.py --days-back 1",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "python: run integrity check",
+			"type": "shell",
+			"command": "uv run python -m integrity_check --base-dir output",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: branch current",
+			"type": "shell",
+			"command": "git branch",
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "git: checkout main",
+			"type": "shell",
+			"command": "git checkout main",
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "git: add all",
+			"type": "shell",
+			"command": "git add .",
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "git: commit",
+			"type": "shell",
+			"command": "git commit -m \"organized checks and tests\"",
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "git: status",
+			"type": "shell",
+			"command": "git status",
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "git: create branch from main",
+			"type": "shell",
+			"command": "git checkout main && git checkout -b feature/period-pipeline",
+			"problemMatcher": [],
+			"group": "none"
+		}
+	],
+	"inputs": [
+		{
+			"id": "branchName",
+			"type": "promptString",
+			"description": "Branch name",
+			"default": "main"
+		},
+		{
+			"id": "commitMessage",
+			"type": "promptString",
+			"description": "Commit message"
+		}
+	]
 }

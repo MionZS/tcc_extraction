@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from file_size_analysis import (
+from src.checks.file_size_analysis import (
     collect_file_sizes,
     compute_size_stats,
     detect_size_outliers,

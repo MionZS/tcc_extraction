@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from integrity_check import (
+from src.checks.integrity_check import (
     check_file_naming,
     check_period,
     check_sizes,
@@ -112,13 +112,13 @@ class TestIntegrityReport:
     def test_one_fail(self):
         report = IntegrityReport()
         report.add(check_file_naming(Path("/nonexistent")))
-        from integrity_check import CheckResult
+        from src.checks.integrity_check import CheckResult
         report.add(CheckResult("manual", False, "manual fail"))
         assert report.passed is False
 
     def test_to_dict(self):
         report = IntegrityReport()
-        from integrity_check import CheckResult
+        from src.checks.integrity_check import CheckResult
         report.add(CheckResult("test", True, "ok"))
         d = report.to_dict()
         assert d["passed"] is True
