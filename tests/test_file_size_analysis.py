@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-import pytest
-
 from src.checks.file_size_analysis import (
     collect_file_sizes,
     compute_size_stats,

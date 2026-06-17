@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from src.checks.daily_file_naming import validate_file_naming, extract_date_from_filename
-from src.checks.period_coverage import get_file_dates, check_period_coverage, generate_date_range
+from src.checks.period_coverage import get_file_dates, check_period_coverage
 from src.checks.file_size_analysis import collect_file_sizes, compute_size_stats, detect_size_outliers, format_size
 
 

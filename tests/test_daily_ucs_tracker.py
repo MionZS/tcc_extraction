@@ -5,18 +5,14 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import importlib.util
+
 import pytest
-
-try:
-    import polars as pl
-    HAS_POLARS = True
-except ImportError:
-    HAS_POLARS = False
-
 from src.checks.daily_ucs_tracker import save_daily_ucs, load_daily_ucs, get_ucs_list
 
+_HAS_POLARS = importlib.util.find_spec("polars") is not None
 
-pytestmark = pytest.mark.skipif(not HAS_POLARS, reason="polars not installed")
+pytestmark = pytest.mark.skipif(not _HAS_POLARS, reason="polars not installed")
 
 
 @pytest.fixture

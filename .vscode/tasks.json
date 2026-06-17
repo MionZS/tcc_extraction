@@ -196,6 +196,13 @@
 			"command": "git checkout main && git checkout -b feature/period-pipeline",
 			"problemMatcher": [],
 			"group": "none"
+		},
+		{
+			"label": "python: run pipeline sample",
+			"type": "shell",
+			"command": "uv run python araucaria_sample_pipeline.py --days-back 1",
+			"problemMatcher": [],
+			"group": "none"
 		}
 	],
 	"inputs": [

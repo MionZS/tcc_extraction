@@ -27,7 +27,7 @@ import polars as pl
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from db import create_engine
+from src.db import create_engine
 
 QUERIES_DIR = Path(__file__).resolve().parent / "queries"
 CIS_QUERY_PATH = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"

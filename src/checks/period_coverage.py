@@ -17,7 +17,7 @@ def get_file_dates(
     *,
     suffix: str = ".csv",
     prefix: str | None = None,
-) -> sorted[set[date]]:
+) -> list[date]:
     """Coleta todas as datas presentes em nomes de arquivos.
 
     Args:
@@ -54,7 +54,7 @@ def generate_date_range(start_date: date, end_date: date) -> list[date]:
 
 
 def check_period_coverage(
-    dates: set[date] | sorted[set[date]],
+    dates: set[date] | list[date],
     *,
     start_date: date | None = None,
     end_date: date | None = None,
