@@ -154,15 +154,34 @@ git push origin feature-branch --force
 # 3. Abra um Pull Request para revisão
 ```
 
-## **Verificação Rápida**
+## **Verificação Rápida (Dry-run Real)**
 
 ```bash
-# Veja o que mudaria com um merge dry-run
-git checkout main
-git merge --stat feature-branch
-
-# Veja os commits que seriam aplicados
+# 1. Veja os commits que seriam aplicados (sem tocar no worktree)
 git log --oneline main..feature-branch
+
+# 2. Veja estatísticas do que mudaria (sem tocar no worktree)
+git diff --stat main..feature-branch
+
+# 3. DRY-RUN REAL: Faz o merge mas PARA antes de commitar
+#    Permite inspecionar conflitos, arquivos modificados, etc.
+git checkout main
+git merge --no-commit --no-ff feature-branch
+
+#    - --no-commit: Para antes de criar o commit de merge
+#    - --no-ff:   Força criar commit de merge mesmo se fast-forward possível
+#    - Resultado: Worktree/índice têm o merge aplicado, mas NÃO commitado
+
+# 4. Inspecione o resultado
+git status                    # Arquivos staged/unstaged
+git diff --cached             # Mudanças que seriam commitadas
+git diff                      # Mudanças não staged (conflitos)
+
+# 5. DECIDA:
+#    - Se OK:     git commit          # Finaliza o merge
+#    - Se NÃO OK: git merge --abort   # Cancela tudo, volta ao estado original
 ```
+
+> **Nota:** `git merge --stat` **NÃO** é um dry-run — só mostra estatísticas. O merge real com `--no-commit --no-ff` é a forma correta de testar antes de commitar.
 
 **Resumo:** Para mudanças completas (incluindo moves, rewrites, renames), **merge** é o método mais seguro. Use **rebase** apenas se você quiser um histórico limpo e controlar completamente o branch.
