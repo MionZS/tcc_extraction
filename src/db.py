@@ -17,7 +17,7 @@ ConfigKey = Literal["ORCA", "CIS", "GEO"]
 
 oracledb.defaults.fetch_lobs = False
 
-CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.json"
 
 _TARGET_CONFIG_KEYS: dict[DatabaseTarget, ConfigKey] = {
     "orca": "ORCA",

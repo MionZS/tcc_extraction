@@ -20,7 +20,7 @@ from src.checks.verify_output import verify_model_input, print_verification_repo
 
 oracledb.defaults.fetch_lobs = False
 
-ROOT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parents[1]
 QUERIES_DIR = ROOT_DIR / "queries"
 DEFAULT_CIS_SQL = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
 DEFAULT_GEO_SQL = QUERIES_DIR / "geo_ucs.sql"
