@@ -12,7 +12,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 
-DEFAULT_RUNS_DIR = Path(__file__).resolve().parent / "output" / "runs"
+DEFAULT_RUNS_DIR = Path(__file__).resolve().parents[1] / "output" / "runs"
 
 
 @dataclass

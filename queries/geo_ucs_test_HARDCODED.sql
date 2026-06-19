@@ -1,15 +1,13 @@
 -- GEO / Hierarquia de alimentacao da UC
--- Consulta filtrada pela lista de UCs recebida do Python.
+-- Versão HARDCODED para teste com 2 UCs específicas.
 -- Inclui coordenadas da UC (CAD_COORDENADA_UC_EE) e do poste (cad_pste_sist_extn).
 --
--- Bind esperado:
---   :UCS -> SYS.ODCIVARCHAR2LIST com a lista de UCs.
+-- UCs hardcoded: 94438722, 110275977
 
 WITH selected_ucs AS (
-    SELECT DISTINCT
-        NULLIF(LTRIM(TRIM(COLUMN_VALUE), '0'), '') AS uc_key
-    FROM TABLE(CAST(:UCS AS SYS.ODCIVARCHAR2LIST))
-    WHERE NULLIF(LTRIM(TRIM(COLUMN_VALUE), '0'), '') IS NOT NULL
+    SELECT '94438722' AS uc_key FROM DUAL
+    UNION ALL
+    SELECT '110275977' AS uc_key FROM DUAL
 ),
 geo_base AS (
     SELECT DISTINCT
@@ -86,7 +84,6 @@ geo_base AS (
            AND PSX.cod_situ_psx = 'AT'
     WHERE UC.NUMERO_POSTO_UC NOT LIKE '%PTMUN'
       AND UC.TIPO_SIT_UC IN ('LG', 'CR', 'DS')
-      AND AG.NUM_ALIM_ALIMG = 6352460
 )
 SELECT
     UC,

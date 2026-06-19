@@ -3,13 +3,20 @@
 Flow
 ----
 1. Run the CIS query to get the ARAUCARIA population.
-2. Extract unique NIOs from that result.
-3. Feed those NIOs to the ORCA/MDM query through SQLAlchemy using
+2. Extract unique UCs from that result.
+3. Feed those UCs to the GEO query through SQLAlchemy using
    ``SYS.ODCIVARCHAR2LIST``.
-4. Save outputs in a datalake-style layout:
+4. Left-join GEO data on CIS by UC.
+5. Extract unique NIOs from the joined result.
+6. Feed those NIOs to the ORCA/MDM query through SQLAlchemy using
+   ``SYS.ODCIVARCHAR2LIST`` (with batching).
+7. Save outputs in a datalake-style layout:
    - raw/CIS
+   - raw/GEO
    - raw/ORCA
    - refined/reports
+8. Publish final CSV to OneDrive target.
+9. Save run manifest.
 """
 
 from __future__ import annotations
@@ -28,15 +35,20 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from src.db import create_engine
+from src.run_manifest import create_manifest
+from src.export_manager import publish_to_target
 
 QUERIES_DIR = Path(__file__).resolve().parent / "queries"
 CIS_QUERY_PATH = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
+GEO_QUERY_PATH = QUERIES_DIR / "geo_ucs.sql"
 MDM_QUERY_PATH = QUERIES_DIR / "mdm_coluna.sql"
 DEFAULT_OUTPUT_DIR = Path("output")
 DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_DIR / "raw" / "CIS"
+DEFAULT_RAW_GEO_DIR = DEFAULT_OUTPUT_DIR / "raw" / "GEO"
 DEFAULT_RAW_ORCA_DIR = DEFAULT_OUTPUT_DIR / "raw" / "ORCA"
 DEFAULT_REFINED_REPORTS_DIR = DEFAULT_OUTPUT_DIR / "refined" / "reports"
 DEFAULT_MDM_BATCH_SIZE = 500
+DEFAULT_GEO_BATCH_SIZE = 500
 DEFAULT_FETCH_SIZE = 1000
 
 
@@ -53,11 +65,14 @@ class PipelineResult:
     report_day: date
     cis_parquet: Path
     cis_csv: Path
+    geo_parquet: Path | None
+    geo_csv: Path | None
     mdm_parquet: Path | None
     mdm_csv: Path | None
     joined_parquet: Path | None
     joined_csv: Path | None
     total_cis_rows: int
+    total_geo_rows: int
     total_nios: int
     total_mdm_rows: int
 
@@ -243,6 +258,14 @@ def _extract_cis_dataframe(cis_sql_path: Path) -> pl.DataFrame:
     if nio_column != "NIO":
         dataframe = dataframe.rename({nio_column: "NIO"})
 
+    # Also normalize UC column to uppercase (case-insensitive lookup)
+    uc_column = next(
+        (column for column in dataframe.columns if str(column).strip().upper() == "UC"),
+        None,
+    )
+    if uc_column is not None and uc_column != "UC":
+        dataframe = dataframe.rename({uc_column: "UC"})
+
     dataframe = (
         _normalize_nio_column(dataframe, "NIO")
         .filter(pl.col("NIO").is_not_null())
@@ -262,6 +285,138 @@ def _extract_nios(cis_df: pl.DataFrame) -> list[str]:
     return sorted(cis_df.get_column("NIO").drop_nulls().unique().to_list())
 
 
+def _extract_ucs(df: pl.DataFrame, column_name: str = "UC") -> list[str]:
+    """Extrai valores únicos da coluna UC, normalizados.
+
+    Returns:
+        Lista ordenada de UCs (dígitos, sem zeros à esquerda).
+    """
+    if column_name not in df.columns:
+        _log(f"Column {column_name!r} not found in DataFrame; no UCs to extract.")
+        return []
+
+    ucs: set[str] = set()
+    for value in df.get_column(column_name).drop_nulls().unique():
+        text = str(value).strip()
+        digits_only = re.sub(r"\D", "", text)
+        if not digits_only:
+            continue
+        normalized = digits_only.lstrip("0")
+        if normalized:
+            ucs.add(normalized)
+
+    sorted_ucs = sorted(ucs)
+    _log(f"Unique UCs extracted: {len(sorted_ucs):,}")
+    return sorted_ucs
+
+
+def _extract_geo_dataframe(
+    geo_sql_path: Path,
+    ucs: Sequence[str],
+    fetch_size: int,
+    batch_size: int = DEFAULT_GEO_BATCH_SIZE,
+) -> pl.DataFrame:
+    """Extrai dados GEO para a lista de UCs fornecida.
+
+    Usa batching (``ODCIVARCHAR2LIST``) similar ao MDM.
+    Retorna DataFrame vazio se ``ucs`` estiver vazio.
+    """
+    if not ucs:
+        _log("No UCs provided; skipping GEO extract.")
+        return _build_empty_frame([])
+
+    geo_sql = _load_sql(geo_sql_path)
+    engine = create_engine("geo")
+    started_at = time.perf_counter()
+    total_rows = 0
+    geo_columns: list[str] = []
+    geo_chunks: list[pl.DataFrame] = []
+
+    try:
+        with engine.connect() as connection:
+            for batch_index, ucs_batch in enumerate(
+                _chunked(list(ucs), batch_size), start=1
+            ):
+                batch_started_at = time.perf_counter()
+                _log(
+                    f"GEO batch {batch_index}: {len(ucs_batch):,} UCs "
+                    f"({ucs_batch[0]}..{ucs_batch[-1]})"
+                )
+
+                oracle_list = _build_oracle_string_list(connection, ucs_batch)
+                result = connection.execute(
+                    text(geo_sql),
+                    {"UCS": oracle_list},
+                )
+
+                current_columns = list(result.keys())
+                if not geo_columns:
+                    geo_columns = current_columns
+
+                while True:
+                    rows = result.fetchmany(fetch_size)
+                    if not rows:
+                        break
+                    geo_chunks.append(_rows_to_frame(rows, current_columns))
+
+                batch_elapsed = time.perf_counter() - batch_started_at
+                _log(f"GEO batch {batch_index}: done in {batch_elapsed:.1f}s")
+    finally:
+        engine.dispose()
+
+    if not geo_chunks:
+        _log("GEO query returned no rows.")
+        return _build_empty_frame(geo_columns or [])
+
+    geo_df = pl.concat(geo_chunks, how="vertical_relaxed")
+    total_rows = geo_df.height
+
+    elapsed = time.perf_counter() - started_at
+    _log(f"GEO extract complete: {total_rows:,} rows in {elapsed:.1f}s")
+    return geo_df
+
+
+def _left_join_geo(
+    cis_df: pl.DataFrame,
+    geo_df: pl.DataFrame,
+    *,
+    join_column: str = "UC",
+    prefix: str = "GEO_",
+) -> pl.DataFrame:
+    """Faz left join do GEO no CIS por UC, prefixando colunas GEO.
+
+    Retorna o DataFrame CIS com colunas GEO_* adicionadas.
+    """
+    if geo_df.is_empty() or geo_df.width == 0:
+        _log("GEO DataFrame is empty; returning CIS unchanged.")
+        return cis_df
+
+    if join_column not in cis_df.columns:
+        _log(f"Join column {join_column!r} not in CIS DataFrame; returning CIS unchanged.")
+        return cis_df
+
+    if join_column not in geo_df.columns:
+        _log(f"Join column {join_column!r} not in GEO DataFrame; returning CIS unchanged.")
+        return cis_df
+
+    # Rename GEO columns with prefix (except the join column)
+    geo_rename = {
+        col: f"{prefix}{col}"
+        for col in geo_df.columns
+        if col != join_column
+    }
+
+    geo_renamed = geo_df.rename(geo_rename)
+
+    result = cis_df.join(
+        geo_renamed,
+        on=join_column,
+        how="left",
+    )
+
+    _log(f"Left join GEO complete: {result.height:,} rows, {result.width:,} columns")
+    return result
+
 
 def _build_oracle_string_list(connection: Connection, values: Sequence[str]):
     driver_connection = connection.connection.driver_connection
@@ -271,7 +426,7 @@ def _build_oracle_string_list(connection: Connection, values: Sequence[str]):
 
 
 def _merge_temp_parquets(parquet_files: Sequence[Path], final_parquet: Path, final_csv: Path) -> None:
-    lazy_frame = pl.scan_parquet([str(path) for path in parquet_files]).sort(["DIA", "NIO"])
+    lazy_frame = pl.scan_parquet([str(path) for path in parquet_files]).sort(["dia", "nio"])
     lazy_frame.sink_parquet(final_parquet)
     lazy_frame.sink_csv(final_csv, separator=";")
 
@@ -397,7 +552,7 @@ def _build_joined_report(
         .join(pl.scan_parquet(str(mdm_result.parquet_path)), on="NIO", how="left")
         .with_columns(
             pl.lit(report_day_text).alias("REPORT_DAY"),
-            pl.col("DIA").is_not_null().fill_null(False).alias("HAS_MDM_DATA"),
+            pl.col("dia").is_not_null().fill_null(False).alias("HAS_MDM_DATA"),
         )
         .sort(["NIO"])
     )
@@ -413,40 +568,72 @@ def run_daily_araucaria_pipeline(
     output_dir: Path | str = DEFAULT_OUTPUT_DIR,
     days_back: int = 1,
     mdm_batch_size: int = DEFAULT_MDM_BATCH_SIZE,
+    geo_batch_size: int = DEFAULT_GEO_BATCH_SIZE,
     fetch_size: int = DEFAULT_FETCH_SIZE,
     cis_sql_path: Path | str = CIS_QUERY_PATH,
+    geo_sql_path: Path | str = GEO_QUERY_PATH,
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
+    publish_target: Path | None = None,
     keep_temp: bool = False,
 ) -> PipelineResult:
-    """Run the daily CIS -> MDM chained extraction for ARAUCARIA.
+    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO and MDM.
+
+    Flow: CIS → GEO (left join por UC) → MDM → relatório final.
 
     ``days_back=1`` means yesterday with the current SQL semantics.
     """
     output_dir = Path(output_dir)
     cis_sql_path = Path(cis_sql_path)
+    geo_sql_path = Path(geo_sql_path)
     mdm_sql_path = Path(mdm_sql_path)
     report_day = _report_day_from_days_back(days_back)
 
     raw_cis_dir = output_dir / "raw" / "CIS"
+    raw_geo_dir = output_dir / "raw" / "GEO"
     raw_orca_dir = output_dir / "raw" / "ORCA"
     refined_reports_dir = output_dir / "refined" / "reports"
 
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_cis_dir.mkdir(parents=True, exist_ok=True)
+    raw_geo_dir.mkdir(parents=True, exist_ok=True)
     raw_orca_dir.mkdir(parents=True, exist_ok=True)
     refined_reports_dir.mkdir(parents=True, exist_ok=True)
+
+    # Manifesto de rastreabilidade
+    manifest = create_manifest(report_day, sample_size=0)
 
     _log(f"Starting ARAUCARIA daily pipeline")
     _log(f"Target report day: {report_day.isoformat()} (days_back={days_back})")
     _log(f"CIS query: {cis_sql_path}")
+    _log(f"GEO query: {geo_sql_path}")
     _log(f"MDM query: {mdm_sql_path}")
 
+    # --- Step 1: CIS extract ---
     cis_df = _extract_cis_dataframe(cis_sql_path)
     cis_parquet = raw_cis_dir / f"araucaria_cis_{_date_token(report_day)}.parquet"
     cis_csv = raw_cis_dir / f"araucaria_cis_{_date_token(report_day)}.csv"
     _write_dataframe_outputs(cis_df, cis_parquet, cis_csv)
+    manifest.record_step("cis_extract", rows=cis_df.height, output=str(cis_csv))
 
-    nios = _extract_nios(cis_df)
+    # --- Step 2: GEO extract ---
+    ucs = _extract_ucs(cis_df)
+    geo_df = _extract_geo_dataframe(
+        geo_sql_path=geo_sql_path,
+        ucs=ucs,
+        fetch_size=fetch_size,
+        batch_size=geo_batch_size,
+    )
+    geo_parquet = raw_geo_dir / f"araucaria_geo_ucs_{_date_token(report_day)}.parquet"
+    geo_csv = raw_geo_dir / f"araucaria_geo_ucs_{_date_token(report_day)}.csv"
+    _write_dataframe_outputs(geo_df, geo_parquet, geo_csv)
+    manifest.record_step("geo_extract", rows=geo_df.height, output=str(geo_csv))
+
+    # --- Step 3: Left join GEO on CIS ---
+    cis_geo_df = _left_join_geo(cis_df, geo_df, join_column="UC", prefix="GEO_")
+    manifest.record_step("geo_join", rows=cis_geo_df.height)
+
+    # --- Step 4: MDM extract (usando NIOs do CIS+GEO) ---
+    nios = _extract_nios(cis_geo_df)
     _log(f"Unique NIOs selected for MDM: {len(nios):,}")
 
     mdm_result = _extract_mdm_dataframe(
@@ -459,30 +646,192 @@ def run_daily_araucaria_pipeline(
         fetch_size=fetch_size,
         keep_temp=keep_temp,
     )
+    manifest.record_step(
+        "mdm_extract",
+        rows=mdm_result.row_count,
+        output=str(mdm_result.csv_path) if mdm_result.csv_path else None,
+    )
 
+    # --- Step 5: Final join (CIS+GEO + MDM) ---
     joined_parquet, joined_csv = _build_joined_report(
-        cis_df=cis_df,
+        cis_df=cis_geo_df,
         mdm_result=mdm_result,
         output_dir=refined_reports_dir,
         report_day=report_day,
     )
+    manifest.record_step("final_join", output=str(joined_csv) if joined_csv else None)
+
+    # --- Step 6: Publish para OneDrive ---
+    if publish_target is not None and joined_csv is not None:
+        try:
+            pub_result = publish_to_target(joined_csv, publish_target)
+            manifest.record_step(
+                "publish",
+                target=str(pub_result.target),
+                bytes=pub_result.bytes_copied,
+            )
+            _log(f"Published to: {pub_result.target}")
+        except Exception as exc:
+            _log(f"Publish failed: {exc}")
+            manifest.add_error(f"Publish failed: {exc}")
+
+    # --- Step 7: Finalizar e salvar manifest ---
+    manifest.finalize()
+    try:
+        manifest_path = manifest.save()
+        _log(f"Run manifest saved: {manifest_path}")
+    except Exception as exc:
+        _log(f"Manifest save failed: {exc}")
 
     _log("Pipeline complete")
-    _log(f"CIS CSV: {cis_csv}")
+    _log(f"CIS CSV  : {cis_csv}")
+    _log(f"GEO CSV  : {geo_csv}")
     if mdm_result.csv_path is not None:
-        _log(f"MDM CSV: {mdm_result.csv_path}")
+        _log(f"MDM CSV  : {mdm_result.csv_path}")
     if joined_csv is not None:
-        _log(f"Joined CSV: {joined_csv}")
+        _log(f"Joined   : {joined_csv}")
 
     return PipelineResult(
         report_day=report_day,
         cis_parquet=cis_parquet,
         cis_csv=cis_csv,
+        geo_parquet=geo_parquet,
+        geo_csv=geo_csv,
         mdm_parquet=mdm_result.parquet_path,
         mdm_csv=mdm_result.csv_path,
         joined_parquet=joined_parquet,
         joined_csv=joined_csv,
         total_cis_rows=cis_df.height,
+        total_geo_rows=geo_df.height,
         total_nios=len(nios),
         total_mdm_rows=mdm_result.row_count,
+    )
+
+
+@dataclass(frozen=True)
+class PeriodResult:
+    """Resultado de uma execução em período (múltiplos dias)."""
+    results: list[PipelineResult]
+    total_days: int
+    success_days: int
+    failed_days: int
+    start_date: date
+    end_date: date
+    duration_seconds: float
+
+
+def run_period_pipeline(
+    *,
+    start_date: date,
+    end_date: date,
+    output_dir: Path | str = DEFAULT_OUTPUT_DIR,
+    mdm_batch_size: int = DEFAULT_MDM_BATCH_SIZE,
+    geo_batch_size: int = DEFAULT_GEO_BATCH_SIZE,
+    fetch_size: int = DEFAULT_FETCH_SIZE,
+    cis_sql_path: Path | str = CIS_QUERY_PATH,
+    geo_sql_path: Path | str = GEO_QUERY_PATH,
+    mdm_sql_path: Path | str = MDM_QUERY_PATH,
+    publish_target: Path | None = None,
+    keep_temp: bool = False,
+    continue_on_error: bool = True,
+) -> PeriodResult:
+    """Executa a pipeline para um período de dias.
+
+    Itera de ``start_date`` a ``end_date`` (inclusive), calculando
+    o ``days_back`` apropriado para cada dia e chamando
+    ``run_daily_araucaria_pipeline()``.
+
+    Args:
+        start_date: Data inicial (inclusive).
+        end_date: Data final (inclusive).
+        continue_on_error: Se True, continua no próximo dia mesmo se
+            um dia falhar.
+            Demais parâmetros: mesmos de ``run_daily_araucaria_pipeline()``.
+
+    Returns:
+        PeriodResult com a lista de resultados individuais.
+    """
+    if start_date > end_date:
+        raise ValueError(
+            f"start_date ({start_date}) não pode ser posterior a end_date ({end_date})"
+        )
+
+    output_dir = Path(output_dir)
+    cis_sql_path = Path(cis_sql_path)
+    geo_sql_path = Path(geo_sql_path)
+    mdm_sql_path = Path(mdm_sql_path)
+
+    today = date.today()
+    results: list[PipelineResult] = []
+    total_days = (end_date - start_date).days + 1
+
+    _log(f"Starting period pipeline: {start_date.isoformat()} to {end_date.isoformat()}")
+    _log(f"Total days: {total_days}")
+
+    started_at = time.perf_counter()
+
+    for i in range(total_days):
+        day = start_date + timedelta(days=i)
+        days_back = (today - day).days
+
+        if days_back < 0:
+            _log(f"Skipping future date: {day.isoformat()}")
+            continue
+
+        _log(f"\n--- Day {i + 1}/{total_days}: {day.isoformat()} (days_back={days_back}) ---")
+
+        try:
+            result = run_daily_araucaria_pipeline(
+                output_dir=output_dir,
+                days_back=days_back,
+                mdm_batch_size=mdm_batch_size,
+                geo_batch_size=geo_batch_size,
+                fetch_size=fetch_size,
+                cis_sql_path=cis_sql_path,
+                geo_sql_path=geo_sql_path,
+                mdm_sql_path=mdm_sql_path,
+                publish_target=publish_target,
+                keep_temp=keep_temp,
+            )
+            results.append(result)
+            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}")
+        except Exception as exc:
+            _log(f"  ❌ Day {day.isoformat()} FAILED: {exc}")
+            if not continue_on_error:
+                raise
+            # Append a placeholder for failed days
+            results.append(PipelineResult(
+                report_day=day,
+                cis_parquet=Path(),
+                cis_csv=Path(),
+                geo_parquet=None,
+                geo_csv=None,
+                mdm_parquet=None,
+                mdm_csv=None,
+                joined_parquet=None,
+                joined_csv=None,
+                total_cis_rows=0,
+                total_geo_rows=0,
+                total_nios=0,
+                total_mdm_rows=0,
+            ))
+
+    elapsed = time.perf_counter() - started_at
+    success = sum(1 for r in results if r.total_cis_rows > 0)
+    failed = sum(1 for r in results if r.total_cis_rows == 0)
+
+    _log(f"\nPeriod pipeline complete")
+    _log(f"Total days : {total_days}")
+    _log(f"Success    : {success}")
+    _log(f"Failed     : {failed}")
+    _log(f"Duration   : {elapsed:.1f}s")
+
+    return PeriodResult(
+        results=results,
+        total_days=total_days,
+        success_days=success,
+        failed_days=failed,
+        start_date=start_date,
+        end_date=end_date,
+        duration_seconds=elapsed,
     )

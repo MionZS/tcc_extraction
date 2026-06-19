@@ -1,6 +1,5 @@
 -- GEO / Hierarquia de alimentacao da UC
 -- Consulta filtrada pela lista de UCs recebida do Python.
--- Inclui coordenadas da UC (CAD_COORDENADA_UC_EE) e do poste (cad_pste_sist_extn).
 --
 -- Bind esperado:
 --   :UCS -> SYS.ODCIVARCHAR2LIST com a lista de UCs.
@@ -25,42 +24,7 @@ geo_base AS (
         SE.TENSAO_NOM_SE        AS "TENSAO_SE",
         SE.CAR_SE               AS "CAR_SE",
         MU.NOME_MUN             AS "MUNICIPIO_SE",
-        MU.COD_MUN              AS "COD_MUN_SE",
-        -- Coordenadas da UC (lat/lon)
-        COORD.NUM_COORY_XXX     AS "LAT_UC",
-        COORD.NUM_COORX_XXX     AS "LONG_UC",
-        -- Coordenadas do poste (UTM SIRGAS 2000)
-        PSX.num_coorx_psx       AS "COORD_X_POSTE",
-        PSX.num_coory_psx       AS "COORD_Y_POSTE",
-        -- Conversao para WGS84 (latitude/longitude) 
-        SDO_CS.TRANSFORM(
-            SDO_GEOMETRY(
-                2001,
-                29192,
-                SDO_POINT_TYPE(
-                    PSX.num_coorx_psx,
-                    PSX.num_coory_psx,
-                    NULL
-                ),
-                NULL,
-                NULL
-            ),
-            4326
-        ).SDO_POINT.Y           AS "LAT_POSTE_WGS84",
-        SDO_CS.TRANSFORM(
-            SDO_GEOMETRY(
-                2001,
-                29192,
-                SDO_POINT_TYPE(
-                    PSX.num_coorx_psx,
-                    PSX.num_coory_psx,
-                    NULL
-                ),
-                NULL,
-                NULL
-            ),
-            4326
-        ).SDO_POINT.X           AS "LONG_POSTE_WGS84"
+        MU.COD_MUN              AS "COD_MUN_SE"
     FROM CIS.UC_ENERGIA UC
         JOIN selected_ucs SU
             ON SU.uc_key = NULLIF(LTRIM(TRIM(TO_CHAR(UC.ISN_UC)), '0'), '')
@@ -77,16 +41,8 @@ geo_base AS (
             ON AL.NUM_SEQ_SE_ALIM = SE.NUM_SEQ_SE
         LEFT JOIN CIS.MUNICIPIO MU
             ON SE.COD_MUN_SE = MU.COD_MUN
-        -- Coordenadas da UC (via REDEDES)
-        LEFT JOIN REDEDES.CAD_COORDENADA_UC_EE COORD
-            ON COORD.COD_UN_CONS_XXX = UC.ISN_UC
-        -- Coordenadas do poste (sistema externo)
-        LEFT JOIN cad_pste_sist_extn PSX
-            ON PSX.num_pste_psx = UC.NUMERO_POSTO_UC
-           AND PSX.cod_situ_psx = 'AT'
     WHERE UC.NUMERO_POSTO_UC NOT LIKE '%PTMUN'
       AND UC.TIPO_SIT_UC IN ('LG', 'CR', 'DS')
-      AND AG.NUM_ALIM_ALIMG = 6352460
 )
 SELECT
     UC,
@@ -101,13 +57,7 @@ SELECT
     TENSAO_SE,
     CAR_SE,
     MUNICIPIO_SE,
-    COD_MUN_SE,
-    -- Coordenadas
-    LAT_UC,
-    LONG_UC,
-    COORD_X_POSTE,
-    COORD_Y_POSTE,
-    LAT_POSTE_WGS84,
-    LONG_POSTE_WGS84
+    COD_MUN_SE
 FROM geo_base
 ORDER BY UC;
+    
