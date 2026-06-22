@@ -266,6 +266,10 @@ def _extract_cis_dataframe(cis_sql_path: Path) -> pl.DataFrame:
     if uc_column is not None and uc_column != "UC":
         dataframe = dataframe.rename({uc_column: "UC"})
 
+    # Normalizar valores de UC (remover zeros à esquerda) igual ao GEO faz
+    if uc_column is not None:
+        dataframe = _normalize_nio_column(dataframe, "UC")
+
     dataframe = (
         _normalize_nio_column(dataframe, "NIO")
         .filter(pl.col("NIO").is_not_null())
@@ -369,6 +373,8 @@ def _extract_geo_dataframe(
         return _build_empty_frame(geo_columns or [])
 
     geo_df = pl.concat(geo_chunks, how="vertical_relaxed")
+    # Normalizar nomes de colunas para maiúsculo (Oracle pode retornar case variado)
+    geo_df = geo_df.rename({col: col.upper() for col in geo_df.columns})
     total_rows = geo_df.height
 
     elapsed = time.perf_counter() - started_at
@@ -408,10 +414,14 @@ def _left_join_geo(
 
     geo_renamed = geo_df.rename(geo_rename)
 
+    # Garantir que a coluna de join seja string em ambos os lados
+    cis_df = cis_df.with_columns(pl.col(join_column).cast(pl.Utf8))
+    geo_renamed = geo_renamed.with_columns(pl.col(join_column).cast(pl.Utf8))
+
     result = cis_df.join(
         geo_renamed,
         on=join_column,
-        how="left",
+        how="inner",
     )
 
     _log(f"Left join GEO complete: {result.height:,} rows, {result.width:,} columns")
@@ -549,7 +559,11 @@ def _build_joined_report(
 
     joined_lazy = (
         cis_df.lazy()
-        .join(pl.scan_parquet(str(mdm_result.parquet_path)), on="NIO", how="left")
+        .join(
+            pl.scan_parquet(str(mdm_result.parquet_path)).rename({"nio": "NIO"}),
+            on="NIO",
+            how="left",
+        )
         .with_columns(
             pl.lit(report_day_text).alias("REPORT_DAY"),
             pl.col("dia").is_not_null().fill_null(False).alias("HAS_MDM_DATA"),

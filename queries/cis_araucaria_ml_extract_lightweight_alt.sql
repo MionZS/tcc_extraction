@@ -41,6 +41,8 @@ meters_araucaria_base AS (
         e.cod_sub_tipo_eqip_emd AS cod_subtipo_medidor,
         ccord.num_coory_xxx AS lat,
         ccord.num_coorx_xxx AS lon,
+        psx.num_coorx_psx   AS COORD_X_POSTE,
+        psx.num_coory_psx   AS COORD_Y_POSTE,
         mu.nom_mun_mun AS municipio
     FROM rel_equip_uc t
     JOIN medidores_araucaria ma
@@ -56,6 +58,8 @@ meters_araucaria_base AS (
         ON e.num_eqip_emd = t.num_eqip_reu
     LEFT JOIN REDEDES.cad_coordenada_uc_ee ccord
         ON ccord.cod_un_cons_xxx = c.cod_un_cons_uee
+    LEFT JOIN cad_pste_sist_extn psx ON psx.num_pste_psx = c.num_pste_uee
+        AND psx.cod_situ_psx = 'AT'
     LEFT JOIN REDEDES.tab_sub_tipo_equip ste
         ON ste.cod_sub_tipo_eqip_ste = e.cod_sub_tipo_eqip_emd
     WHERE t.dta_reti_reu IS NULL
