@@ -81,6 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the MDM SQL file.",
     )
     parser.add_argument(
+        "--timegrid-sql",
+        type=Path,
+        default=None,
+        help="Path to the TIMEGRID SQL file. If provided, runs the timegrid "
+             "step at the end of the pipeline (grade 5 min, uma linha por intervalo).",
+    )
+    parser.add_argument(
         "--publish-target",
         type=Path,
         default=DEFAULT_PUBLISH_TARGET,
@@ -128,6 +135,7 @@ def main() -> int:
             cis_sql_path=args.cis_sql,
             geo_sql_path=args.geo_sql,
             mdm_sql_path=args.mdm_sql,
+            timegrid_sql_path=args.timegrid_sql,
             publish_target=publish_target,
             keep_temp=args.keep_temp,
             continue_on_error=args.continue_on_error,
@@ -153,6 +161,7 @@ def main() -> int:
             cis_sql_path=args.cis_sql,
             geo_sql_path=args.geo_sql,
             mdm_sql_path=args.mdm_sql,
+            timegrid_sql_path=args.timegrid_sql,
             publish_target=publish_target,
             keep_temp=args.keep_temp,
         )
@@ -165,11 +174,14 @@ def main() -> int:
         print(f"GEO rows   : {result.total_geo_rows:,}")
         print(f"NIOs       : {result.total_nios:,}")
         print(f"MDM rows   : {result.total_mdm_rows:,}")
+        print(f"TIMEGRID rows: {result.total_timegrid_rows:,}")
         print(f"CIS CSV    : {result.cis_csv}")
         if result.geo_csv is not None:
             print(f"GEO CSV    : {result.geo_csv}")
         if result.mdm_csv is not None:
             print(f"MDM CSV    : {result.mdm_csv}")
+        if result.timegrid_csv is not None:
+            print(f"TIMEGRID CSV: {result.timegrid_csv}")
         if result.joined_csv is not None:
             print(f"Joined CSV : {result.joined_csv}")
 

@@ -42,10 +42,12 @@ QUERIES_DIR = Path(__file__).resolve().parent / "queries"
 CIS_QUERY_PATH = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
 GEO_QUERY_PATH = QUERIES_DIR / "geo_ucs.sql"
 MDM_QUERY_PATH = QUERIES_DIR / "mdm_coluna.sql"
+TIMEGRID_QUERY_PATH = QUERIES_DIR / "memoria_de_massa_nio_list.sql"
 DEFAULT_OUTPUT_DIR = Path("output")
 DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_DIR / "raw" / "CIS"
 DEFAULT_RAW_GEO_DIR = DEFAULT_OUTPUT_DIR / "raw" / "GEO"
 DEFAULT_RAW_ORCA_DIR = DEFAULT_OUTPUT_DIR / "raw" / "ORCA"
+DEFAULT_RAW_TIMEGRID_DIR = DEFAULT_OUTPUT_DIR / "raw" / "TIMEGRID"
 DEFAULT_REFINED_REPORTS_DIR = DEFAULT_OUTPUT_DIR / "refined" / "reports"
 DEFAULT_MDM_BATCH_SIZE = 500
 DEFAULT_GEO_BATCH_SIZE = 500
@@ -71,10 +73,13 @@ class PipelineResult:
     mdm_csv: Path | None
     joined_parquet: Path | None
     joined_csv: Path | None
+    timegrid_parquet: Path | None
+    timegrid_csv: Path | None
     total_cis_rows: int
     total_geo_rows: int
     total_nios: int
     total_mdm_rows: int
+    total_timegrid_rows: int
 
 
 
@@ -435,8 +440,10 @@ def _build_oracle_string_list(connection: Connection, values: Sequence[str]):
 
 
 
-def _merge_temp_parquets(parquet_files: Sequence[Path], final_parquet: Path, final_csv: Path) -> None:
-    lazy_frame = pl.scan_parquet([str(path) for path in parquet_files]).sort(["dia", "nio"])
+def _merge_temp_parquets(parquet_files: Sequence[Path], final_parquet: Path, final_csv: Path, *, sort_by: Sequence[str] | None = None) -> None:
+    if sort_by is None:
+        sort_by = ["dia", "nio"]
+    lazy_frame = pl.scan_parquet([str(path) for path in parquet_files]).sort(sort_by)
     lazy_frame.sink_parquet(final_parquet)
     lazy_frame.sink_csv(final_csv, separator=";")
 
@@ -539,6 +546,111 @@ def _extract_mdm_dataframe(
 
 
 
+def _extract_timegrid_dataframe(
+    timegrid_sql_path: Path,
+    nios: Sequence[str],
+    output_dir: Path,
+    report_day: date,
+    days_back: int,
+    batch_size: int,
+    fetch_size: int,
+    *,
+    keep_temp: bool = False,
+) -> MdmExtractResult:
+    """Extrai a grade horária (timegrid) completa para os NIOs fornecidos.
+
+    Similar ao MDM mas gera 288 linhas por NIO (uma a cada 5 min)
+    e salva em ``raw/TIMEGRID/``.
+    """
+    if not nios:
+        _log("No NIOs provided; skipping timegrid extract.")
+        return MdmExtractResult(None, None, 0, tuple())
+
+    timegrid_sql = _load_sql(timegrid_sql_path)
+    tmp_dir = _prepare_temp_dir(output_dir, report_day)
+    final_parquet = output_dir / f"araucaria_timegrid_{_date_token(report_day)}.parquet"
+    final_csv = output_dir / f"araucaria_timegrid_{_date_token(report_day)}.csv"
+
+    batch_files: list[Path] = []
+    tg_columns: list[str] = []
+    total_rows = 0
+
+    engine = create_engine("orca")
+    started_at = time.perf_counter()
+
+    try:
+        with engine.connect() as connection:
+            for batch_index, nio_batch in enumerate(_chunked(list(nios), batch_size), start=1):
+                batch_started_at = time.perf_counter()
+                _log(
+                    f"TIMEGRID batch {batch_index}: {len(nio_batch):,} NIOs "
+                    f"({nio_batch[0]}..{nio_batch[-1]})"
+                )
+
+                oracle_list = _build_oracle_string_list(connection, nio_batch)
+                result = connection.execute(
+                    text(timegrid_sql),
+                    {
+                        "DAYS_BACK": days_back,
+                        "UCS": oracle_list,
+                    },
+                )
+
+                current_columns = list(result.keys())
+                if not tg_columns:
+                    tg_columns = current_columns
+
+                dataframe_chunks: list[pl.DataFrame] = []
+                while True:
+                    rows = result.fetchmany(fetch_size)
+                    if not rows:
+                        break
+                    dataframe_chunks.append(
+                        _normalize_nio_column(_rows_to_frame(rows, current_columns), "NIO")
+                    )
+
+                batch_elapsed = time.perf_counter() - batch_started_at
+                if not dataframe_chunks:
+                    _log(f"TIMEGRID batch {batch_index}: 0 rows in {batch_elapsed:.1f}s")
+                    continue
+
+                batch_df = pl.concat(dataframe_chunks, how="vertical_relaxed")
+                total_rows += batch_df.height
+
+                batch_path = tmp_dir / f"timegrid_batch_{batch_index:05d}.parquet"
+                batch_df.write_parquet(batch_path)
+                batch_files.append(batch_path)
+
+                _log(
+                    f"TIMEGRID batch {batch_index}: {batch_df.height:,} rows in {batch_elapsed:.1f}s "
+                    f"-> {batch_path.name}"
+                )
+    finally:
+        engine.dispose()
+
+    if batch_files:
+        _merge_temp_parquets(
+            batch_files, final_parquet, final_csv,
+            sort_by=["NIO", "Data Time"],
+        )
+    elif tg_columns:
+        empty_df = _build_empty_frame(tg_columns)
+        _write_dataframe_outputs(empty_df, final_parquet, final_csv)
+        _log("TIMEGRID query returned no rows for the requested day.")
+    else:
+        if not keep_temp and tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        return MdmExtractResult(None, None, 0, tuple())
+
+    if not keep_temp and tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+
+    elapsed = time.perf_counter() - started_at
+    _log(f"TIMEGRID extract complete: {total_rows:,} rows in {elapsed:.1f}s")
+    return MdmExtractResult(final_parquet, final_csv, total_rows, tuple(tg_columns))
+
+
+
 def _build_joined_report(
     cis_df: pl.DataFrame,
     mdm_result: MdmExtractResult,
@@ -587,30 +699,37 @@ def run_daily_araucaria_pipeline(
     cis_sql_path: Path | str = CIS_QUERY_PATH,
     geo_sql_path: Path | str = GEO_QUERY_PATH,
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
+    timegrid_sql_path: Path | str | None = None,
     publish_target: Path | None = None,
     keep_temp: bool = False,
 ) -> PipelineResult:
-    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO and MDM.
+    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO, MDM and timegrid.
 
-    Flow: CIS → GEO (left join por UC) → MDM → relatório final.
+    Flow: CIS → GEO (left join por UC) → MDM → relatório final
+          └──> timegrid (grade 5 min, opcional)
 
     ``days_back=1`` means yesterday with the current SQL semantics.
+    If ``timegrid_sql_path`` is provided, runs the timegrid step
+    at the end of the pipeline.
     """
     output_dir = Path(output_dir)
     cis_sql_path = Path(cis_sql_path)
     geo_sql_path = Path(geo_sql_path)
     mdm_sql_path = Path(mdm_sql_path)
+    timegrid_sql_path = Path(timegrid_sql_path) if timegrid_sql_path is not None else None
     report_day = _report_day_from_days_back(days_back)
 
     raw_cis_dir = output_dir / "raw" / "CIS"
     raw_geo_dir = output_dir / "raw" / "GEO"
     raw_orca_dir = output_dir / "raw" / "ORCA"
+    raw_timegrid_dir = output_dir / "raw" / "TIMEGRID"
     refined_reports_dir = output_dir / "refined" / "reports"
 
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_cis_dir.mkdir(parents=True, exist_ok=True)
     raw_geo_dir.mkdir(parents=True, exist_ok=True)
     raw_orca_dir.mkdir(parents=True, exist_ok=True)
+    raw_timegrid_dir.mkdir(parents=True, exist_ok=True)
     refined_reports_dir.mkdir(parents=True, exist_ok=True)
 
     # Manifesto de rastreabilidade
@@ -621,6 +740,8 @@ def run_daily_araucaria_pipeline(
     _log(f"CIS query: {cis_sql_path}")
     _log(f"GEO query: {geo_sql_path}")
     _log(f"MDM query: {mdm_sql_path}")
+    if timegrid_sql_path is not None:
+        _log(f"TIMEGRID query: {timegrid_sql_path}")
 
     # --- Step 1: CIS extract ---
     cis_df = _extract_cis_dataframe(cis_sql_path)
@@ -689,7 +810,35 @@ def run_daily_araucaria_pipeline(
             _log(f"Publish failed: {exc}")
             manifest.add_error(f"Publish failed: {exc}")
 
-    # --- Step 7: Finalizar e salvar manifest ---
+    # --- Step 7: Timegrid extract (opcional) ---
+    timegrid_parquet: Path | None = None
+    timegrid_csv: Path | None = None
+    total_timegrid_rows = 0
+    if timegrid_sql_path is not None:
+        _log("TIMEGRID step enabled")
+        nios_tg = _extract_nios(cis_geo_df)  # mesmos NIOs do CIS+GEO
+        _log(f"Unique NIOs for TIMEGRID: {len(nios_tg):,}")
+
+        timegrid_result = _extract_timegrid_dataframe(
+            timegrid_sql_path=timegrid_sql_path,
+            nios=nios_tg,
+            output_dir=raw_timegrid_dir,
+            report_day=report_day,
+            days_back=days_back,
+            batch_size=mdm_batch_size,
+            fetch_size=fetch_size,
+            keep_temp=keep_temp,
+        )
+        timegrid_parquet = timegrid_result.parquet_path
+        timegrid_csv = timegrid_result.csv_path
+        total_timegrid_rows = timegrid_result.row_count
+        manifest.record_step(
+            "timegrid_extract",
+            rows=timegrid_result.row_count,
+            output=str(timegrid_result.csv_path) if timegrid_result.csv_path else None,
+        )
+
+    # --- Step 8: Finalizar e salvar manifest ---
     manifest.finalize()
     try:
         manifest_path = manifest.save()
@@ -702,6 +851,8 @@ def run_daily_araucaria_pipeline(
     _log(f"GEO CSV  : {geo_csv}")
     if mdm_result.csv_path is not None:
         _log(f"MDM CSV  : {mdm_result.csv_path}")
+    if timegrid_csv is not None:
+        _log(f"TIMEGRID CSV: {timegrid_csv}")
     if joined_csv is not None:
         _log(f"Joined   : {joined_csv}")
 
@@ -715,10 +866,13 @@ def run_daily_araucaria_pipeline(
         mdm_csv=mdm_result.csv_path,
         joined_parquet=joined_parquet,
         joined_csv=joined_csv,
+        timegrid_parquet=timegrid_parquet,
+        timegrid_csv=timegrid_csv,
         total_cis_rows=cis_df.height,
         total_geo_rows=geo_df.height,
         total_nios=len(nios),
         total_mdm_rows=mdm_result.row_count,
+        total_timegrid_rows=total_timegrid_rows,
     )
 
 
@@ -745,6 +899,7 @@ def run_period_pipeline(
     cis_sql_path: Path | str = CIS_QUERY_PATH,
     geo_sql_path: Path | str = GEO_QUERY_PATH,
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
+    timegrid_sql_path: Path | str | None = None,
     publish_target: Path | None = None,
     keep_temp: bool = False,
     continue_on_error: bool = True,
@@ -804,11 +959,12 @@ def run_period_pipeline(
                 cis_sql_path=cis_sql_path,
                 geo_sql_path=geo_sql_path,
                 mdm_sql_path=mdm_sql_path,
+                timegrid_sql_path=timegrid_sql_path,
                 publish_target=publish_target,
                 keep_temp=keep_temp,
             )
             results.append(result)
-            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}")
+            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}, TIMEGRID: {result.total_timegrid_rows:,}")
         except Exception as exc:
             _log(f"  ❌ Day {day.isoformat()} FAILED: {exc}")
             if not continue_on_error:
@@ -824,10 +980,13 @@ def run_period_pipeline(
                 mdm_csv=None,
                 joined_parquet=None,
                 joined_csv=None,
+                timegrid_parquet=None,
+                timegrid_csv=None,
                 total_cis_rows=0,
                 total_geo_rows=0,
                 total_nios=0,
                 total_mdm_rows=0,
+                total_timegrid_rows=0,
             ))
 
     elapsed = time.perf_counter() - started_at
