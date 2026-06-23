@@ -691,9 +691,16 @@ def _extract_weather_dataframe(
         _log(f"Unique NIOs for WEATHER: {len(nios):,}")
 
         # Calcular coordenadas medianas a partir do CIS
+        # Caso-insensitive lookup for LAT/LONG columns
+        cis_cols = {c.lower(): c for c in cis_df.columns}
+        lat_col = cis_cols.get("lat")
+        lon_col = cis_cols.get("long")
+        if lat_col is None or lon_col is None:
+            _log(f"WEATHER: LAT/LONG columns not found in CIS DataFrame")
+            return MdmExtractResult(None, None, 0, tuple())
         coord_df = cis_df.select([
-            pl.col("LAT").cast(pl.Float64).median().alias("lat"),
-            pl.col("LONG").cast(pl.Float64).median().alias("lon"),
+            pl.col(lat_col).cast(pl.Float64).median().alias("lat"),
+            pl.col(lon_col).cast(pl.Float64).median().alias("lon"),
         ])
         lat = coord_df["lat"].item()
         lon = coord_df["lon"].item()
