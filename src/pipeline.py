@@ -48,6 +48,7 @@ DEFAULT_RAW_CIS_DIR = DEFAULT_OUTPUT_DIR / "raw" / "CIS"
 DEFAULT_RAW_GEO_DIR = DEFAULT_OUTPUT_DIR / "raw" / "GEO"
 DEFAULT_RAW_ORCA_DIR = DEFAULT_OUTPUT_DIR / "raw" / "ORCA"
 DEFAULT_RAW_TIMEGRID_DIR = DEFAULT_OUTPUT_DIR / "raw" / "TIMEGRID"
+DEFAULT_RAW_WEATHER_DIR = DEFAULT_OUTPUT_DIR / "raw" / "WEATHER"
 DEFAULT_REFINED_REPORTS_DIR = DEFAULT_OUTPUT_DIR / "refined" / "reports"
 DEFAULT_MDM_BATCH_SIZE = 500
 DEFAULT_GEO_BATCH_SIZE = 500
@@ -75,11 +76,14 @@ class PipelineResult:
     joined_csv: Path | None
     timegrid_parquet: Path | None
     timegrid_csv: Path | None
+    weather_parquet: Path | None
+    weather_csv: Path | None
     total_cis_rows: int
     total_geo_rows: int
     total_nios: int
     total_mdm_rows: int
     total_timegrid_rows: int
+    total_weather_rows: int
 
 
 
@@ -201,13 +205,18 @@ def _normalize_nio(value: Any) -> str | None:
 
 
 def _normalize_nio_column(df: pl.DataFrame, column_name: str = "NIO") -> pl.DataFrame:
-    if column_name not in df.columns:
+    # Busca a coluna ignorando case (Oracle pode retornar nio, NIO, etc.)
+    actual_col = next(
+        (col for col in df.columns if str(col).strip().upper() == column_name.upper()),
+        None,
+    )
+    if actual_col is None:
         return df
 
     return df.with_columns(
-        pl.col(column_name)
+        pl.col(actual_col)
         .map_elements(_normalize_nio, return_dtype=pl.String)
-        .alias(column_name)
+        .alias(actual_col)
     )
 
 
@@ -631,7 +640,7 @@ def _extract_timegrid_dataframe(
     if batch_files:
         _merge_temp_parquets(
             batch_files, final_parquet, final_csv,
-            sort_by=["NIO", "Data Time"],
+            sort_by=["nio", "Data Time"],
         )
     elif tg_columns:
         empty_df = _build_empty_frame(tg_columns)
@@ -648,6 +657,62 @@ def _extract_timegrid_dataframe(
     elapsed = time.perf_counter() - started_at
     _log(f"TIMEGRID extract complete: {total_rows:,} rows in {elapsed:.1f}s")
     return MdmExtractResult(final_parquet, final_csv, total_rows, tuple(tg_columns))
+
+
+
+def _extract_weather_dataframe(
+    cis_df: pl.DataFrame,
+    cis_geo_df: pl.DataFrame,
+    report_day: date,
+    output_dir: Path,
+    *,
+    enable: bool = True,
+) -> MdmExtractResult:
+    """Extrai dados meteorológicos do Open-Meteo e formata como JSON (MDM-like).
+
+    Usa as coordenadas (LAT/LONG) do CIS para consultar a API histórica
+    do Open-Meteo e cria um DataFrame com uma linha por NIO, onde cada
+    variável climática é uma coluna JSON com 24 slots horários.
+    """
+    if not enable:
+        _log("WEATHER step disabled.")
+        return MdmExtractResult(None, None, 0, tuple())
+
+    from src.weather import build_weather_dataframe
+
+    final_parquet = output_dir / f"araucaria_weather_{_date_token(report_day)}.parquet"
+    final_csv = output_dir / f"araucaria_weather_{_date_token(report_day)}.csv"
+
+    started_at = time.perf_counter()
+
+    try:
+        # Extrair NIOs do DataFrame mesclado (CIS+GEO)
+        nios = _extract_nios(cis_geo_df)
+        _log(f"Unique NIOs for WEATHER: {len(nios):,}")
+
+        # Calcular coordenadas medianas a partir do CIS
+        coord_df = cis_df.select([
+            pl.col("LAT").cast(pl.Float64).median().alias("lat"),
+            pl.col("LONG").cast(pl.Float64).median().alias("lon"),
+        ])
+        lat = coord_df["lat"].item()
+        lon = coord_df["lon"].item()
+        _log(f"Median coordinates for WEATHER: lat={lat:.4f}, lon={lon:.4f}")
+
+        weather_df = build_weather_dataframe(nios, report_day, lat, lon)
+    except Exception as exc:
+        _log(f"WEATHER extract failed: {exc}")
+        return MdmExtractResult(None, None, 0, tuple())
+
+    if weather_df.is_empty():
+        _log("WEATHER extract returned no rows.")
+        return MdmExtractResult(None, None, 0, tuple())
+
+    _write_dataframe_outputs(weather_df, final_parquet, final_csv)
+
+    elapsed = time.perf_counter() - started_at
+    _log(f"WEATHER extract complete: {weather_df.height:,} rows in {elapsed:.1f}s")
+    return MdmExtractResult(final_parquet, final_csv, weather_df.height, tuple(weather_df.columns))
 
 
 
@@ -699,18 +764,19 @@ def run_daily_araucaria_pipeline(
     cis_sql_path: Path | str = CIS_QUERY_PATH,
     geo_sql_path: Path | str = GEO_QUERY_PATH,
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
-    timegrid_sql_path: Path | str | None = None,
+    timegrid_sql_path: Path | str | None = TIMEGRID_QUERY_PATH,
+    enable_weather: bool = True,
     publish_target: Path | None = None,
     keep_temp: bool = False,
 ) -> PipelineResult:
-    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO, MDM and timegrid.
+    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO, MDM, weather and timegrid.
 
-    Flow: CIS → GEO (left join por UC) → MDM → relatório final
-          └──> timegrid (grade 5 min, opcional)
+    Flow: CIS → GEO (left join por UC) → MDM → weather → timegrid → relatório final
+          └──> timegrid (grade 5 min) e weather (Open-Meteo) são executados por padrão
 
     ``days_back=1`` means yesterday with the current SQL semantics.
-    If ``timegrid_sql_path`` is provided, runs the timegrid step
-    at the end of the pipeline.
+    Set ``timegrid_sql_path=None`` to skip the timegrid step.
+    Set ``enable_weather=False`` to skip the weather step.
     """
     output_dir = Path(output_dir)
     cis_sql_path = Path(cis_sql_path)
@@ -787,7 +853,23 @@ def run_daily_araucaria_pipeline(
         output=str(mdm_result.csv_path) if mdm_result.csv_path else None,
     )
 
-    # --- Step 5: Final join (CIS+GEO + MDM) ---
+    # --- Step 5: Weather extract (Open-Meteo) ---
+    raw_weather_dir = output_dir / "raw" / "WEATHER"
+    raw_weather_dir.mkdir(parents=True, exist_ok=True)
+    weather_result = _extract_weather_dataframe(
+        cis_df=cis_df,
+        cis_geo_df=cis_geo_df,
+        report_day=report_day,
+        output_dir=raw_weather_dir,
+        enable=enable_weather,
+    )
+    manifest.record_step(
+        "weather_extract",
+        rows=weather_result.row_count,
+        output=str(weather_result.csv_path) if weather_result.csv_path else None,
+    )
+
+    # --- Step 6: Final join (CIS+GEO + MDM + weather) ---
     joined_parquet, joined_csv = _build_joined_report(
         cis_df=cis_geo_df,
         mdm_result=mdm_result,
@@ -796,7 +878,7 @@ def run_daily_araucaria_pipeline(
     )
     manifest.record_step("final_join", output=str(joined_csv) if joined_csv else None)
 
-    # --- Step 6: Publish para OneDrive ---
+    # --- Step 7: Publish para OneDrive ---
     if publish_target is not None and joined_csv is not None:
         try:
             pub_result = publish_to_target(joined_csv, publish_target)
@@ -810,7 +892,7 @@ def run_daily_araucaria_pipeline(
             _log(f"Publish failed: {exc}")
             manifest.add_error(f"Publish failed: {exc}")
 
-    # --- Step 7: Timegrid extract (opcional) ---
+    # --- Step 8: Timegrid extract (opcional) ---
     timegrid_parquet: Path | None = None
     timegrid_csv: Path | None = None
     total_timegrid_rows = 0
@@ -838,7 +920,7 @@ def run_daily_araucaria_pipeline(
             output=str(timegrid_result.csv_path) if timegrid_result.csv_path else None,
         )
 
-    # --- Step 8: Finalizar e salvar manifest ---
+    # --- Step 9: Finalizar e salvar manifest ---
     manifest.finalize()
     try:
         manifest_path = manifest.save()
@@ -851,6 +933,8 @@ def run_daily_araucaria_pipeline(
     _log(f"GEO CSV  : {geo_csv}")
     if mdm_result.csv_path is not None:
         _log(f"MDM CSV  : {mdm_result.csv_path}")
+    if weather_result.csv_path is not None:
+        _log(f"WEATHER CSV: {weather_result.csv_path}")
     if timegrid_csv is not None:
         _log(f"TIMEGRID CSV: {timegrid_csv}")
     if joined_csv is not None:
@@ -868,11 +952,14 @@ def run_daily_araucaria_pipeline(
         joined_csv=joined_csv,
         timegrid_parquet=timegrid_parquet,
         timegrid_csv=timegrid_csv,
+        weather_parquet=weather_result.parquet_path,
+        weather_csv=weather_result.csv_path,
         total_cis_rows=cis_df.height,
         total_geo_rows=geo_df.height,
         total_nios=len(nios),
         total_mdm_rows=mdm_result.row_count,
         total_timegrid_rows=total_timegrid_rows,
+        total_weather_rows=weather_result.row_count,
     )
 
 
@@ -899,7 +986,8 @@ def run_period_pipeline(
     cis_sql_path: Path | str = CIS_QUERY_PATH,
     geo_sql_path: Path | str = GEO_QUERY_PATH,
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
-    timegrid_sql_path: Path | str | None = None,
+    timegrid_sql_path: Path | str | None = TIMEGRID_QUERY_PATH,
+    enable_weather: bool = True,
     publish_target: Path | None = None,
     keep_temp: bool = False,
     continue_on_error: bool = True,
@@ -960,11 +1048,12 @@ def run_period_pipeline(
                 geo_sql_path=geo_sql_path,
                 mdm_sql_path=mdm_sql_path,
                 timegrid_sql_path=timegrid_sql_path,
+                enable_weather=enable_weather,
                 publish_target=publish_target,
                 keep_temp=keep_temp,
             )
             results.append(result)
-            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}, TIMEGRID: {result.total_timegrid_rows:,}")
+            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}, WEATHER: {result.total_weather_rows:,}, TIMEGRID: {result.total_timegrid_rows:,}")
         except Exception as exc:
             _log(f"  ❌ Day {day.isoformat()} FAILED: {exc}")
             if not continue_on_error:
@@ -982,11 +1071,14 @@ def run_period_pipeline(
                 joined_csv=None,
                 timegrid_parquet=None,
                 timegrid_csv=None,
+                weather_parquet=None,
+                weather_csv=None,
                 total_cis_rows=0,
                 total_geo_rows=0,
                 total_nios=0,
                 total_mdm_rows=0,
                 total_timegrid_rows=0,
+                total_weather_rows=0,
             ))
 
     elapsed = time.perf_counter() - started_at

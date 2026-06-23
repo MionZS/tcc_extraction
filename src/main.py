@@ -83,9 +83,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--timegrid-sql",
         type=Path,
-        default=None,
-        help="Path to the TIMEGRID SQL file. If provided, runs the timegrid "
-             "step at the end of the pipeline (grade 5 min, uma linha por intervalo).",
+        default=Path("queries/memoria_de_massa_nio_list.sql"),
+        help="Path to the TIMEGRID SQL file.",
+    )
+    parser.add_argument(
+        "--no-timegrid",
+        action="store_true",
+        help="Disable the TIMEGRID (grade 5 min) step.",
+    )
+    parser.add_argument(
+        "--no-weather",
+        action="store_true",
+        help="Disable the WEATHER (Open-Meteo) step.",
     )
     parser.add_argument(
         "--publish-target",
@@ -135,7 +144,8 @@ def main() -> int:
             cis_sql_path=args.cis_sql,
             geo_sql_path=args.geo_sql,
             mdm_sql_path=args.mdm_sql,
-            timegrid_sql_path=args.timegrid_sql,
+            timegrid_sql_path=None if args.no_timegrid else args.timegrid_sql,
+            enable_weather=not args.no_weather,
             publish_target=publish_target,
             keep_temp=args.keep_temp,
             continue_on_error=args.continue_on_error,
@@ -161,7 +171,8 @@ def main() -> int:
             cis_sql_path=args.cis_sql,
             geo_sql_path=args.geo_sql,
             mdm_sql_path=args.mdm_sql,
-            timegrid_sql_path=args.timegrid_sql,
+            timegrid_sql_path=None if args.no_timegrid else args.timegrid_sql,
+            enable_weather=not args.no_weather,
             publish_target=publish_target,
             keep_temp=args.keep_temp,
         )
@@ -174,12 +185,15 @@ def main() -> int:
         print(f"GEO rows   : {result.total_geo_rows:,}")
         print(f"NIOs       : {result.total_nios:,}")
         print(f"MDM rows   : {result.total_mdm_rows:,}")
+        print(f"WEATHER rows: {result.total_weather_rows:,}")
         print(f"TIMEGRID rows: {result.total_timegrid_rows:,}")
         print(f"CIS CSV    : {result.cis_csv}")
         if result.geo_csv is not None:
             print(f"GEO CSV    : {result.geo_csv}")
         if result.mdm_csv is not None:
             print(f"MDM CSV    : {result.mdm_csv}")
+        if result.weather_csv is not None:
+            print(f"WEATHER CSV: {result.weather_csv}")
         if result.timegrid_csv is not None:
             print(f"TIMEGRID CSV: {result.timegrid_csv}")
         if result.joined_csv is not None:
