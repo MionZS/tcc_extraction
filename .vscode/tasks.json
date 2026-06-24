@@ -203,6 +203,22 @@
 			"command": "uv run python araucaria_sample_pipeline.py --days-back 1",
 			"problemMatcher": [],
 			"group": "none"
+		},
+		{
+			"label": "weather: integration test",
+			"type": "shell",
+			"command": "uv run python tests/test_weather_integration.py",
+			"group": "none"
+		},
+		{
+			"label": "check last date",
+			"type": "shell",
+			"command": "scripts\check_last_date.cmd",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			}
 		}
 	],
 	"inputs": [

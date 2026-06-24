@@ -110,9 +110,53 @@ def _load_sql(path: Path) -> str:
 
 
 def _report_day_from_days_back(days_back: int) -> date:
-    if days_back < 0:
-        raise ValueError("days_back must be >= 0")
+    if days_back < 1:
+        raise ValueError("days_back must be >= 1 (0 = today is not allowed)")
     return date.today() - timedelta(days=days_back)
+
+
+# ── Date-range helpers ──────────────────────────────────────────────────────
+
+def _min_allowed_report_day() -> date:
+    """Earliest report day we may process (inclusive).
+
+    MDM data is retained for about 4 months.  The source system purges
+    entire months at month boundaries — at midnight on 01/Jul, for
+    instance, all February data is gone.
+
+    The cut-off month is ``current_month - 5``.  Any date that falls
+    *in or before* that month is rejected.
+    """
+    today = date.today()
+    # The month that is 5 months before the current month
+    m = today.month - 5
+    y = today.year
+    if m < 1:
+        m += 12
+        y -= 1
+    # Move to the first day of the *next* month so that the
+    # cut-off month itself is treated as too old.
+    m += 1
+    if m > 12:
+        m = 1
+        y += 1
+    return date(y, m, 1)
+
+
+def _ensure_report_day_allowed(report_day: date) -> None:
+    """Raise ``ValueError`` if *report_day* is outside the valid range."""
+    if report_day >= date.today():
+        raise ValueError(
+            f"report_day {report_day} is today or in the future — "
+            f"must be at least 1 day in the past"
+        )
+
+    min_allowed = _min_allowed_report_day()
+    if report_day < min_allowed:
+        raise ValueError(
+            f"report_day {report_day} is too old — "
+            f"MDM retention cut-off is {min_allowed.isoformat()}"
+        )
 
 
 
@@ -152,9 +196,12 @@ def _rows_to_frame(rows: Sequence[Any], columns: Sequence[str]) -> pl.DataFrame:
         return _build_empty_frame(columns)
 
     materialized_rows = _materialize_rows(rows)
+    # Normaliza nomes de colunas para UPPER_CASE (Oracle pode retornar
+    # casing inconsistente entre batches ou com quoted identifiers)
+    norm_columns = [str(c).strip().upper() for c in columns]
     return pl.DataFrame(
         materialized_rows,
-        schema=list(columns),
+        schema=list(norm_columns),
         orient="row",
         infer_schema_length=None,
         strict=False,
@@ -444,6 +491,8 @@ def _left_join_geo(
 
 def _build_oracle_string_list(connection: Connection, values: Sequence[str]):
     driver_connection = connection.connection.driver_connection
+    if driver_connection is None:
+        raise RuntimeError("Oracle driver connection is None")
     object_type = driver_connection.gettype("SYS.ODCIVARCHAR2LIST")
     return object_type.newobject(list(values))
 
@@ -451,8 +500,18 @@ def _build_oracle_string_list(connection: Connection, values: Sequence[str]):
 
 def _merge_temp_parquets(parquet_files: Sequence[Path], final_parquet: Path, final_csv: Path, *, sort_by: Sequence[str] | None = None) -> None:
     if sort_by is None:
-        sort_by = ["dia", "nio"]
-    lazy_frame = pl.scan_parquet([str(path) for path in parquet_files]).sort(sort_by)
+        sort_by = ["DIA", "NIO"]
+
+    batch_frames = [pl.scan_parquet(str(path)) for path in parquet_files]
+
+    if len(batch_frames) == 1:
+        lazy_frame = batch_frames[0]
+    else:
+        # Usa vertical_relaxed para tolerar divergências de schema entre batches
+        # (ex.: Decimal(38,0) vs Decimal(38,3) na coluna tariff_1)
+        lazy_frame = pl.concat(batch_frames, how="vertical_relaxed")
+
+    lazy_frame = lazy_frame.sort(sort_by)
     lazy_frame.sink_parquet(final_parquet)
     lazy_frame.sink_csv(final_csv, separator=";")
 
@@ -640,7 +699,7 @@ def _extract_timegrid_dataframe(
     if batch_files:
         _merge_temp_parquets(
             batch_files, final_parquet, final_csv,
-            sort_by=["nio", "Data Time"],
+            sort_by=["NIO", "DATA TIME"],
         )
     elif tg_columns:
         empty_df = _build_empty_frame(tg_columns)
@@ -696,7 +755,7 @@ def _extract_weather_dataframe(
         lat_col = cis_cols.get("lat")
         lon_col = cis_cols.get("long")
         if lat_col is None or lon_col is None:
-            _log(f"WEATHER: LAT/LONG columns not found in CIS DataFrame")
+            _log("WEATHER: LAT/LONG columns not found in CIS DataFrame")
             return MdmExtractResult(None, None, 0, tuple())
         coord_df = cis_df.select([
             pl.col(lat_col).cast(pl.Float64).median().alias("lat"),
@@ -733,7 +792,9 @@ def _build_joined_report(
     joined_csv = output_dir / f"araucaria_daily_report_{_date_token(report_day)}.csv"
     report_day_text = report_day.isoformat()
 
-    if mdm_result.parquet_path is None:
+    has_mdm = mdm_result.parquet_path is not None
+
+    if not has_mdm:
         joined_df = cis_df.with_columns(
             pl.lit(report_day_text).alias("REPORT_DAY"),
             pl.lit(False).alias("HAS_MDM_DATA"),
@@ -741,19 +802,27 @@ def _build_joined_report(
         _write_dataframe_outputs(joined_df, joined_parquet, joined_csv)
         return joined_parquet, joined_csv
 
-    joined_lazy = (
-        cis_df.lazy()
-        .join(
-            pl.scan_parquet(str(mdm_result.parquet_path)).rename({"nio": "NIO"}),
+    # Start with CIS+GEO
+    joined_lazy = cis_df.lazy()
+
+    # Join MDM depois (última extração antes do relatório final)
+    if has_mdm:
+        joined_lazy = joined_lazy.join(
+            pl.scan_parquet(str(mdm_result.parquet_path)).rename({"nio": "NIO"}, strict=False),
             on="NIO",
             how="left",
         )
-        .with_columns(
-            pl.lit(report_day_text).alias("REPORT_DAY"),
-            pl.col("dia").is_not_null().fill_null(False).alias("HAS_MDM_DATA"),
+        joined_lazy = joined_lazy.with_columns(
+            pl.col("DIA").is_not_null().fill_null(False).alias("HAS_MDM_DATA"),
         )
-        .sort(["NIO"])
-    )
+    else:
+        joined_lazy = joined_lazy.with_columns(
+            pl.lit(False).alias("HAS_MDM_DATA"),
+        )
+
+    joined_lazy = joined_lazy.with_columns(
+        pl.lit(report_day_text).alias("REPORT_DAY"),
+    ).sort(["NIO"])
 
     joined_lazy.sink_parquet(joined_parquet)
     joined_lazy.sink_csv(joined_csv, separator=";")
@@ -776,10 +845,12 @@ def run_daily_araucaria_pipeline(
     publish_target: Path | None = None,
     keep_temp: bool = False,
 ) -> PipelineResult:
-    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO, MDM, weather and timegrid.
+    """Run the daily ARAUCARIA extraction pipeline with CIS, GEO, weather, MDM and timegrid.
 
-    Flow: CIS → GEO (left join por UC) → MDM → weather → timegrid → relatório final
-          └──> timegrid (grade 5 min) e weather (Open-Meteo) são executados por padrão
+    Flow: CIS → GEO (left join por UC) → weather → MDM → relatório final → timegrid
+          └──> weather e MDM são extraídos na sequência; MDM é joined no relatório final
+          └──> weather é exportado como CSV separado (join será implementado futuramente)
+          └──> timegrid (grade 5 min) é extraído separadamente após o publish
 
     ``days_back=1`` means yesterday with the current SQL semantics.
     Set ``timegrid_sql_path=None`` to skip the timegrid step.
@@ -791,6 +862,7 @@ def run_daily_araucaria_pipeline(
     mdm_sql_path = Path(mdm_sql_path)
     timegrid_sql_path = Path(timegrid_sql_path) if timegrid_sql_path is not None else None
     report_day = _report_day_from_days_back(days_back)
+    _ensure_report_day_allowed(report_day)
 
     raw_cis_dir = output_dir / "raw" / "CIS"
     raw_geo_dir = output_dir / "raw" / "GEO"
@@ -808,7 +880,7 @@ def run_daily_araucaria_pipeline(
     # Manifesto de rastreabilidade
     manifest = create_manifest(report_day, sample_size=0)
 
-    _log(f"Starting ARAUCARIA daily pipeline")
+    _log("Starting ARAUCARIA daily pipeline")
     _log(f"Target report day: {report_day.isoformat()} (days_back={days_back})")
     _log(f"CIS query: {cis_sql_path}")
     _log(f"GEO query: {geo_sql_path}")
@@ -840,7 +912,23 @@ def run_daily_araucaria_pipeline(
     cis_geo_df = _left_join_geo(cis_df, geo_df, join_column="UC", prefix="GEO_")
     manifest.record_step("geo_join", rows=cis_geo_df.height)
 
-    # --- Step 4: MDM extract (usando NIOs do CIS+GEO) ---
+    # --- Step 4: Weather extract (Open-Meteo) ---
+    raw_weather_dir = output_dir / "raw" / "WEATHER"
+    raw_weather_dir.mkdir(parents=True, exist_ok=True)
+    weather_result = _extract_weather_dataframe(
+        cis_df=cis_df,
+        cis_geo_df=cis_geo_df,
+        report_day=report_day,
+        output_dir=raw_weather_dir,
+        enable=enable_weather,
+    )
+    manifest.record_step(
+        "weather_extract",
+        rows=weather_result.row_count,
+        output=str(weather_result.csv_path) if weather_result.csv_path else None,
+    )
+
+    # --- Step 5: MDM extract (última extração antes do join final) ---
     nios = _extract_nios(cis_geo_df)
     _log(f"Unique NIOs selected for MDM: {len(nios):,}")
 
@@ -860,23 +948,7 @@ def run_daily_araucaria_pipeline(
         output=str(mdm_result.csv_path) if mdm_result.csv_path else None,
     )
 
-    # --- Step 5: Weather extract (Open-Meteo) ---
-    raw_weather_dir = output_dir / "raw" / "WEATHER"
-    raw_weather_dir.mkdir(parents=True, exist_ok=True)
-    weather_result = _extract_weather_dataframe(
-        cis_df=cis_df,
-        cis_geo_df=cis_geo_df,
-        report_day=report_day,
-        output_dir=raw_weather_dir,
-        enable=enable_weather,
-    )
-    manifest.record_step(
-        "weather_extract",
-        rows=weather_result.row_count,
-        output=str(weather_result.csv_path) if weather_result.csv_path else None,
-    )
-
-    # --- Step 6: Final join (CIS+GEO + MDM + weather) ---
+    # --- Step 6: Final join (CIS+GEO + MDM) ---
     joined_parquet, joined_csv = _build_joined_report(
         cis_df=cis_geo_df,
         mdm_result=mdm_result,
@@ -1031,15 +1103,23 @@ def run_period_pipeline(
 
     _log(f"Starting period pipeline: {start_date.isoformat()} to {end_date.isoformat()}")
     _log(f"Total days: {total_days}")
+    if end_date >= today:
+        _log(f"⚠️  end-date {end_date.isoformat()} is today or in the future — those dates will be skipped")
 
     started_at = time.perf_counter()
+
+    min_allowed_date = _min_allowed_report_day()
 
     for i in range(total_days):
         day = start_date + timedelta(days=i)
         days_back = (today - day).days
 
-        if days_back < 0:
-            _log(f"Skipping future date: {day.isoformat()}")
+        if days_back < 1:
+            _log(f"Skipping {day.isoformat()} — must be at least 1 day in the past")
+            continue
+
+        if day < min_allowed_date:
+            _log(f"Skipping {day.isoformat()} — before MDM retention cut-off ({min_allowed_date.isoformat()})")
             continue
 
         _log(f"\n--- Day {i + 1}/{total_days}: {day.isoformat()} (days_back={days_back}) ---")
@@ -1092,7 +1172,7 @@ def run_period_pipeline(
     success = sum(1 for r in results if r.total_cis_rows > 0)
     failed = sum(1 for r in results if r.total_cis_rows == 0)
 
-    _log(f"\nPeriod pipeline complete")
+    _log("\nPeriod pipeline complete")
     _log(f"Total days : {total_days}")
     _log(f"Success    : {success}")
     _log(f"Failed     : {failed}")

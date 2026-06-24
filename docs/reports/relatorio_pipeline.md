@@ -33,8 +33,11 @@ Cada um desses problemas foi endereçado com uma solução específica, detalhad
 │                                                                     │
 │  CIS ──► extrai NIOs ──► GEO (batch por UC) ──► join em UC         │
 │                              │                                      │
-│                              ▼                                      │
-│            MDM/ORCA (batch por NIO) ──► join em NIO ──► relatório   │
+│                    ┌─────────┴─────────┐                            │
+│                    ▼                    ▼                            │
+│            WEATHER (Open-Meteo)   MDM/ORCA (batch por NIO)          │
+│            exportado como CSV    join em NIO ──► relatório final    │
+│            (separado)                                                │
 │                              │                                      │
 │                              ▼                                      │
 │            TIMEGRID (batch por NIO) ──► grade 5 min                 │
@@ -43,6 +46,10 @@ Cada um desses problemas foi endereçado com uma solução específica, detalhad
 │            Publish para OneDrive + Manifest JSON                     │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
+
+Nota: Weather é extraído e exportado como CSV separado. A junção
+do weather no relatório final (antes do MDM) será implementada
+futuramente — veja seção 10.
 ```
 
 ### 2.2 Tecnologias Utilizadas
@@ -131,6 +138,37 @@ Isso garante que `00123456` e `123456` sejam tratados como o mesmo NIO, evitando
 **Arquivo:** `queries/memoria_de_massa_nio_list.sql`
 
 Similar ao MDM, mas focado exclusivamente na grade horária de 5 minutos com todas as variáveis elétricas (tensão, corrente, energia ativa/reativa, demanda). Gera 288 linhas por NIO.
+
+### 3.5 Extração WEATHER (Clima — Open-Meteo)
+
+**Fonte:** [Open-Meteo Archive API](https://archive-api.open-meteo.com/v1/archive)
+
+Após o GEO, o pipeline consulta a **API pública Open-Meteo** para obter dados climáticos históricos do dia do relatório. As coordenadas (LAT/LONG) vêm do DataFrame CIS.
+
+#### Funcionamento
+
+1. O pipeline obtém as coordenadas médias (LAT/LONG) dos NIOs do dia a partir do CIS.
+2. Constrói uma URL para a API Archive do Open-Meteo com as variáveis solicitadas:
+   - `temperature_2m`, `precipitation`, `rain`, `cloud_cover`
+   - `wind_speed_10m`, `wind_direction_10m`
+3. A API retorna um JSON com dados horários (24 linhas).
+4. O JSON é convertido em um DataFrame Polars com colunas:
+   - `NIO`, `DIA`, `TEMPERATURE_2M`, `PRECIPITATION`, `RAIN`, `CLOUD_COVER`, `WIND_SPEED_10M`, `WIND_DIRECTION_10M`
+5. O DataFrame é salvo como Parquet + CSV no diretório `output/raw/WEATHER/`.
+
+#### Estado Atual
+
+Atualmente o weather é **exportado como CSV separado** do relatório final. O relatório final contém apenas CIS + GEO + MDM.
+
+#### Plano Futuro (ver seção 10)
+
+No futuro, o weather será **joined no relatório final antes do MDM**, seguindo a ordem:
+
+```
+CIS + GEO → JOIN weather (por NIO) → JOIN MDM (por NIO) → relatório final
+```
+
+Isso permitirá que as colunas climáticas estejam disponíveis como features nos modelos de ML, mantendo a precedência correta: weather antes de MDM para evitar conflito de nomes (ambos têm `DIA`).
 
 ---
 
@@ -416,6 +454,9 @@ output/
 │   │   └── daily_cadastrados/ucs_YYYYMMDD.parquet
 │   ├── GEO/
 │   │   └── araucaria_geo_ucs_YYYYMMDD.parquet
+│   ├── WEATHER/
+│   │   ├── araucaria_weather_YYYYMMDD.parquet
+│   │   └── araucaria_weather_YYYYMMDD.csv
 │   ├── ORCA/
 │   │   ├── araucaria_mdm_YYYYMMDD.parquet
 │   │   └── araucaria_mdm_YYYYMMDD.csv
@@ -446,3 +487,35 @@ A pipeline ARAUCARIA foi construída com **foco em resiliência, rastreabilidade
 Para produção, as melhorias incluirão vetorização completa, streaming obrigatório, escrita atômica, e eventualmente **Dask** para processamento distribuído no servidor da empresa, que tem capacidade muito superior à máquina local.
 
 > *"O pipeline certo é aquele que não apenas funciona hoje, mas que te dá confiança para escalar amanhã."*
+
+---
+
+## 10. Próximos Passos
+
+### 10.1 Weather no Relatório Final (JOIN antes do MDM)
+
+**Objetivo:** Incluir as colunas climáticas (temperatura, precipitação, etc.) como features no relatório final, para que os modelos de ML possam utilizá-las.
+
+**Ordem proposta:**
+
+```
+CIS + GEO → JOIN weather (por NIO) → JOIN MDM (por NIO) → relatório final
+```
+
+**Motivo da ordem:** Weather e MDM têm a coluna `DIA` em comum. Para evitar conflito, o weather deve ser joined **antes** do MDM, e a coluna `DIA` do weather deve ser excluída do join (apenas colunas climáticas são adicionadas). O MDM é o último a ser joined para que sua coluna `DIA` (a mais relevante para o modelo) seja a versão final no relatório.
+
+**Status:** ⏳ Pendente — weather atualmente é exportado como CSV separado.
+
+### 10.2 Melhorias Visuais (Rich / TUI)
+
+**Objetivo:** Substituir `print()` por `rich` para obter saída colorida com tabelas, painéis e progress bars.
+
+**Referência:** O projeto `gcp-validation` já utiliza `rich>=14.2.0` com bons resultados.
+
+### 10.3 Servidor Empresarial
+
+Migrar a execução para o servidor da empresa, permitindo agendamento automático e processamento em escala.
+
+---
+
+*Documento gerado em 2026-06-23 · Última atualização: 2026-06-24*

@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 # Target OneDrive sincronizado
-DEFAULT_PUBLISH_TARGET = Path(r"E:\mion\OneDrive - copel.com\transfer_area\machine_learning_pipeline\input\sample200")
+DEFAULT_PUBLISH_TARGET = Path(r"E:\mion\OneDrive - copel.com\transfer_area\machine_learning_pipeline\input")
 
 
 @dataclass
@@ -87,7 +87,7 @@ def publish_to_target(
 
 def print_publish_report(result: PublishResult) -> None:
     """Imprime relatório de publicação formatado."""
-    print(f"\n  Publish:")
+    print("\n  Publish:")
     print(f"    Source : {result.source}")
     print(f"    Target : {result.target}")
     print(f"    Size   : {result.bytes_copied:,} bytes")
