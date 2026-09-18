@@ -766,9 +766,121 @@ def main() -> int:
     )
     manifest.record_step("mdm_extract", rows=mdm_rows, output=str(mdm_csv_path))
 
+def _build_semantic_layers_and_model_input(
+    cis_sample_geo_csv_path: Path,
+    mdm_csv_path: Path,
+    report_day: date,
+    output_root: Path,
+    run_id: str,
+) -> Path | None:
+    import polars as pl
+    from src.datasets.normalize import (
+        normalize_uc_context,
+        normalize_meter_installation_history,
+        normalize_electrical_hierarchy,
+        normalize_mdm_dataframe,
+    )
+    from src.datasets.writers import (
+        write_context_table,
+        write_measurements_table,
+        write_features,
+        write_window_features,
+        write_training_dataset,
+    )
+    from src.features.meter_day import build_meter_day_features
+    from src.features.uc_window import build_uc_window_features
+    from src.datasets.build_training_dataset import build_training_dataset
+
+    _log("Normalizing semantic layers (context, measurements, features, model_input)...")
+
+    if not cis_sample_geo_csv_path.exists():
+        _log("CIS+GEO file does not exist; skipping semantic layers.")
+        return None
+
+    try:
+        cis_geo_df = pl.read_csv(cis_sample_geo_csv_path, separator=";", infer_schema_length=0)
+    except Exception as e:
+        _log(f"Failed to read CIS+GEO CSV: {e}")
+        return None
+
+    # 1. Context tables (uc_context, meter_installation_history, electrical_hierarchy)
+    uc_context_df = normalize_uc_context(cis_geo_df, run_id=run_id)
+    write_context_table(uc_context_df, "uc_context", base_dir=output_root, write_csv=True)
+
+    meter_history_df = normalize_meter_installation_history(cis_geo_df, run_id=run_id)
+    write_context_table(meter_history_df, "meter_installation_history", base_dir=output_root, write_csv=True)
+
+    hierarchy_df = normalize_electrical_hierarchy(cis_geo_df, run_id=run_id)
+    write_context_table(hierarchy_df, "electrical_hierarchy", base_dir=output_root, write_csv=True)
+
+    # 2. Measurements tables (ami_interval, ami_instantaneous, ami_registers)
+    mdm_df = (
+        pl.read_csv(mdm_csv_path, separator=";", infer_schema_length=0)
+        if mdm_csv_path.exists()
+        else pl.DataFrame()
+    )
+    interval_df, instant_df, register_df = normalize_mdm_dataframe(
+        mdm_df, report_day=report_day, run_id=run_id
+    )
+
+    write_measurements_table(interval_df, "ami_interval", report_day, base_dir=output_root, write_csv=True)
+    write_measurements_table(instant_df, "ami_instantaneous", report_day, base_dir=output_root, write_csv=True)
+    write_measurements_table(register_df, "ami_registers", report_day, base_dir=output_root, write_csv=True)
+
+    # Map NIO to UC
+    meter_to_uc: dict[str, str] = {}
+    if not meter_history_df.is_empty() and "NIO" in meter_history_df.columns and "UC" in meter_history_df.columns:
+        for r in meter_history_df.select(["NIO", "UC"]).iter_rows():
+            if r[0] and r[1]:
+                meter_to_uc[str(r[0])] = str(r[1])
+
+    # 3. Daily features
+    daily_features_df = build_meter_day_features(
+        interval_df, instant_df, register_df,
+        metadata_df=uc_context_df,
+        report_day=report_day,
+        meter_to_uc_map=meter_to_uc,
+    )
+    write_features(daily_features_df, "v1", report_day, base_dir=output_root, write_csv=True)
+
+    # 4. Window features (UC x cutoff_date x window_days)
+    window_features_df = build_uc_window_features(
+        daily_features_df,
+        meter_history_df=meter_history_df,
+        cutoff_date=report_day,
+        window_days=30,
+        feature_set_version="v1",
+    )
+    write_window_features(window_features_df, "v1", report_day, base_dir=output_root, write_csv=True)
+
+    # 5. Training dataset (UC x cutoff_date)
+    training_df = build_training_dataset(
+        window_features_df,
+        uc_context_df=uc_context_df,
+        hierarchy_df=hierarchy_df,
+        split_policy="train",
+    )
+    model_dataset_path = write_training_dataset(training_df, "v1", base_dir=output_root, write_csv=True)
+    _log(f"Model training dataset generated: {model_dataset_path}")
+    return model_dataset_path
+
+
     # Step 6: Final join
     _join_daily_files(cis_sample_geo_csv_path, mdm_csv_path, joined_csv_path)
     manifest.record_step("final_join", output=str(joined_csv_path))
+
+    # Step 6b: Semantic multi-layer export & model training dataset
+    model_dataset_path = _build_semantic_layers_and_model_input(
+        cis_sample_geo_csv_path,
+        mdm_csv_path,
+        report_day,
+        DEFAULT_OUTPUT_ROOT,
+        manifest.run_id,
+    )
+    manifest.record_step(
+        "semantic_layers_and_model_input",
+        output=str(model_dataset_path) if model_dataset_path else None,
+    )
 
     # Step 7: Verify output
     if not args.no_verify:

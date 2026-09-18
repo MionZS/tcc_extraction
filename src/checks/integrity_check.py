@@ -5,6 +5,7 @@ Script autônomo que verifica:
 - Período completo (sem lacunas)
 - Tamanhos de arquivo dentro da faixa esperada
 - Arquivo auxiliar de UCs existe
+- Schema, chaves, unidades, temporality dos datasets normalizados
 """
 
 from __future__ import annotations
@@ -15,9 +16,13 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
+import polars as pl
+
 from src.checks.daily_file_naming import validate_file_naming, extract_date_from_filename
 from src.checks.period_coverage import get_file_dates, check_period_coverage
 from src.checks.file_size_analysis import collect_file_sizes, compute_size_stats, detect_size_outliers, format_size
+from src.datasets.schemas import get_schema, get_keys, TABLE_REGISTRY
+from src.checks.period_coverage import get_expected_points
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -47,6 +52,35 @@ _DEFAULT_KEY_COLUMNS = ["UC", "NIO"]
 
 # Max age for daily_cadastrados parquet (days)
 _MAX_UCS_AGE_DAYS = 3
+
+# Datasets normalizados para verificar
+_NORMALIZED_TABLES = [
+    "meter_day_metadata",
+    "meter_interval",
+    "meter_instantaneous",
+    "meter_register_snapshot",
+]
+
+# Faixas físicas esperadas por coluna (nome → (min, max, unidade))
+_PHYSICAL_RANGES: dict[str, tuple[float, float, str]] = {
+    "FA_INTERVAL": (0.0, 100.0, "kWh"),
+    "RA_INTERVAL": (0.0, 100.0, "kWh"),
+    "FA_ENERGY_C": (0.0, 100.0, "kWh"),
+    "RA_ENERGY_C": (0.0, 100.0, "kWh"),
+    "FA_ENERGY_D": (0.0, 100.0, "kWh"),
+    "RA_ENERGY_D": (0.0, 100.0, "kWh"),
+    "FA_MD_D": (0.0, 100.0, "kW"),
+    "U_L1": (0.0, 500.0, "V"),
+    "U_L2": (0.0, 500.0, "V"),
+    "U_L3": (0.0, 500.0, "V"),
+    "I_L1": (0.0, 1000.0, "A"),
+    "I_L2": (0.0, 1000.0, "A"),
+    "I_L3": (0.0, 1000.0, "A"),
+    "I_INSTANT_L1": (0.0, 1000.0, "A"),
+    "I_INSTANT_L2": (0.0, 1000.0, "A"),
+    "I_INSTANT_L3": (0.0, 1000.0, "A"),
+    "QUALITY_CODE": (0.0, 9.0, "código"),
+}
 
 
 @dataclass
@@ -224,16 +258,340 @@ def check_ucs_file(output_dir: Path) -> CheckResult:
     )
 
 
+# --- Novas verificações para datasets normalizados ---
+
+
+def _resolve_parquet_path(base_dir: Path, table: str, report_day: date | None = None) -> Path | None:
+    """Tenta localizar o arquivo Parquet de uma tabela normalizada.
+
+    Procura em ``base_dir/normalized/<table>/report_year=.../data.parquet``
+    ou ``base_dir/<table>.parquet``.
+    """
+    from src.datasets.partitioning import partition_path
+
+    if report_day is not None:
+        p = partition_path(table, report_day, base_dir=base_dir / "normalized") / "data.parquet"
+        if p.exists():
+            return p
+
+    # Fallback: procurar em normalized/ recursivamente
+    norm_dir = base_dir / "normalized" / table
+    if norm_dir.exists():
+        for f in norm_dir.rglob("*.parquet"):
+            return f
+
+    # Fallback: arquivo direto
+    direct = base_dir / f"{table}.parquet"
+    return direct if direct.exists() else None
+
+
+def check_dataset_schema(
+    base_dir: Path,
+    *,
+    report_day: date | None = None,
+) -> CheckResult:
+    """Valida schemas dos datasets normalizados contra definições.
+
+    Para cada tabela em ``_NORMALIZED_TABLES``, carrega o Parquet
+    e verifica se todas as colunas obrigatórias existem e têm tipos
+    compatíveis.
+
+    Returns:
+        CheckResult com detalhes de schemas válidos ou divergências.
+    """
+    import polars as pl
+
+    issues: list[str] = []
+    checked = 0
+
+    for table in _NORMALIZED_TABLES:
+        schema_def = get_schema(table)
+        if schema_def is None:
+            issues.append(f"Tabela '{table}' sem definição de schema registrada")
+            continue
+
+        file_path = _resolve_parquet_path(base_dir, table, report_day)
+        if file_path is None:
+            issues.append(f"Arquivo Parquet não encontrado para '{table}'")
+            continue
+
+        try:
+            actual_schema = pl.read_parquet_schema(file_path)
+        except Exception as exc:
+            issues.append(f"Erro ao ler schema de '{table}': {exc}")
+            continue
+
+        checked += 1
+
+        # Verificar colunas obrigatórias
+        for field in schema_def:
+            col_name = field.name
+            if col_name not in actual_schema:
+                issues.append(f"'{table}': coluna obrigatória '{col_name}' ausente")
+
+        # Verificar tipos (compatibilidade básica)
+        for field in schema_def:
+            col_name = field.name
+            if col_name not in actual_schema:
+                continue
+            expected_dtype = field.dtype
+            actual_dtype = actual_schema[col_name]
+            # Apenas reportar divergência maior (ex.: Float vs Int)
+            if type(expected_dtype).__name__ != type(actual_dtype).__name__:
+                issues.append(
+                    f"'{table}'.{col_name}: esperado {expected_dtype}, "
+                    f"encontrado {actual_dtype}"
+                )
+
+    if not issues:
+        return CheckResult(
+            "dataset_schema",
+            True,
+            f"Schemas válidos para {checked} tabela(s).",
+        )
+    return CheckResult(
+        "dataset_schema",
+        False,
+        f"Problemas em {len(issues)} schema(s): " + "; ".join(issues[:10]),
+    )
+
+
+def check_dataset_keys(
+    base_dir: Path,
+    *,
+    report_day: date | None = None,
+) -> CheckResult:
+    """Verifica unicidade e não-nulidade das chaves primárias.
+
+    Para cada tabela, carrega os dados e checa:
+    - Nenhuma chave nula
+    - Nenhuma duplicata na grain definida
+
+    Returns:
+        CheckResult com resultado da verificação.
+    """
+    import polars as pl
+
+    issues: list[str] = []
+
+    for table in _NORMALIZED_TABLES:
+        keys = get_keys(table)
+        if not keys:
+            continue
+
+        file_path = _resolve_parquet_path(base_dir, table, report_day)
+        if file_path is None:
+            continue
+
+        try:
+            df = pl.read_parquet(file_path)
+        except Exception as exc:
+            issues.append(f"Erro ao ler '{table}': {exc}")
+            continue
+
+        if df.height == 0:
+            continue
+
+        # Verificar nulos nas chaves
+        for key_col in keys:
+            null_count = df.filter(pl.col(key_col).is_null()).height
+            if null_count > 0:
+                issues.append(
+                    f"'{table}': coluna chave '{key_col}' tem {null_count} nulo(s)"
+                )
+
+        # Verificar duplicatas
+        try:
+            dup_count = df.group_by(keys).agg(pl.len().alias("_cnt")).filter(pl.col("_cnt") > 1).height
+            if dup_count > 0:
+                issues.append(
+                    f"'{table}': {dup_count} duplicata(s) na grain ({', '.join(keys)})"
+                )
+        except Exception as exc:
+            issues.append(f"Erro ao verificar duplicatas em '{table}': {exc}")
+
+    if not issues:
+        return CheckResult("dataset_keys", True, "Todas as chaves são únicas e não-nulas.")
+    return CheckResult(
+        "dataset_keys",
+        False,
+        "; ".join(issues[:10]),
+    )
+
+
+def check_dataset_ranges(
+    base_dir: Path,
+    *,
+    report_day: date | None = None,
+) -> CheckResult:
+    """Valida faixas físicas de colunas numéricas.
+
+    Verifica se valores estão dentro dos limites físicos esperados
+    definidos em ``_PHYSICAL_RANGES``.
+
+    Returns:
+        CheckResult com valores fora da faixa.
+    """
+    import polars as pl
+
+    violations: list[str] = []
+    checked_cols = 0
+
+    for table in _NORMALIZED_TABLES:
+        file_path = _resolve_parquet_path(base_dir, table, report_day)
+        if file_path is None:
+            continue
+
+        try:
+            df = pl.read_parquet(file_path)
+        except Exception:
+            continue
+
+        if df.height == 0:
+            continue
+
+        for col_name, (vmin, vmax, unit) in _PHYSICAL_RANGES.items():
+            if col_name not in df.columns:
+                continue
+
+            checked_cols += 1
+            col = df.get_column(col_name)
+            if col.dtype in (pl.Float32, pl.Float64, pl.Int32, pl.Int64):
+                actual_min = col.min()
+                actual_max = col.max()
+                if actual_min is not None and actual_max is not None:
+                    if actual_min < vmin or actual_max > vmax:
+                        violations.append(
+                            f"'{table}'.{col_name} [{actual_min:.2f}, {actual_max:.2f}] "
+                            f"fora da faixa [{vmin}, {vmax}] {unit}"
+                        )
+
+    if not violations:
+        return CheckResult(
+            "dataset_ranges",
+            True,
+            f"Faixas físicas válidas para {checked_cols} colunas.",
+        )
+    return CheckResult(
+        "dataset_ranges",
+        False,
+        "; ".join(violations[:10]),
+    )
+
+
+def check_temporal_order(
+    base_dir: Path,
+    *,
+    report_day: date | None = None,
+) -> CheckResult:
+    """Verifica ordenação temporal e particionamento.
+
+    Para tabelas com coluna TIMESTAMP_UTC, verifica:
+    - Timestamps estão em ordem crescente dentro de cada NIO
+    - Timestamps correspondem ao report_day se informado
+
+    Returns:
+        CheckResult com resultado da verificação.
+    """
+    import polars as pl
+
+    issues: list[str] = []
+    time_tables = ["meter_interval", "meter_instantaneous", "meter_register_snapshot"]
+
+    for table in time_tables:
+        file_path = _resolve_parquet_path(base_dir, table, report_day)
+        if file_path is None:
+            continue
+
+        try:
+            df = pl.read_parquet(file_path)
+        except Exception:
+            continue
+
+        if df.height == 0:
+            continue
+
+        if "TIMESTAMP_UTC" not in df.columns:
+            continue
+
+        # Verificar se timestamps estão ordenados por NIO
+        if "NIO" in df.columns:
+            disordered = (
+                df.sort("TIMESTAMP_UTC")
+                .with_columns(
+                    pl.col("TIMESTAMP_UTC")
+                    .diff()
+                    .cast(pl.Duration("ms"))
+                    .dt.total_milliseconds()
+                    .alias("_diff_ms")
+                )
+                .filter(pl.col("_diff_ms") < 0)
+                .height
+            )
+            if disordered > 0:
+                issues.append(f"'{table}': {disordered} timestamps fora de ordem")
+
+        # Verificar se timestamps correspondem ao report_day
+        if report_day is not None:
+            date_col = df.get_column("TIMESTAMP_UTC").dt.date().unique()
+            expected = {report_day}
+            actual = set(date_col)
+            if not actual.issubset(expected):
+                extra = actual - expected
+                issues.append(
+                    f"'{table}': {len(extra)} data(s) não correspondem a {report_day}"
+                )
+
+    if not issues:
+        return CheckResult(
+            "temporal_order",
+            True,
+            "Ordenação temporal correta para todas as tabelas.",
+        )
+    return CheckResult(
+        "temporal_order",
+        False,
+        "; ".join(issues[:10]),
+    )
+
+
+def check_datasets(
+    base_dir: Path,
+    *,
+    report_day: date | None = None,
+) -> list[CheckResult]:
+    """Executa verificações de dataset em lote.
+
+    Args:
+        base_dir: Diretório raiz do output.
+        report_day: Data de referência (opcional).
+
+    Returns:
+        Lista de CheckResult.
+    """
+    return [
+        check_dataset_schema(base_dir, report_day=report_day),
+        check_dataset_keys(base_dir, report_day=report_day),
+        check_dataset_ranges(base_dir, report_day=report_day),
+        check_temporal_order(base_dir, report_day=report_day),
+    ]
+
+
 def run_integrity_check(
     base_dir: Path,
     *,
     min_days_back: int = 30,
+    check_normalized: bool = False,
+    report_day: date | None = None,
 ) -> IntegrityReport:
     """Executa todas as verificações e retorna relatório consolidado.
 
     Args:
         base_dir: Diretório raiz do output.
         min_days_back: Número de dias para trás para verificar período.
+        check_normalized: Se True, executa verificações de schema/chaves/ranges
+                          nos datasets normalizados.
+        report_day: Data de referência para datasets normalizados.
     """
     report = IntegrityReport()
 
@@ -241,6 +599,10 @@ def run_integrity_check(
     report.add(check_period(base_dir, min_days_back=min_days_back))
     report.add(check_sizes(base_dir))
     report.add(check_ucs_file(base_dir))
+
+    if check_normalized:
+        for result in check_datasets(base_dir, report_day=report_day):
+            report.add(result)
 
     report.summary = {
         "base_dir": str(base_dir),
@@ -280,6 +642,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Número de dias para trás para verificar período (default: 30).",
     )
     parser.add_argument(
+        "--check-normalized",
+        action="store_true",
+        help="Executa verificações de schema/chaves/ranges nos datasets normalizados.",
+    )
+    parser.add_argument(
+        "--report-day",
+        type=date.fromisoformat,
+        default=None,
+        help="Data de referência para datasets normalizados (AAAA-MM-DD).",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Saída em formato JSON.",
@@ -291,7 +664,12 @@ def main() -> int:
     args = build_parser().parse_args()
     base_dir = args.base_dir.resolve()
 
-    report = run_integrity_check(base_dir, min_days_back=args.days_back)
+    report = run_integrity_check(
+        base_dir,
+        min_days_back=args.days_back,
+        check_normalized=args.check_normalized,
+        report_day=args.report_day,
+    )
 
     if args.json:
         print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))

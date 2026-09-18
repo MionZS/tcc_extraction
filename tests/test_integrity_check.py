@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -47,14 +47,15 @@ def full_output_tree(tmp_path: Path) -> Path:
     # UCs
     ucs_dir = tmp_path / "raw" / "CIS" / "daily_cadastrados"
     ucs_dir.mkdir(parents=True)
-    # Create a parquet file (just write a placeholder; real parquet test needs polars)
+    # Create a parquet file with a recent date (avoids MAX_UCS_AGE_DAYS check)
+    recent = date.today() - timedelta(days=1)
     try:
         import polars as pl
-        df = pl.DataFrame({"ucs": ["UC001"], "count": [1], "date": ["2026-06-15"], "created_at": ["2026-06-15T00:00:00"]})
-        df.write_parquet(ucs_dir / "ucs_20260615.parquet")
+        df = pl.DataFrame({"ucs": ["UC001"], "count": [1], "date": [recent.isoformat()], "created_at": [f"{recent}T00:00:00"]})
+        df.write_parquet(ucs_dir / f"ucs_{recent:%Y%m%d}.parquet")
     except ImportError:
         # If polars not available, create a dummy file
-        (ucs_dir / "ucs_20260615.parquet").write_bytes(b"dummy")
+        (ucs_dir / f"ucs_{recent:%Y%m%d}.parquet").write_bytes(b"dummy")
 
     return tmp_path
 

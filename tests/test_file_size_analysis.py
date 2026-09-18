@@ -58,7 +58,7 @@ class TestComputeSizeStats:
 class TestDetectOutliers:
     def test_no_outliers(self):
         records = [
-            FileSizeRecord(Path("a.csv"), date(2026, 6, i), 100 + i)
+            FileSizeRecord(Path("a.csv"), date(2026, 6, i + 1), 100 + i)
             for i in range(10)
         ]
         outliers = detect_size_outliers(records)

@@ -114,7 +114,7 @@
 		{
 			"label": "pytest: run all tests",
 			"type": "shell",
-			"command": "uv run pytest tests/ -v",
+			"command": "uv --native-tls run pytest tests/ -v",
 			"group": "test",
 			"presentation": {
 				"reveal": "always",
@@ -125,7 +125,7 @@
 		{
 			"label": "pytest: run with coverage",
 			"type": "shell",
-			"command": "uv run pytest tests/ -v --tb=short",
+			"command": "uv --native-tls run pytest tests/ -v --tb=short",
 			"group": "test",
 			"presentation": {
 				"reveal": "always",
@@ -136,7 +136,7 @@
 		{
 			"label": "python: run pipeline sample",
 			"type": "shell",
-			"command": "uv run python araucaria_sample_pipeline.py --days-back 1",
+			"command": "uv --native-tls run python araucaria_sample_pipeline.py --days-back 1",
 			"group": "none",
 			"presentation": {
 				"reveal": "always",
@@ -147,7 +147,7 @@
 		{
 			"label": "python: run integrity check",
 			"type": "shell",
-			"command": "uv run python -m integrity_check --base-dir output",
+			"command": "uv --native-tls run python -m integrity_check --base-dir output",
 			"group": "none",
 			"presentation": {
 				"reveal": "always",

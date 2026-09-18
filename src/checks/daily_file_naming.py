@@ -7,7 +7,7 @@ e que o nome corresponde ao ``days_back`` esperado.
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 
@@ -32,7 +32,7 @@ def extract_date_from_filename(filename: str) -> date | None:
     if not match:
         return None
     try:
-        return date.strptime(match.group(1), "%Y%m%d")
+        return datetime.strptime(match.group(1), "%Y%m%d").date()
     except ValueError:
         return None
 
@@ -63,11 +63,12 @@ def validate_file_naming(
         if path.suffix not in {".csv", ".parquet"}:
             continue
 
-        # Se prefixo foi informado, verificar só aquele padrão
+        # Se prefixo foi informado, ignorar arquivos que não correspondem
         if prefix:
             pattern = _PREFIX_PATTERNS[prefix]
             if not pattern.match(path.name):
-                invalid.append(path.name)
+                continue  # skip files not matching the requested prefix
+            # If it matches, it's valid by definition (pattern includes date)
         else:
             # Sem prefixo: verificar se TEM uma data válida
             if extract_date_from_filename(path.name) is None:

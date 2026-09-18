@@ -1,94 +1,80 @@
-# ARAUCARIA daily pipeline
+# TCC Extraction Pipeline
 
-This project now runs a chained daily extraction based on the same Oracle/SQLAlchemy pattern used in `E:\mion\PythonVSCode\Daimon`.
+Este repositório contém o pipeline de extração, processamento e modelagem de dados de medição inteligente (AMI) para fins de detecção de anomalias, focado no alimentador **Fonte Nova** da subestação Araucária.
 
-## What it does
+## 1. Arquitetura Conceitual e de Dados
 
-1. Runs `queries/cis_araucaria_ml_extract_lightweight_alt.sql` on the **CIS** database.
-2. Reads the resulting `NIO` population for ARAUCARIA.
-3. Sends those NIOs in batches to `queries/mdm_coluna.sql` on the **ORCA/AMI** database using SQLAlchemy plus `SYS.ODCIVARCHAR2LIST`.
-4. Writes the daily outputs in a datalake-style layout:
-   - `output/raw/CIS/araucaria_cis_YYYYMMDD.{csv,parquet}`
-   - `output/raw/ORCA/araucaria_mdm_YYYYMMDD.{csv,parquet}`
-   - `output/refined/reports/araucaria_daily_report_YYYYMMDD.{csv,parquet}`
+O projeto adota um princípio de separação semântica das fontes de dados:
 
-The joined report is a left join from CIS to MDM on `NIO`, plus:
-- `REPORT_DAY`
-- `HAS_MDM_DATA`
+* **AMI (Medições) $\rightarrow$ Fenômeno**: Dados de séries temporais provenientes do MDM (intervalos, instantâneos e registradores).
+* **Cadastro + Medidor + GEO $\rightarrow$ Contexto**: Perfil da Unidade Consumidora (UC), histórico temporal de instalações de medidores e topologia de rede extraída do GIS/GEO.
+* **Alarmes $\rightarrow$ Eventos**: Eventos operacionais vinculados ao NIO (Número de Instalação da Obra) com cálculo de latência.
+* **Unidade Analítica Final para ML**: Tudo é projetado e consolidado na matriz final baseada na chave: `UC x cutoff_date`.
 
-## Important note about `DAYS_BACK`
+## 2. Estrutura do Datalake
 
-`mdm_coluna.sql` currently uses:
+Em vez de gerar arquivos CSV desorganizados, o pipeline agora grava tabelas particionadas no formato **Parquet**, otimizadas para leitura e processamento analítico. A estrutura no diretório `output/` é a seguinte:
 
-- `DAYS_BACK = 1` -> yesterday
-- `DAYS_BACK = 0` -> today
-
-So the pipeline defaults to `--days-back 1`.
-
-## Configuration
-
-Create `config.json` from `config_example.json`.
-
-This pipeline only uses these entries:
-- `oracle.ORCA`
-- `oracle.CIS`
-
-The other database entries in the config are ignored by this project.
-
-## Install
-
-Use your preferred Python environment manager, then install dependencies from `pyproject.toml`.
-
-Main dependencies:
-- `sqlalchemy`
-- `oracledb`
-- `polars`
-
-## Run
-
-```bash
-python main.py --days-back 1 --output-dir output
+```text
+output/
+├── context/
+│   ├── uc_context/
+│   ├── meter_installation_history/
+│   └── electrical_hierarchy/
+├── measurements/
+│   ├── ami_interval/
+│   ├── ami_instantaneous/
+│   └── ami_registers/
+├── events/
+│   └── alarm_events/
+├── features/
+│   ├── uc_day_features/
+│   └── uc_window_features/ (ex: 30 dias)
+└── model_input/
+    └── training_dataset.parquet (formatado com x__*, id__*, meta__*, y__*)
 ```
 
-Optional flags:
+## 3. Escopo: População do Alimentador Fonte Nova
+
+Historicamente, o CIS extraía todos os medidores de Araucária (~71k), e os testes eram feitos em amostras aleatórias (ex: 200 UCs) que muitas vezes não possuíam dados topológicos completos (pois a query do GEO tinha um filtro fixo para o Alimentador Fonte Nova).
+
+**Decisão Atual:** Para garantir consistência e performance, o pipeline roda **100% da população de um alimentador específico (Fonte Nova)**. 
+- Extrai dados de aproximadamente 1.500 a 3.000 UCs.
+- Tempo de execução rápido (~2 a 5 minutos) desde a extração até o treinamento.
+
+## 4. Como Usar o Pipeline (Automação e Treinamento)
+
+O pipeline ponta a ponta foi automatizado. Ele cruza os dados do CIS com o GEO, extrai o MDM apenas para os medidores relevantes, normaliza as camadas no datalake e aciona o treinamento do modelo baseline de detecção de anomalias (`IsolationForest` + `KMeans`).
+
+### Configuração
+
+1. Crie o arquivo `config.json` a partir do `config_example.json` na raiz do projeto, preenchendo as credenciais dos bancos de dados Oracle (ORCA e CIS).
+2. Garanta que as dependências Python estejam instaladas (gerenciadas pelo `uv` via `pyproject.toml` / `uv.lock`).
+
+### Execução Simples
+
+Para rodar o pipeline completo e treinar o modelo, basta executar o script CMD fornecido:
+
+```cmd
+run_feeder.cmd
+```
+*(Ou dê um clique duplo no arquivo `run_feeder.cmd` no Windows)*
+
+Isso executará o pipeline com o padrão de extração (`--days-back 1`).
+
+### Execução Manual / Avançada
+
+Você também pode chamar o script Python diretamente a partir da raiz do projeto, o que permite passar parâmetros adicionais:
 
 ```bash
-python main.py \
-  --days-back 1 \
-  --mdm-batch-size 500 \
-  --fetch-size 1000 \
-  --keep-temp
+python scripts/run_feeder_pipeline.py --days-back 1
 ```
 
-## Current behavior
+O que acontece nos bastidores:
+1. Executa `queries/geo_feeder_direct.sql` para buscar as UCs reais do alimentador Fonte Nova no GEO.
+2. Cruza CIS + GEO do alimentador.
+3. Extrai do MDM apenas os medidores que compõem este alimentador.
+4. Salva as partições Parquet e cria a matriz consolidada `training_dataset.parquet`.
+5. Aciona o `scripts/train_anomaly_model.py` para treinar o modelo e gerar os scores/ranking de anomalias.
 
-- Uses the two SQL files already present in `queries/`
-- Keeps `mdm_coluna.sql` semantics unchanged
-- Batches NIOs for the MDM step
-- Writes both CSV and Parquet outputs
-- Produces a final joined daily report
-
-## Sample pipeline
-
-For the 200-NIO sample flow, run:
-
-```bash
-python .\scripts\araucaria_sample_pipeline.py --days-back 1 --sample-size 200
-```
-
-That flow writes to:
-- `output/raw/CIS/` and `output/raw/CIS/sample200/`
-- `output/raw/ORCA/sample200/`
-- `output/refined/reports/sample200/`
-
-The sample join keeps only ORCA-returned rows (`RIGHT JOIN` behavior on the sample step).
-
-## Files added
-
-- `db.py`
-- `pipeline.py`
-- `araucaria_sample_pipeline.py`
-- `scripts/araucaria_sample_pipeline.py`
-- updated `main.py`
-- `config_example.json`
-- `.gitignore`
+O resultado do treinamento e as previsões do modelo podem ser inspecionados no diretório `output/model_input/`.
