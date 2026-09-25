@@ -17,8 +17,9 @@ Usage::
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone, timedelta
-from typing import Any
+from datetime import date, datetime, time, timezone, timedelta
+from pathlib import Path
+from typing import Any, Sequence
 
 import polars as pl
 
@@ -70,6 +71,72 @@ _SLOT_MINUTES = 5
 
 
 # ── JSON parsing ─────────────────────────────────────────────────────────────
+
+def _parse_json_slot_map(value: Any, default_cadence_minutes: int = 5) -> dict[str, float]:
+    """Parse a JSON column into a mapping from time string 'HH:MM' to float value.
+
+    Preserves exact chronological timestamps, preventing time-shift and inter-column desynchronization.
+    Handles:
+    - JSON object: '{"08:00": 1.2, "08:10": 3.4}' -> {"08:00": 1.2, "08:10": 3.4}
+    - JSON array: '[1.2, 3.4]' -> mapped to successive slots starting from 00:00
+    - Plain numeric or None
+    """
+    if value is None:
+        return {}
+    if isinstance(value, (int, float)):
+        fv = _coerce_float(value)
+        return {"00:00": fv} if fv is not None else {}
+
+    text = str(value).strip()
+    if not text:
+        return {}
+
+    # 1. Try JSON object
+    if text.startswith("{"):
+        try:
+            obj = json.loads(text)
+            if isinstance(obj, dict):
+                result: dict[str, float] = {}
+                for k, v in obj.items():
+                    fv = _coerce_float(v)
+                    if fv is not None:
+                        k_str = str(k).strip()
+                        if ":" in k_str:
+                            parts = k_str.split(":", 1)
+                            try:
+                                h, m = int(parts[0]), int(parts[1])
+                                norm_k = f"{h:02d}:{m:02d}"
+                            except ValueError:
+                                norm_k = k_str
+                        else:
+                            norm_k = k_str
+                        result[norm_k] = fv
+                return result
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Try JSON array
+    if text.startswith("["):
+        try:
+            arr = json.loads(text)
+            if isinstance(arr, list):
+                cadence = _infer_cadence_from_slot_count(len(arr)) if len(arr) > 0 else default_cadence_minutes
+                result = {}
+                for i, v in enumerate(arr):
+                    fv = _coerce_float(v)
+                    if fv is not None:
+                        mins = i * cadence
+                        h = (mins // 60) % 24
+                        m = mins % 60
+                        result[f"{h:02d}:{m:02d}"] = fv
+                return result
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Plain numeric
+    fv = _coerce_float(text)
+    return {"00:00": fv} if fv is not None else {}
+
 
 def _parse_json_slot(value: Any) -> list[float | None]:
     """Parse a JSON column containing hourly or 5-min slot values.
@@ -247,124 +314,150 @@ def normalize_mdm_day(
 
     now = datetime.now(timezone.utc)
 
-    # Parse interval columns
-    interval_slots: dict[str, list[float | None]] = {}
+    # Parse interval columns as timestamp maps
+    interval_maps: dict[str, dict[str, float]] = {}
     for col in _INTERVAL_COLUMNS:
-        raw = mdm_row.get(col)
-        parsed = _parse_json_slot(raw)
-        if parsed:
-            interval_slots[col] = parsed
+        m = _parse_json_slot_map(mdm_row.get(col), default_cadence_minutes=_SLOT_MINUTES)
+        if m:
+            interval_maps[col] = m
 
-    # Parse instantaneous columns
-    instant_slots: dict[str, list[float | None]] = {}
+    # Parse instantaneous columns as timestamp maps
+    instant_maps: dict[str, dict[str, float]] = {}
     for col in _INSTANTANEOUS_COLUMNS:
-        raw = mdm_row.get(col)
-        parsed = _parse_json_slot(raw)
-        if parsed:
-            instant_slots[col] = parsed
+        m = _parse_json_slot_map(mdm_row.get(col), default_cadence_minutes=60)
+        if m:
+            instant_maps[col] = m
 
-    # Parse register columns (typically 4 snapshots per day)
-    register_slots: dict[str, list[float | None]] = {}
+    # Parse register columns as timestamp maps
+    register_maps: dict[str, dict[str, float]] = {}
     for col in _REGISTER_COLUMNS:
-        raw = mdm_row.get(col)
-        parsed = _parse_json_slot(raw)
-        if parsed:
-            register_slots[col] = parsed
+        m = _parse_json_slot_map(mdm_row.get(col), default_cadence_minutes=360)
+        if m:
+            register_maps[col] = m
 
-    # Determine slot count and cadence for interval data
-    max_interval_slots = max((len(v) for v in interval_slots.values()), default=0)
-    if max_interval_slots == 0:
-        # Try instantaneous
-        max_interval_slots = max((len(v) for v in instant_slots.values()), default=0)
-
-    cadence = _infer_cadence_from_slot_count(max_interval_slots) if max_interval_slots > 0 else _SLOT_MINUTES
-    slot_count = max_interval_slots if max_interval_slots > 0 else 288
-
-    # Build interval rows
+    # ── Build interval rows (exact chronological alignment) ──────────
+    interval_keys = sorted(set().union(*(m.keys() for m in interval_maps.values()))) if interval_maps else []
     interval_rows = []
-    for i in range(slot_count):
-        ts = _slot_index_to_time(i, report_day, cadence)
-        row: dict[str, Any] = {
-            "NIO": nio,
-            "REPORT_DAY": report_day,
-            "TIMESTAMP_UTC": ts,
-            "TIMESTAMP_LOCAL": ts,  # TODO: timezone conversion
-            "CADENCE_MINUTES": cadence,
-            "MEASUREMENT_SOURCE": "MDM",
-        }
-        has_data = False
-        for col in _INTERVAL_COLUMNS:
-            values = interval_slots.get(col, [])
-            val = values[i] if i < len(values) else None
-            row[col] = val
-            if val is not None:
-                has_data = True
-        row["QUALITY_CODE"] = 0
-        row["SOURCE_UPDATED_AT"] = now
-        row["RUN_ID"] = run_id
+    if interval_keys:
+        parsed_dt = []
+        for k in interval_keys:
+            if ":" in k:
+                try:
+                    h, m = map(int, k.split(":", 1))
+                    parsed_dt.append(datetime.combine(report_day, time(h, m)))
+                except ValueError:
+                    pass
+        interval_cadence = detect_cadence(parsed_dt, default_minutes=_SLOT_MINUTES) if len(parsed_dt) >= 2 else _SLOT_MINUTES
 
-        if has_data:
-            interval_rows.append(row)
+        for k in interval_keys:
+            if ":" in k:
+                try:
+                    h, m = map(int, k.split(":", 1))
+                    ts = datetime.combine(report_day, time(h, m))
+                except ValueError:
+                    continue
+            else:
+                continue
 
-    # Build instantaneous rows
-    instant_cadence = _infer_cadence_from_slot_count(
-        max((len(v) for v in instant_slots.values()), default=288)
-    ) if instant_slots else 60
-    instant_count = max((len(v) for v in instant_slots.values()), default=0)
+            row: dict[str, Any] = {
+                "NIO": nio,
+                "REPORT_DAY": report_day,
+                "TIMESTAMP_UTC": ts,
+                "TIMESTAMP_LOCAL": ts,
+                "CADENCE_MINUTES": interval_cadence,
+                "MEASUREMENT_SOURCE": "MDM",
+            }
+            has_data = False
+            for col in _INTERVAL_COLUMNS:
+                val = interval_maps.get(col, {}).get(k)
+                row[col] = val
+                if val is not None:
+                    has_data = True
+            row["QUALITY_CODE"] = 0
+            row["SOURCE_UPDATED_AT"] = now
+            row["RUN_ID"] = run_id
 
+            if has_data:
+                interval_rows.append(row)
+
+    # ── Build instantaneous rows (exact chronological alignment) ─────
+    instant_keys = sorted(set().union(*(m.keys() for m in instant_maps.values()))) if instant_maps else []
     instant_rows = []
-    for i in range(instant_count):
-        ts = _slot_index_to_time(i, report_day, instant_cadence)
-        row = {
-            "NIO": nio,
-            "REPORT_DAY": report_day,
-            "TIMESTAMP_UTC": ts,
-            "TIMESTAMP_LOCAL": ts,
-            "CADENCE_MINUTES": instant_cadence,
-            "MEASUREMENT_SOURCE": "MDM",
-        }
-        has_data = False
-        for col in _INSTANTANEOUS_COLUMNS:
-            values = instant_slots.get(col, [])
-            val = values[i] if i < len(values) else None
-            row[col] = val
-            if val is not None:
-                has_data = True
-        row["QUALITY_CODE"] = 0
-        row["SOURCE_UPDATED_AT"] = now
-        row["RUN_ID"] = run_id
+    if instant_keys:
+        parsed_dt = []
+        for k in instant_keys:
+            if ":" in k:
+                try:
+                    h, m = map(int, k.split(":", 1))
+                    parsed_dt.append(datetime.combine(report_day, time(h, m)))
+                except ValueError:
+                    pass
+        instant_cadence = detect_cadence(parsed_dt, default_minutes=60) if len(parsed_dt) >= 2 else 60
 
-        if has_data:
-            instant_rows.append(row)
+        for k in instant_keys:
+            if ":" in k:
+                try:
+                    h, m = map(int, k.split(":", 1))
+                    ts = datetime.combine(report_day, time(h, m))
+                except ValueError:
+                    continue
+            else:
+                continue
 
-    # Build register rows
-    register_count = max((len(v) for v in register_slots.values()), default=0)
-    # Registers are typically 4 snapshots at 00:00, 06:00, 12:00, 18:00
-    register_cadence = 360  # 6 hours in minutes
+            row = {
+                "NIO": nio,
+                "REPORT_DAY": report_day,
+                "TIMESTAMP_UTC": ts,
+                "TIMESTAMP_LOCAL": ts,
+                "CADENCE_MINUTES": instant_cadence,
+                "MEASUREMENT_SOURCE": "MDM",
+            }
+            has_data = False
+            for col in _INSTANTANEOUS_COLUMNS:
+                val = instant_maps.get(col, {}).get(k)
+                row[col] = val
+                if val is not None:
+                    has_data = True
+            row["QUALITY_CODE"] = 0
+            row["SOURCE_UPDATED_AT"] = now
+            row["RUN_ID"] = run_id
 
+            if has_data:
+                instant_rows.append(row)
+
+    # ── Build register rows (exact chronological alignment) ──────────
+    register_keys = sorted(set().union(*(m.keys() for m in register_maps.values()))) if register_maps else []
     register_rows = []
-    for i in range(register_count):
-        ts = _slot_index_to_time(i, report_day, register_cadence)
-        row = {
-            "NIO": nio,
-            "REPORT_DAY": report_day,
-            "TIMESTAMP_UTC": ts,
-            "REGISTER_GROUP": "DAILY",
-        }
-        has_data = False
-        for col in _REGISTER_COLUMNS:
-            schema_col = _REGISTER_COLUMN_MAP[col]
-            values = register_slots.get(col, [])
-            val = values[i] if i < len(values) else None
-            row[schema_col] = val
-            if val is not None:
-                has_data = True
-        row["QUALITY_CODE"] = 0
-        row["SOURCE_UPDATED_AT"] = now
-        row["RUN_ID"] = run_id
+    if register_keys:
+        for k in register_keys:
+            if ":" in k:
+                try:
+                    h, m = map(int, k.split(":", 1))
+                    ts = datetime.combine(report_day, time(h, m))
+                except ValueError:
+                    continue
+            else:
+                continue
 
-        if has_data:
-            register_rows.append(row)
+            row = {
+                "NIO": nio,
+                "REPORT_DAY": report_day,
+                "TIMESTAMP_UTC": ts,
+                "REGISTER_GROUP": "DAILY",
+            }
+            has_data = False
+            for col in _REGISTER_COLUMNS:
+                schema_col = _REGISTER_COLUMN_MAP[col]
+                val = register_maps.get(col, {}).get(k)
+                row[schema_col] = val
+                if val is not None:
+                    has_data = True
+            row["QUALITY_CODE"] = 0
+            row["SOURCE_UPDATED_AT"] = now
+            row["RUN_ID"] = run_id
+
+            if has_data:
+                register_rows.append(row)
 
     # Build DataFrames
     interval_df = pl.DataFrame(
@@ -467,48 +560,206 @@ def normalize_mdm_dataframe(
     run_id: str = "",
     schema_version: str = "v1",
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Normalize an entire MDM DataFrame (multiple NIOs) into atomic tables.
-
-    This is the batch version of :func:`normalize_mdm_day`.
+    """Normalize an entire MDM DataFrame (multiple NIOs) into atomic tables in memory-safe chunks.
 
     Returns:
         (interval_df, instantaneous_df, register_df)
     """
-    all_interval: list[pl.DataFrame] = []
-    all_instant: list[pl.DataFrame] = []
-    all_register: list[pl.DataFrame] = []
+    if mdm_df.is_empty():
+        return _empty_interval_frame(), _empty_instantaneous_frame(), _empty_register_frame()
 
-    for row_dict in mdm_df.iter_rows(named=True):
-        interval_df, instant_df, register_df = normalize_mdm_day(
+    interval_chunks: list[pl.DataFrame] = []
+    instant_chunks: list[pl.DataFrame] = []
+    register_chunks: list[pl.DataFrame] = []
+
+    cur_interval: list[pl.DataFrame] = []
+    cur_instant: list[pl.DataFrame] = []
+    cur_register: list[pl.DataFrame] = []
+
+    chunk_size = 500
+    for idx, row_dict in enumerate(mdm_df.iter_rows(named=True), start=1):
+        i_df, ins_df, reg_df = normalize_mdm_day(
             row_dict,
             report_day=report_day,
             run_id=run_id,
             schema_version=schema_version,
         )
-        if interval_df.height > 0:
-            all_interval.append(interval_df)
-        if instant_df.height > 0:
-            all_instant.append(instant_df)
-        if register_df.height > 0:
-            all_register.append(register_df)
+        if i_df.height > 0:
+            cur_interval.append(i_df)
+        if ins_df.height > 0:
+            cur_instant.append(ins_df)
+        if reg_df.height > 0:
+            cur_register.append(reg_df)
+
+        if idx % chunk_size == 0:
+            if cur_interval:
+                interval_chunks.append(pl.concat(cur_interval, how="vertical_relaxed"))
+                cur_interval.clear()
+            if cur_instant:
+                instant_chunks.append(pl.concat(cur_instant, how="vertical_relaxed"))
+                cur_instant.clear()
+            if cur_register:
+                register_chunks.append(pl.concat(cur_register, how="vertical_relaxed"))
+                cur_register.clear()
+
+    if cur_interval:
+        interval_chunks.append(pl.concat(cur_interval, how="vertical_relaxed"))
+    if cur_instant:
+        instant_chunks.append(pl.concat(cur_instant, how="vertical_relaxed"))
+    if cur_register:
+        register_chunks.append(pl.concat(cur_register, how="vertical_relaxed"))
 
     combined_interval = (
-        pl.concat(all_interval, how="vertical_relaxed")
-        if all_interval
+        pl.concat(interval_chunks, how="vertical_relaxed")
+        if interval_chunks
         else _empty_interval_frame()
     )
     combined_instant = (
-        pl.concat(all_instant, how="vertical_relaxed")
-        if all_instant
+        pl.concat(instant_chunks, how="vertical_relaxed")
+        if instant_chunks
         else _empty_instantaneous_frame()
     )
     combined_register = (
-        pl.concat(all_register, how="vertical_relaxed")
-        if all_register
+        pl.concat(register_chunks, how="vertical_relaxed")
+        if register_chunks
         else _empty_register_frame()
     )
 
     return combined_interval, combined_instant, combined_register
+
+
+def _normalize_single_batch_file(
+    item: tuple[int, Path],
+    *,
+    report_day: date,
+    run_id: str,
+    temp_dir: Path,
+    compression: str,
+) -> tuple[int, Path | None, Path | None, Path | None, int, int, int]:
+    idx, raw_path = item
+    if not raw_path.exists() or raw_path.stat().st_size == 0:
+        return idx, None, None, None, 0, 0, 0
+    try:
+        batch_df = pl.read_parquet(raw_path)
+    except Exception:
+        return idx, None, None, None, 0, 0, 0
+    if batch_df.is_empty():
+        return idx, None, None, None, 0, 0, 0
+
+    i_df, ins_df, reg_df = normalize_mdm_dataframe(
+        batch_df,
+        report_day=report_day,
+        run_id=run_id,
+    )
+
+    p_i: Path | None = None
+    p_ins: Path | None = None
+    p_reg: Path | None = None
+    i_rows = i_df.height
+    ins_rows = ins_df.height
+    reg_rows = reg_df.height
+
+    if i_rows > 0:
+        p_i = temp_dir / f"interval_chunk_{idx:05d}.parquet"
+        i_df.write_parquet(p_i, compression=compression)
+    if ins_rows > 0:
+        p_ins = temp_dir / f"instant_chunk_{idx:05d}.parquet"
+        ins_df.write_parquet(p_ins, compression=compression)
+    if reg_rows > 0:
+        p_reg = temp_dir / f"register_chunk_{idx:05d}.parquet"
+        reg_df.write_parquet(p_reg, compression=compression)
+
+    return idx, p_i, p_ins, p_reg, i_rows, ins_rows, reg_rows
+
+
+def normalize_and_sink_mdm_batches(
+    raw_parquet_files: Sequence[Path],
+    *,
+    report_day: date,
+    interval_final_parquet: Path,
+    instant_final_parquet: Path,
+    register_final_parquet: Path,
+    temp_dir: Path,
+    run_id: str = "",
+    write_csv: bool = False,
+    compression: str = "zstd",
+    max_workers: int = 5,
+) -> tuple[int, int, int]:
+    """Lazy-sink normalizer: processes raw MDM batch files in parallel (up to max_workers),
+
+    writes chunk parquets, and streams them to final partitioned parquets using Polars scan/sink.
+    Memory footprint remains strictly bounded to one batch per worker.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    i_parts: list[Path] = []
+    ins_parts: list[Path] = []
+    reg_parts: list[Path] = []
+
+    total_interval_rows = 0
+    total_instant_rows = 0
+    total_register_rows = 0
+
+    items = list(enumerate(raw_parquet_files, start=1))
+    results: list[tuple[int, Path | None, Path | None, Path | None, int, int, int]] = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(
+                _normalize_single_batch_file,
+                item,
+                report_day=report_day,
+                run_id=run_id,
+                temp_dir=temp_dir,
+                compression=compression,
+            )
+            for item in items
+        ]
+        for fut in as_completed(futures):
+            results.append(fut.result())
+
+    results.sort(key=lambda r: r[0])
+    for _, p_i, p_ins, p_reg, i_rows, ins_rows, reg_rows in results:
+        if p_i is not None:
+            i_parts.append(p_i)
+            total_interval_rows += i_rows
+        if p_ins is not None:
+            ins_parts.append(p_ins)
+            total_instant_rows += ins_rows
+        if p_reg is not None:
+            reg_parts.append(p_reg)
+            total_register_rows += reg_rows
+
+    # Stream to final destination
+    interval_final_parquet.parent.mkdir(parents=True, exist_ok=True)
+    if i_parts:
+        lf = pl.concat([pl.scan_parquet(str(p)) for p in i_parts], how="vertical_relaxed")
+        lf.sink_parquet(interval_final_parquet, compression=compression)
+        if write_csv:
+            lf.sink_csv(interval_final_parquet.with_suffix(".csv"), separator=";")
+    else:
+        _empty_interval_frame().write_parquet(interval_final_parquet, compression=compression)
+
+    instant_final_parquet.parent.mkdir(parents=True, exist_ok=True)
+    if ins_parts:
+        lf = pl.concat([pl.scan_parquet(str(p)) for p in ins_parts], how="vertical_relaxed")
+        lf.sink_parquet(instant_final_parquet, compression=compression)
+        if write_csv:
+            lf.sink_csv(instant_final_parquet.with_suffix(".csv"), separator=";")
+    else:
+        _empty_instantaneous_frame().write_parquet(instant_final_parquet, compression=compression)
+
+    register_final_parquet.parent.mkdir(parents=True, exist_ok=True)
+    if reg_parts:
+        lf = pl.concat([pl.scan_parquet(str(p)) for p in reg_parts], how="vertical_relaxed")
+        lf.sink_parquet(register_final_parquet, compression=compression)
+        if write_csv:
+            lf.sink_csv(register_final_parquet.with_suffix(".csv"), separator=";")
+    else:
+        _empty_register_frame().write_parquet(register_final_parquet, compression=compression)
+
+    return total_interval_rows, total_instant_rows, total_register_rows
 
 
 # ── Context Layer Normalization ──────────────────────────────────────────────

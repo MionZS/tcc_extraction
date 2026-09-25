@@ -249,7 +249,7 @@ def fetch_historical_weather(
     if not rows:
         return _build_empty_weather_frame(variables)
 
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, infer_schema_length=None, strict=False)
 
 
 def enrich_timegrid(

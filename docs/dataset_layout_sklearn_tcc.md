@@ -6,7 +6,11 @@ date: "29 July 2026"
 lang: en
 ---
 
-## Practical Dataset Layout for scikit-learn
+## Practical Dataset Layout for scikit-learn (HISTÓRICO — FUNDAMENTAÇÃO)
+
+> Nota (2026-09): guia prático original. A arquitetura **implementada** está em
+> [`nova_arquitetura_dados.md`](nova_arquitetura_dados.md) e no README
+> (entrada: `uv run main.py`). Mantido como fundamentação (janelas 7/30 dias, anti-leakage).
 
 ## 1. Decision in one page
 

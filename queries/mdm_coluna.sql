@@ -22,11 +22,21 @@ selected_meters AS (
 ),
 catalogue AS (
     SELECT
-        a.data_id,
-        NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '') AS meter_asset_no
-    FROM AMI.a_data_catalogue a
-    JOIN selected_meters sm
-        ON sm.meter_asset_no = NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '')
+        c.data_id,
+        c.meter_asset_no
+    FROM (
+        SELECT
+            a.data_id,
+            NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '') AS meter_asset_no,
+            ROW_NUMBER() OVER (
+                PARTITION BY NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '')
+                ORDER BY a.data_id DESC
+            ) AS rn
+        FROM AMI.a_data_catalogue a
+        JOIN selected_meters sm
+            ON sm.meter_asset_no = NULLIF(LTRIM(TRIM(a.meter_asset_no), '0'), '')
+    ) c
+    WHERE c.rn = 1
 ),
 time_grid AS (
     SELECT

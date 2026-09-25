@@ -20,6 +20,7 @@ from src.features.electrical import (
     compute_energy_ramp,
 )
 from src.features.quality import compute_coverage, compute_null_ratio
+from src.datasets.schemas import METER_DAY_FEATURES_SCHEMA
 
 
 def build_meter_day_features(
@@ -53,23 +54,31 @@ def build_meter_day_features(
     if interval_df.is_empty():
         return _empty_features_frame()
 
-    # Group by NIO
-    nios = interval_df["NIO"].unique().sort().to_list()
+    # Fast O(N) partitioning across frames instead of O(N*M) repeated filters
+    interval_by_nio = interval_df.partition_by("NIO", as_dict=True)
+    instant_by_nio = (
+        instantaneous_df.partition_by("NIO", as_dict=True)
+        if not instantaneous_df.is_empty() and "NIO" in instantaneous_df.columns
+        else {}
+    )
+    register_by_nio = (
+        register_df.partition_by("NIO", as_dict=True)
+        if not register_df.is_empty() and "NIO" in register_df.columns
+        else {}
+    )
+    metadata_by_nio = (
+        metadata_df.partition_by("NIO", as_dict=True)
+        if metadata_df is not None and not metadata_df.is_empty() and "NIO" in metadata_df.columns
+        else {}
+    )
+
     feature_rows: list[dict[str, Any]] = []
+    empty_df = pl.DataFrame()
 
-    for nio in nios:
-        nio_interval = interval_df.filter(pl.col("NIO") == nio)
-        nio_instant = (
-            instantaneous_df.filter(pl.col("NIO") == nio)
-            if not instantaneous_df.is_empty()
-            else pl.DataFrame()
-        )
-        nio_register = (
-            register_df.filter(pl.col("NIO") == nio)
-            if not register_df.is_empty()
-            else pl.DataFrame()
-        )
-
+    for nio_key, nio_interval in sorted(interval_by_nio.items(), key=lambda kv: kv[0][0] if isinstance(kv[0], tuple) else kv[0]):
+        nio = nio_key[0] if isinstance(nio_key, tuple) else nio_key
+        nio_instant = instant_by_nio.get(nio_key, empty_df)
+        nio_register = register_by_nio.get(nio_key, empty_df)
         uc_val = meter_to_uc_map.get(nio, nio) if meter_to_uc_map else nio
 
         row = _compute_nio_features(
@@ -83,16 +92,22 @@ def build_meter_day_features(
         )
 
         # Merge metadata context if available
-        if metadata_df is not None and not metadata_df.is_empty():
-            meta_row = metadata_df.filter(pl.col("NIO") == nio)
-            if meta_row.height > 0:
-                for col in ("PHASE_TYPE", "CONSUMER_CLASS", "METER_TYPE", "INSTALLED_KVA"):
-                    if col in meta_row.columns:
-                        row[col] = meta_row[col][0]
+        meta_sub = metadata_by_nio.get(nio_key)
+        if meta_sub is not None and meta_sub.height > 0:
+            for col in ("PHASE_TYPE", "CONSUMER_CLASS", "METER_TYPE", "INSTALLED_KVA"):
+                if col in meta_sub.columns:
+                    row[col] = meta_sub[col][0]
 
         feature_rows.append(row)
 
-    return pl.DataFrame(feature_rows, strict=False)
+    if not feature_rows:
+        return pl.DataFrame(schema=METER_DAY_FEATURES_SCHEMA)
+    return pl.DataFrame(
+        feature_rows,
+        schema=METER_DAY_FEATURES_SCHEMA,
+        strict=False,
+        infer_schema_length=None,
+    )
 
 
 def _compute_nio_features(
@@ -154,14 +169,12 @@ def _compute_nio_features(
     row["RA_REVERSAL_RATIO"] = round(compute_ra_reversal_ratio(interval_df), 4)
 
     # ── Voltage imbalance ────────────────────────────────────────────────
-    row["VOLTAGE_IMBALANCE_MAX"] = round(
-        compute_voltage_imbalance(interval_df, instantaneous_df), 4
-    )
+    v_imb = compute_voltage_imbalance(interval_df, instantaneous_df)
+    row["VOLTAGE_IMBALANCE_MAX"] = round(v_imb, 4) if v_imb is not None else None
 
     # ── Current imbalance ────────────────────────────────────────────────
-    row["CURRENT_IMBALANCE_MAX"] = round(
-        compute_current_imbalance(interval_df, instantaneous_df), 4
-    )
+    c_imb = compute_current_imbalance(interval_df, instantaneous_df)
+    row["CURRENT_IMBALANCE_MAX"] = round(c_imb, 4) if c_imb is not None else None
 
     # ── Robust statistics (median, IQR, p05, p95) ───────────────────────
     for prefix, source in [("FA_INTERVAL", interval_df), ("U_L1", interval_df)]:

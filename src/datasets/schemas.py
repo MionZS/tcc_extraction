@@ -247,6 +247,8 @@ UC_DAY_FEATURES_SCHEMA = {
     "FA_INTERVAL_P95": pl.Float64,
     "U_L1_MEDIAN": pl.Float64,
     "U_L1_IQR": pl.Float64,
+    "U_L1_P05": pl.Float64,
+    "U_L1_P95": pl.Float64,
     # Variations & ramps
     "FA_RAMP_MAX": pl.Float64,
     "U_L1_RAMP_MAX": pl.Float64,

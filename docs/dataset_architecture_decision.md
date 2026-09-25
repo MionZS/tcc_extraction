@@ -1,4 +1,9 @@
-# Decisão de Arquitetura de Dataset para o TCC
+# Decisão de Arquitetura de Dataset para o TCC (HISTÓRICO — FUNDAMENTAÇÃO)
+
+> Documento de decisão original (2026-07-17). A arquitetura **implementada** está em
+> [`nova_arquitetura_dados.md`](nova_arquitetura_dados.md) (v2.0, UC como entidade central)
+> e no README. Este doc permanece como fundamentação histórica (por que não JSON-no-CSV,
+> cadências heterogêneas, contratos v1).
 
 **Projeto:** análise de dados de medidores inteligentes em Araucária  
 **Status:** proposta técnica v1.0  

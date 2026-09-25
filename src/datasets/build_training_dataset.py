@@ -93,9 +93,17 @@ def build_training_dataset(
         hier_cols = {c.upper(): c for c in hierarchy_df.columns}
         if "UC" in hier_cols:
             hier_select: list[pl.Expr] = [pl.col(hier_cols["UC"]).cast(pl.String).alias("id__uc_id")]
+            # Numeric features for ML
             for fld in ("POT_INST_KVA", "TENSAO_ALIMENTADOR", "TENSAO_SE"):
                 if fld in hier_cols:
                     hier_select.append(pl.col(hier_cols[fld]).alias(f"x__{fld.lower()}"))
+            # Meta columns for grouping / routing — never sent to estimator
+            if "ALIMENTADOR" in hier_cols:
+                hier_select.append(pl.col(hier_cols["ALIMENTADOR"]).cast(pl.String).alias("meta__feeder"))
+            if "POSTO_OPERACIONAL" in hier_cols:
+                hier_select.append(pl.col(hier_cols["POSTO_OPERACIONAL"]).cast(pl.String).alias("meta__posto"))
+            if "SUBESTACAO" in hier_cols:
+                hier_select.append(pl.col(hier_cols["SUBESTACAO"]).cast(pl.String).alias("meta__subestacao"))
 
             hier_subset = hierarchy_df.select(hier_select).unique(subset=["id__uc_id"])
             base_model_df = base_model_df.join(hier_subset, on="id__uc_id", how="left")

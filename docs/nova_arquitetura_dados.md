@@ -4,7 +4,14 @@
 **Entidade Analítica Central:** Unidade Consumidora ($\text{UC}$)  
 **Unidade Amostral para Machine Learning:** $\text{UC} \times \text{cutoff\_date}$  
 **Versão:** 2.0  
-**Data:** Setembro de 2026  
+**Data:** Setembro de 2026
+
+> **Status dos docs:** este documento + `data_contracts.md`, `feature_catalog.md` e
+> `vulnerabilities.md` descrevem o sistema atual. `dataset_architecture_decision.md` e
+> `dataset_layout_sklearn_tcc.md` sao historico/fundamentacao. `reports/relatorio_pipeline.md`,
+> `export_and_publish_plan.md` e `daily_pipeline_integrity_plan.md` descrevem a fase
+> anterior (`output/raw + refined/reports`, amostra 200 NIOs) — superseded, mantidos como registro.
+> Entrada: README + TUI (`uv run main.py`, guia em `TUI_INSTRUCTIONS.md`).  
 
 ---
 
@@ -211,16 +218,17 @@ flowchart TD
 
 ## 5. Como Executar
 
-Na raiz do projeto (`d:\Projects\tcc_extraction`):
+Na raiz do projeto (`d:\Projects\tcc_extraction`) — via TUI (`uv run main.py`, opcao 1) ou:
 
 ### Extração Completa do Alimentador e Geração do Dataset
 ```cmd
 run_feeder.cmd
 ```
-*(Ou diretamente: `python scripts/run_feeder_pipeline.py --days-back 1`)*
+*(Ou diretamente: `uv run python scripts/run_feeder_pipeline.py --days-back 1 --train-model` — ver README §1)*
 
 ### Treinamento / Re-treinamento do Modelo de Anomalias
 ```cmd
-python scripts/train_anomaly_model.py --input output/model_input/v1/training_dataset.parquet --contamination 0.05
+uv run python scripts/train_anomaly_model.py --input output/model_input/v1/training_dataset.parquet --contamination 0.05
 ```
+*(Modos: `--mode composite` (padrao) | `hierarchical --feeder Fonte_Nova` | `baseline` — ver README §4)*
 

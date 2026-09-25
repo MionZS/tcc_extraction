@@ -5,10 +5,15 @@ description = "Daily ARAUCARIA CIS -> MDM extraction pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "clawmetry>=0.12.887",
+    "joblib>=1.3.0",
     "numpy>=2.4.6",
+    "matplotlib>=3.8.0",
     "oracledb>=3.4.2",
     "polars>=1.38.1",
     "pytest>=9.1.0",
+    "rich>=13.0.0",
+    "scikit-learn>=1.4.0",
     "sqlalchemy>=2.0.48",
 ]
 

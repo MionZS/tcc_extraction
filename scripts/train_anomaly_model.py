@@ -1,11 +1,14 @@
-"""Baseline Anomaly Detection & Clustering Training Script.
+"""Anomaly Detection, Clustering & Hierarchical Model Training Script.
 
-Trains an unsupervised baseline using IsolationForest and KMeans
-on the model_input training dataset (UC × cutoff_date).
+Supports:
+- Composite Multi-Technique Model (Isolation Forest, LOF, ECOD, Robust PCA, Physics Rules)
+- Hierarchical Training (Feeder-specific, Municipality, and Global Models via MoE Router)
+- Baseline Model (Isolation Forest + KMeans)
 
 Usage:
-    python scripts/train_anomaly_model.py
-    python scripts/train_anomaly_model.py --input output/model_input/v1/training_dataset.parquet --contamination 0.05
+    python scripts/train_anomaly_model.py --mode composite
+    python scripts/train_anomaly_model.py --mode hierarchical --feeder Fonte_Nova
+    python scripts/train_anomaly_model.py --mode baseline --contamination 0.05
 """
 
 from __future__ import annotations
@@ -23,9 +26,15 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import RobustScaler
 
+from src.datasets.dataset_splitter import DatasetSplitter
+from src.models.composite import CompositeAnomalyDetector
+from src.models.hierarchical_trainer import HierarchicalModelOrchestrator
+from src.models.spurious_filter import filter_spurious_anomalies
+from src.tui.tui_app import show_environment_warning
+
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train anomaly detection model on UC features.")
+    parser = argparse.ArgumentParser(description="Train anomaly detection models on UC features.")
     parser.add_argument(
         "--input",
         type=Path,
@@ -33,10 +42,29 @@ def parse_args() -> argparse.Namespace:
         help="Path to training_dataset.parquet",
     )
     parser.add_argument(
+        "--hierarchy-input",
+        type=Path,
+        default=Path("output/context/electrical_hierarchy.parquet"),
+        help="Path to electrical_hierarchy.parquet",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output"),
         help="Base output directory",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["composite", "hierarchical", "baseline"],
+        default="composite",
+        help="Training architecture: 'composite', 'hierarchical', or 'baseline'",
+    )
+    parser.add_argument(
+        "--feeder",
+        type=str,
+        default=None,
+        help="Optional specific feeder name to filter/train (e.g. Fonte_Nova)",
     )
     parser.add_argument(
         "--contamination",
@@ -60,6 +88,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    show_environment_warning()
     args = parse_args()
 
     if not args.input.exists():
@@ -71,36 +100,93 @@ def main() -> None:
     df = pl.read_parquet(args.input)
     print(f"[+] Loaded {df.height:,} rows, {df.width:,} columns.")
 
-    # ── Feature Selection ─────────────────────────────────────────────────
-    feature_cols = [
-        col for col in df.columns
-        if col.startswith("x__")
-    ]
-    # Filter only numeric features for baseline estimators
-    numeric_features = [
-        col for col in feature_cols
-        if df[col].dtype.is_numeric()
-    ]
+    hierarchy_df = (
+        pl.read_parquet(args.hierarchy_input)
+        if args.hierarchy_input.exists()
+        else None
+    )
 
-    print(f"[+] Identified {len(numeric_features)} numeric model features:")
-    for f in numeric_features:
-        print(f"    - {f}")
+    feature_cols = [col for col in df.columns if col.startswith("x__") and df[col].dtype.is_numeric()]
+    print(f"[+] Identified {len(feature_cols)} numeric model features.")
 
-    if not numeric_features:
+    if not feature_cols:
         raise ValueError("No numeric features found with 'x__' prefix in dataset.")
 
-    # Select samples (use train split if present)
-    if "meta__split" in df.columns:
-        train_df = df.filter(pl.col("meta__split") == "train")
-        if train_df.is_empty():
-            train_df = df
-    else:
-        train_df = df
+    # ── Mode 1: Hierarchical / MoE Training ──────────────────────────────
+    if args.mode == "hierarchical":
+        print(f"\n[*] Starting Hierarchical MoE Training (Feeder vs Regional vs Global)...")
+        orchestrator = HierarchicalModelOrchestrator(
+            output_dir=args.output_dir,
+            contamination=args.contamination,
+            random_state=args.random_state,
+        )
+        scores_df = orchestrator.train_and_score(
+            df,
+            hierarchy_df=hierarchy_df,
+            target_feeder=args.feeder,
+        )
 
-    X_train = train_df.select(numeric_features).to_numpy()
+        n_anom = int(scores_df["FINAL_IS_ANOMALY"].sum()) if "FINAL_IS_ANOMALY" in scores_df.columns else 0
+        print("\n" + "=" * 50)
+        print("HIERARCHICAL MoE TRAINING SUMMARY")
+        print("=" * 50)
+        print(f"Total evaluated samples: {scores_df.height:,}")
+        print(f"Final Genuine Anomalies: {n_anom:,} ({n_anom/scores_df.height:.1%})")
+        if "ANOMALY_CATEGORY" in scores_df.columns:
+            cats = scores_df["ANOMALY_CATEGORY"].value_counts().to_dicts()
+            print("Category breakdown:")
+            for c in cats:
+                print(f"  - {c.get('ANOMALY_CATEGORY')}: {c.get('count'):,}")
+        return
 
-    # ── Model 1: Isolation Forest (Anomaly Detection) ─────────────────────
-    print(f"\n[*] Training Isolation Forest (contamination={args.contamination})...")
+    # ── Mode 2: Composite Multi-Technique Committee ───────────────────────
+    if args.mode == "composite":
+        print(f"\n[*] Training Composite Multi-Technique Detector (IsoForest + LOF + ECOD + PCA + Rules)...")
+        X = df.select(feature_cols).to_numpy()
+
+        detector = CompositeAnomalyDetector(
+            contamination=args.contamination,
+            random_state=args.random_state,
+        )
+        detector.fit(X)
+
+        preds = detector.predict_composite(X, raw_dataframe=df)
+
+        scores_dir = args.output_dir / "outputs" / "composite_scores"
+        scores_dir.mkdir(parents=True, exist_ok=True)
+        models_dir = args.output_dir / "models"
+        models_dir.mkdir(parents=True, exist_ok=True)
+
+        joblib.dump(detector, models_dir / "composite_anomaly_detector.joblib")
+
+        id_cols = [c for c in ("id__uc_id", "meta__cutoff_date", "meta__window_days") if c in df.columns]
+        scores_df = df.select(id_cols) if id_cols else pl.DataFrame()
+        scores_df = scores_df.with_columns([
+            pl.Series("consensus_score", preds["consensus_score"]),
+            pl.Series("iso_score", preds["iso_score"]),
+            pl.Series("lof_score", preds["lof_score"]),
+            pl.Series("ecod_score", preds["ecod_score"]),
+            pl.Series("pca_score", preds["pca_score"]),
+            pl.Series("rule_violation", preds["rule_violation_flag"]),
+            pl.Series("is_anomaly", preds["is_anomaly"]),
+        ])
+
+        # Filter spurious noise
+        scores_df = filter_spurious_anomalies(scores_df)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_p = scores_dir / f"composite_scores_{timestamp}.parquet"
+        out_c = scores_dir / f"composite_scores_{timestamp}.csv"
+        scores_df.write_parquet(out_p)
+        scores_df.write_csv(out_c, separator=";")
+
+        print(f"[+] Saved composite detector to {models_dir / 'composite_anomaly_detector.joblib'}")
+        print(f"[+] Saved composite scores to {out_p.name}")
+        return
+
+    # ── Mode 3: Baseline (Isolation Forest + KMeans) ───────────────────────
+    print(f"\n[*] Training Baseline Model (Isolation Forest + KMeans)...")
+    X_train = df.select(feature_cols).to_numpy()
     iso_pipeline = make_pipeline(
         SimpleImputer(strategy="median"),
         RobustScaler(),
@@ -113,81 +199,39 @@ def main() -> None:
     )
     iso_pipeline.fit(X_train)
 
-    # Negative decision function: higher means more anomalous
     estimator = iso_pipeline.named_steps["isolationforest"]
     transformed_X = iso_pipeline.named_steps["robustscaler"].transform(
         iso_pipeline.named_steps["simpleimputer"].transform(X_train)
     )
     raw_scores = -estimator.score_samples(transformed_X)
-    predictions = estimator.predict(transformed_X)
-    is_anomaly = predictions == -1
+    is_anomaly = estimator.predict(transformed_X) == -1
 
-    # ── Model 2: KMeans (Behavioral Profiling / Clustering) ───────────────
-    print(f"[*] Training KMeans behavioral clustering (k={args.n_clusters})...")
     kmeans_pipeline = make_pipeline(
         SimpleImputer(strategy="median"),
         RobustScaler(),
-        KMeans(
-            n_clusters=args.n_clusters,
-            random_state=args.random_state,
-            n_init="auto",
-        ),
+        KMeans(n_clusters=args.n_clusters, random_state=args.random_state, n_init="auto"),
     )
     cluster_labels = kmeans_pipeline.fit_predict(X_train)
 
-    # ── Build Output Scores Table ─────────────────────────────────────────
-    scores_df = train_df.select([
-        c for c in ("id__uc_id", "meta__cutoff_date", "meta__window_days")
-        if c in train_df.columns
-    ])
-
+    scores_df = df.select([c for c in ("id__uc_id", "meta__cutoff_date", "meta__window_days") if c in df.columns])
     scores_df = scores_df.with_columns([
         pl.Series("anomaly_score", np.round(raw_scores, 4)),
         pl.Series("is_anomaly", is_anomaly),
         pl.Series("behavior_cluster", cluster_labels),
     ])
 
-    # Rank percentile (0.0 = normal, 1.0 = most anomalous)
-    ranks = (np.argsort(np.argsort(raw_scores)) + 1) / len(raw_scores)
-    scores_df = scores_df.with_columns(
-        pl.Series("rank_percentile", np.round(ranks, 4))
-    ).sort("anomaly_score", descending=True)
-
-    # ── Save Models & Scores ──────────────────────────────────────────────
     models_dir = args.output_dir / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(iso_pipeline, models_dir / "isolation_forest_pipeline.joblib")
     joblib.dump(kmeans_pipeline, models_dir / "kmeans_clustering_pipeline.joblib")
-    print(f"[+] Saved trained pipelines to {models_dir}")
 
     scores_dir = args.output_dir / "outputs" / "anomaly_scores"
     scores_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_parquet = scores_dir / f"anomaly_scores_{timestamp}.parquet"
-    out_csv = scores_dir / f"anomaly_scores_{timestamp}.csv"
-
     scores_df.write_parquet(out_parquet)
-    scores_df.write_csv(out_csv, separator=";")
-    print(f"[+] Saved anomaly scores to:\n    - {out_parquet}\n    - {out_csv}")
-
-    # ── Summary Report ────────────────────────────────────────────────────
-    n_anomalies = int(is_anomaly.sum())
-    print("\n" + "=" * 50)
-    print("TRAINING & SCORING SUMMARY")
-    print("=" * 50)
-    print(f"Total evaluated samples: {len(raw_scores):,}")
-    print(f"Flagged anomalies:       {n_anomalies:,} ({n_anomalies/len(raw_scores):.1%})")
-    print(f"Behavior clusters:       {args.n_clusters}")
-    print("\nTop 5 Flagged UCs by Anomaly Score:")
-    top5 = scores_df.head(5)
-    for row in top5.iter_rows(named=True):
-        print(
-            f"  UC {row.get('id__uc_id')}: score={row.get('anomaly_score'):.4f}, "
-            f"percentile={row.get('rank_percentile'):.2%}, cluster={row.get('behavior_cluster')}"
-        )
-    print("=" * 50)
+    print(f"[+] Saved baseline anomaly scores to {out_parquet.name}")
 
 
 if __name__ == "__main__":
     main()
-

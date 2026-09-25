@@ -171,4 +171,3 @@ Ao contrário de bugs sintáticos (que interrompem a execução com traceback), 
 | ⚠️ **P1 - Alta** | Loops $O(N)$ em Python puro com `DataFrame.filter()` no Polars | Escalabilidade | Pipeline trava ou demora horas ao processar a cidade toda. |
 | 🟡 **P2 - Média** | Desbalanceamento médio vs. desbalanceamento dinâmico instantâneo | Domínio Técnico | Mascaramento de distúrbios elétricos severos em horários alternados. |
 | 🟡 **P2 - Média** | Credenciais em texto claro e ausência de suporte a `.env` | Segurança | Exposição acidental de acessos corporativos de produção. |
-

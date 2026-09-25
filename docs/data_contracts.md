@@ -1,5 +1,9 @@
 # Data Contracts — ARAUCARIA Smart Meter Datasets
 
+> Contratos vigentes (v1.0, 2026-07-27). Arquitetura implementada em
+> [`nova_arquitetura_dados.md`](nova_arquitetura_dados.md) (v2.0); entrada pelo README
+> (`uv run main.py`). Partições `report_year=/report_month=/report_day=` sob `data/`/`output/`.
+
 **Projeto:** TCC — análise de dados de medidores inteligentes em Araucária  
 **Status:** v1.0  
 **Data:** 2026-07-27  

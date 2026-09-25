@@ -26,8 +26,29 @@ from src.datasets.partitioning import (
 )
 
 
+def _sink_or_write(
+    data: pl.DataFrame | pl.LazyFrame,
+    parquet_path: Path,
+    *,
+    write_csv: bool = False,
+    compression: str = "zstd",
+) -> Path:
+    """Helper to stream sink a LazyFrame or write a DataFrame to Parquet and optional CSV."""
+    if isinstance(data, pl.LazyFrame):
+        data.sink_parquet(parquet_path, compression=compression)
+        if write_csv:
+            csv_path = parquet_path.with_suffix(".csv") if parquet_path.suffix == ".parquet" else parquet_path.parent / f"{parquet_path.stem}.csv"
+            data.sink_csv(csv_path, separator=";")
+    else:
+        data.write_parquet(parquet_path, compression=compression)
+        if write_csv:
+            csv_path = parquet_path.with_suffix(".csv") if parquet_path.suffix == ".parquet" else parquet_path.parent / f"{parquet_path.stem}.csv"
+            data.write_csv(csv_path, separator=";")
+    return parquet_path
+
+
 def write_context_table(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     table_name: str,
     *,
     base_dir: Path | str = "data",
@@ -35,23 +56,16 @@ def write_context_table(
     compression: str = "zstd",
 ) -> Path:
     """Write context table (e.g. uc_context, meter_installation_history, electrical_hierarchy)."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_file = context_path(table_name, base_dir=base_dir)
     ensure_partition_dirs(out_file.parent)
-
-    df.write_parquet(out_file, compression=compression)
-
-    if write_csv:
-        csv_path = out_file.with_suffix(".csv")
-        df.write_csv(csv_path, separator=";")
-
-    return out_file
+    return _sink_or_write(df, out_file, write_csv=write_csv, compression=compression)
 
 
 def write_measurements_table(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     table_name: str,
     report_day: date,
     *,
@@ -60,24 +74,18 @@ def write_measurements_table(
     compression: str = "zstd",
 ) -> Path:
     """Write measurements table (ami_interval, ami_instantaneous, ami_registers)."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_dir = measurements_partition_path(table_name, report_day, base_dir=base_dir)
     ensure_partition_dirs(out_dir)
 
     parquet_path = out_dir / "data.parquet"
-    df.write_parquet(parquet_path, compression=compression)
-
-    if write_csv:
-        csv_path = out_dir / "data.csv"
-        df.write_csv(csv_path, separator=";")
-
-    return parquet_path
+    return _sink_or_write(df, parquet_path, write_csv=write_csv, compression=compression)
 
 
 def write_events_table(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     table_name: str,
     report_day: date,
     *,
@@ -86,20 +94,14 @@ def write_events_table(
     compression: str = "zstd",
 ) -> Path:
     """Write events table (alarm_events)."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_dir = events_partition_path(table_name, report_day, base_dir=base_dir)
     ensure_partition_dirs(out_dir)
 
     parquet_path = out_dir / "data.parquet"
-    df.write_parquet(parquet_path, compression=compression)
-
-    if write_csv:
-        csv_path = out_dir / "data.csv"
-        df.write_csv(csv_path, separator=";")
-
-    return parquet_path
+    return _sink_or_write(df, parquet_path, write_csv=write_csv, compression=compression)
 
 
 def write_normalized_table(
@@ -151,7 +153,7 @@ def write_normalized_batch(
 
 
 def write_features(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     feature_set_version: str,
     report_day: date,
     *,
@@ -160,24 +162,18 @@ def write_features(
     compression: str = "zstd",
 ) -> Path:
     """Write daily feature DataFrame to partitioned Parquet."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_dir = feature_partition_path(feature_set_version, report_day, base_dir=base_dir)
     ensure_partition_dirs(out_dir)
 
     parquet_path = out_dir / "data.parquet"
-    df.write_parquet(parquet_path, compression=compression)
-
-    if write_csv:
-        csv_path = out_dir / "data.csv"
-        df.write_csv(csv_path, separator=";")
-
-    return parquet_path
+    return _sink_or_write(df, parquet_path, write_csv=write_csv, compression=compression)
 
 
 def write_window_features(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     feature_set_version: str,
     cutoff_date: date,
     *,
@@ -186,24 +182,18 @@ def write_window_features(
     compression: str = "zstd",
 ) -> Path:
     """Write window feature DataFrame to partitioned Parquet."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_dir = window_feature_partition_path(feature_set_version, cutoff_date, base_dir=base_dir)
     ensure_partition_dirs(out_dir)
 
     parquet_path = out_dir / "data.parquet"
-    df.write_parquet(parquet_path, compression=compression)
-
-    if write_csv:
-        csv_path = out_dir / "data.csv"
-        df.write_csv(csv_path, separator=";")
-
-    return parquet_path
+    return _sink_or_write(df, parquet_path, write_csv=write_csv, compression=compression)
 
 
 def write_training_dataset(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     dataset_version: str = "v1",
     *,
     base_dir: Path | str = "data",
@@ -211,23 +201,17 @@ def write_training_dataset(
     compression: str = "zstd",
 ) -> Path:
     """Write final model input dataset (UC × cutoff_date)."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_path = model_input_path(dataset_version, base_dir=base_dir)
     ensure_partition_dirs(out_path.parent)
 
-    df.write_parquet(out_path, compression=compression)
-
-    if write_csv:
-        csv_path = out_path.with_suffix(".csv")
-        df.write_csv(csv_path, separator=";")
-
-    return out_path
+    return _sink_or_write(df, out_path, write_csv=write_csv, compression=compression)
 
 
 def write_labels(
-    df: pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     label_version: str,
     *,
     base_dir: Path | str = "data",
@@ -235,20 +219,14 @@ def write_labels(
     compression: str = "zstd",
 ) -> Path:
     """Write labels DataFrame to partitioned Parquet."""
-    if df.is_empty():
+    if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 
     out_dir = label_partition_path(label_version, base_dir=base_dir)
     ensure_partition_dirs(out_dir)
 
     parquet_path = out_dir / "data.parquet"
-    df.write_parquet(parquet_path, compression=compression)
-
-    if write_csv:
-        csv_path = out_dir / "data.csv"
-        df.write_csv(csv_path, separator=";")
-
-    return parquet_path
+    return _sink_or_write(df, parquet_path, write_csv=write_csv, compression=compression)
 
 
 def compute_file_checksum(path: Path) -> str:

@@ -1,5 +1,10 @@
 # Catálogo de Features — ARAUCARIA Smart Meter TCC
 
+> Catálogo vigente (v1). Implementação: `src/features/meter_day.py::build_meter_day_features`
+> (dia: `UC × REPORT_DAY`) + `src/features/uc_window.py::build_uc_window_features`
+> (janelas, ex. 30 dias) → `src/datasets/build_training_dataset.py`
+> (prefixos `id__* / meta__* / x__* / y__*`). Versão via `feature_set_version` (padrão `v1`).
+
 > **Documento**: `docs/feature_catalog.md`  
 > **Versão**: 1.0  
 > **Atualizado**: 2025-07-16  

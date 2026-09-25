@@ -12,90 +12,89 @@ import polars as pl
 def compute_voltage_imbalance(
     interval_df: pl.DataFrame,
     instantaneous_df: pl.DataFrame,
-) -> float:
-    """Compute maximum voltage imbalance across phases.
+) -> float | None:
+    """Compute maximum dynamic voltage imbalance across active phases.
 
-    Voltage imbalance is defined as the maximum deviation from the
-    average across L1, L2, L3, divided by the average.
+    Follows standard electrical engineering standards (PRODIST Módulo 8 / IEEE 1159):
+    Computes instantaneous imbalance at each timestamp:
+        V_avg(t) = (1/K) * sum(V_k(t))
+        imbalance(t) = max_k |V_k(t) - V_avg(t)| / V_avg(t)
+    Returns max(imbalance(t)) across the day.
 
-    Uses instantaneous voltage if available, falls back to interval averages.
+    For single-phase installations (only 1 active phase), inter-phase imbalance
+    is physically undefined, so None is returned.
+    For two-phase (bifásico), computes imbalance between the 2 active phases without
+    dropping rows due to missing third phase.
 
     Returns:
-        Maximum imbalance ratio (0.0 to 1.0+).
+        Maximum imbalance ratio (0.0 to 1.0+), or None if single-phase or empty.
     """
     source = instantaneous_df if instantaneous_df.height > 0 else interval_df
-
     if source.is_empty():
-        return 0.0
+        return None
 
-    u_cols = [c for c in ("U_L1", "U_L2", "U_L3") if c in source.columns]
-    if not u_cols:
-        u_cols = [c for c in ("U_L1_AVG", "U_L2_AVG", "U_L3_AVG") if c in source.columns]
+    candidate_cols = [c for c in ("U_L1", "U_L2", "U_L3") if c in source.columns]
+    if not candidate_cols:
+        candidate_cols = [c for c in ("U_L1_AVG", "U_L2_AVG", "U_L3_AVG") if c in source.columns]
 
-    if len(u_cols) < 2:
-        return 0.0
+    # Filter to active phases that actually contain measurements for this meter
+    active_cols = [c for c in candidate_cols if source[c].drop_nulls().len() > 0]
+    if len(active_cols) < 2:
+        return None
 
     try:
-        temp = source.select(u_cols).drop_nulls()
-        if temp.is_empty():
-            return 0.0
+        valid_rows = source.select(active_cols).drop_nulls()
+        if valid_rows.is_empty():
+            return None
 
-        max_imbalance = 0.0
-        for i in range(len(u_cols)):
-            for j in range(i + 1, len(u_cols)):
-                v1 = temp[u_cols[i]].mean()
-                v2 = temp[u_cols[j]].mean()
-                avg = (v1 + v2) / 2
-                if avg > 0:
-                    imbalance = abs(v1 - v2) / avg
-                    max_imbalance = max(max_imbalance, imbalance)
+        # Vectorized dynamic calculation at each timestamp
+        avg_expr = sum(pl.col(c) for c in active_cols) / len(active_cols)
+        max_dev_expr = pl.max_horizontal([(pl.col(c) - avg_expr).abs() for c in active_cols])
+        imb_expr = pl.when(avg_expr > 0).then(max_dev_expr / avg_expr).otherwise(0.0)
 
-        return max_imbalance
+        max_imb = valid_rows.select(imb_expr.max()).item()
+        return float(max_imb) if max_imb is not None else None
     except Exception:
-        return 0.0
+        return None
 
 
 def compute_current_imbalance(
     interval_df: pl.DataFrame,
     instantaneous_df: pl.DataFrame,
-) -> float:
-    """Compute maximum current imbalance across phases.
+) -> float | None:
+    """Compute maximum dynamic current imbalance across active phases.
 
-    Similar to voltage imbalance but for current measurements.
+    Follows PRODIST Módulo 8 / IEEE Std 1159 dynamic instantaneous calculation.
+    Returns None for single-phase installations.
 
     Returns:
-        Maximum imbalance ratio (0.0 to 1.0+).
+        Maximum imbalance ratio (0.0 to 1.0+), or None if single-phase or empty.
     """
     source = instantaneous_df if instantaneous_df.height > 0 else interval_df
-
     if source.is_empty():
-        return 0.0
+        return None
 
-    i_cols = [c for c in ("I_INSTANT_L1", "I_INSTANT_L2", "I_INSTANT_L3") if c in source.columns]
-    if not i_cols:
-        i_cols = [c for c in ("I_L1_AVG", "I_L2_AVG", "I_L3_AVG") if c in source.columns]
+    candidate_cols = [c for c in ("I_INSTANT_L1", "I_INSTANT_L2", "I_INSTANT_L3") if c in source.columns]
+    if not candidate_cols:
+        candidate_cols = [c for c in ("I_L1_AVG", "I_L2_AVG", "I_L3_AVG") if c in source.columns]
 
-    if len(i_cols) < 2:
-        return 0.0
+    active_cols = [c for c in candidate_cols if source[c].drop_nulls().len() > 0]
+    if len(active_cols) < 2:
+        return None
 
     try:
-        temp = source.select(i_cols).drop_nulls()
-        if temp.is_empty():
-            return 0.0
+        valid_rows = source.select(active_cols).drop_nulls()
+        if valid_rows.is_empty():
+            return None
 
-        max_imbalance = 0.0
-        for i in range(len(i_cols)):
-            for j in range(i + 1, len(i_cols)):
-                v1 = temp[i_cols[i]].mean()
-                v2 = temp[i_cols[j]].mean()
-                avg = (v1 + v2) / 2
-                if avg > 0:
-                    imbalance = abs(v1 - v2) / avg
-                    max_imbalance = max(max_imbalance, imbalance)
+        avg_expr = sum(pl.col(c) for c in active_cols) / len(active_cols)
+        max_dev_expr = pl.max_horizontal([(pl.col(c) - avg_expr).abs() for c in active_cols])
+        imb_expr = pl.when(avg_expr > 0).then(max_dev_expr / avg_expr).otherwise(0.0)
 
-        return max_imbalance
+        max_imb = valid_rows.select(imb_expr.max()).item()
+        return float(max_imb) if max_imb is not None else None
     except Exception:
-        return 0.0
+        return None
 
 
 def compute_load_factor(interval_df: pl.DataFrame) -> float:

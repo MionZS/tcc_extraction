@@ -112,11 +112,11 @@ def main():
     if not rows:
         print("No alarm data found for the given range/filters.")
         return
-    df = pl.DataFrame(rows)
+    df = pl.DataFrame(rows, infer_schema_length=None, strict=False)
     df = df.with_columns([
-        pl.col("alarm_name").cast(pl.Utf8),
-        pl.col("cnt").cast(pl.Int64),
-        pl.col("event_date").cast(pl.Date),
+        pl.col("alarm_name").cast(pl.Utf8, strict=False),
+        pl.col("cnt").cast(pl.Int64, strict=False),
+        pl.col("event_date").cast(pl.Date, strict=False),
     ])
     base_name = f"alarms_aggregate_{args.start_date}-{args.end_date}"
     if args.output_format in ("parquet", "both"):

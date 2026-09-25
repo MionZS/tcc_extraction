@@ -7,7 +7,7 @@ and event counts without looking ahead into the future.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 import numpy as np
@@ -42,6 +42,8 @@ def build_uc_window_features(
         return pl.DataFrame(schema=UC_WINDOW_FEATURES_SCHEMA)
 
     window_start = cutoff_date - timedelta(days=window_days)
+    window_start_dt = datetime.combine(window_start + timedelta(days=1), time.min)
+    cutoff_end_dt = datetime.combine(cutoff_date, time.max)
 
     # Filter strictly to the window: window_start < REPORT_DAY <= cutoff_date
     window_daily = daily_features_df.filter(
@@ -51,12 +53,24 @@ def build_uc_window_features(
     if window_daily.is_empty():
         return pl.DataFrame(schema=UC_WINDOW_FEATURES_SCHEMA)
 
-    # Extract unique UCs present
-    ucs = window_daily["UC"].unique().sort().to_list()
+    # Fast O(N) partitioning across frames instead of O(N*M) repeated filters
+    daily_by_uc = window_daily.partition_by("UC", as_dict=True)
+    history_by_uc = (
+        meter_history_df.partition_by("UC", as_dict=True)
+        if meter_history_df is not None and not meter_history_df.is_empty() and "UC" in meter_history_df.columns
+        else {}
+    )
+    alarms_by_nio = (
+        alarm_events_df.partition_by("NIO", as_dict=True)
+        if alarm_events_df is not None and not alarm_events_df.is_empty() and "NIO" in alarm_events_df.columns
+        else {}
+    )
+
     rows: list[dict[str, Any]] = []
 
-    for uc in ucs:
-        uc_daily = window_daily.filter(pl.col("UC") == uc).sort("REPORT_DAY")
+    for uc_key, uc_daily_raw in sorted(daily_by_uc.items(), key=lambda kv: kv[0][0] if isinstance(kv[0], tuple) else kv[0]):
+        uc = uc_key[0] if isinstance(uc_key, tuple) else uc_key
+        uc_daily = uc_daily_raw.sort("REPORT_DAY")
 
         # ── Coverage & Quality ──────────────────────────────────────────
         cov_col = uc_daily.get_column("INTERVAL_COVERAGE") if "INTERVAL_COVERAGE" in uc_daily.columns else pl.Series([0.0])
@@ -65,7 +79,7 @@ def build_uc_window_features(
 
         # ── Electrical aggregations ─────────────────────────────────────
         fa_sums = (
-            uc_daily.get_column("FA_INTERVAL_SUM").to_numpy()
+            uc_daily.get_column("FA_INTERVAL_SUM").drop_nulls().to_numpy()
             if "FA_INTERVAL_SUM" in uc_daily.columns
             else np.array([0.0])
         )
@@ -73,7 +87,7 @@ def build_uc_window_features(
         fa_mad = float(np.median(np.abs(fa_sums - fa_median))) if len(fa_sums) > 0 else 0.0
 
         ra_rev = (
-            uc_daily.get_column("RA_REVERSAL_RATIO").to_numpy()
+            uc_daily.get_column("RA_REVERSAL_RATIO").drop_nulls().to_numpy()
             if "RA_REVERSAL_RATIO" in uc_daily.columns
             else np.array([0.0])
         )
@@ -81,21 +95,21 @@ def build_uc_window_features(
         rev_max = float(np.max(ra_rev)) if len(ra_rev) > 0 else 0.0
 
         load_factors = (
-            uc_daily.get_column("LOAD_FACTOR").to_numpy()
+            uc_daily.get_column("LOAD_FACTOR").drop_nulls().to_numpy()
             if "LOAD_FACTOR" in uc_daily.columns
             else np.array([0.0])
         )
         lf_mean = float(np.nanmean(load_factors)) if len(load_factors) > 0 else 0.0
 
         u_imb = (
-            uc_daily.get_column("VOLTAGE_IMBALANCE_MAX").to_numpy()
+            uc_daily.get_column("VOLTAGE_IMBALANCE_MAX").drop_nulls().to_numpy()
             if "VOLTAGE_IMBALANCE_MAX" in uc_daily.columns
             else np.array([0.0])
         )
         u_imb_max = float(np.nanmax(u_imb)) if len(u_imb) > 0 else 0.0
 
         i_imb = (
-            uc_daily.get_column("CURRENT_IMBALANCE_MAX").to_numpy()
+            uc_daily.get_column("CURRENT_IMBALANCE_MAX").drop_nulls().to_numpy()
             if "CURRENT_IMBALANCE_MAX" in uc_daily.columns
             else np.array([0.0])
         )
@@ -104,40 +118,46 @@ def build_uc_window_features(
         # Linear trend slope
         if len(fa_sums) >= 3:
             x_vals = np.arange(len(fa_sums))
-            # simple linear regression slope
             cov_xy = np.cov(x_vals, fa_sums)[0, 1]
             var_x = np.var(x_vals)
             trend_slope = float(cov_xy / var_x) if var_x > 0 else 0.0
         else:
             trend_slope = 0.0
 
-        # ── Meter installation & age context ─────────────────────────────
+        # ── Meter installation & age context (Strict anti-leakage) ────────
         meter_age_days = 0
         meter_changed_30d = False
         meter_changed_90d = False
 
-        if meter_history_df is not None and not meter_history_df.is_empty():
-            uc_meters = meter_history_df.filter(pl.col("UC") == uc)
-            if not uc_meters.is_empty() and "DATA_INSTALACAO" in uc_meters.columns:
-                install_dates = uc_meters["DATA_INSTALACAO"].drop_nulls().to_list()
-                if install_dates:
-                    latest_install = max(install_dates)
-                    meter_age_days = max(0, (cutoff_date - latest_install).days)
-                    meter_changed_30d = meter_age_days <= 30
-                    meter_changed_90d = meter_age_days <= 90
+        uc_meters = history_by_uc.get(uc_key)
+        if uc_meters is not None and uc_meters.height > 0 and "DATA_INSTALACAO" in uc_meters.columns:
+            # Only consider installations on or before cutoff_date
+            install_dates = [
+                d for d in uc_meters["DATA_INSTALACAO"].drop_nulls().to_list()
+                if d <= cutoff_date
+            ]
+            if install_dates:
+                latest_install = max(install_dates)
+                meter_age_days = max(0, (cutoff_date - latest_install).days)
+                meter_changed_30d = meter_age_days <= 30
+                meter_changed_90d = meter_age_days <= 90
 
-        # ── Alarm events over window ─────────────────────────────────────
+        # ── Alarm events over window (Handles meter replacements & Datetime)
         alarm_count = 0
         avg_alarm_latency = 0.0
 
-        if alarm_events_df is not None and not alarm_events_df.is_empty():
-            # Join alarm events via NIO if applicable
-            nio_val = uc_daily["NIO"][0] if "NIO" in uc_daily.columns else None
-            if nio_val:
-                uc_alarms = alarm_events_df.filter(
-                    (pl.col("NIO") == nio_val)
-                    & (pl.col("ORIGIN_TIMESTAMP") >= window_start)
-                    & (pl.col("ORIGIN_TIMESTAMP") <= cutoff_date)
+        if alarms_by_nio:
+            all_nios = uc_daily["NIO"].drop_nulls().unique().to_list() if "NIO" in uc_daily.columns else []
+            matching_dfs = []
+            for nio_val in all_nios:
+                for k in ((nio_val,), nio_val):
+                    if k in alarms_by_nio:
+                        matching_dfs.append(alarms_by_nio[k])
+            if matching_dfs:
+                combined_alarms = pl.concat(matching_dfs, how="vertical_relaxed")
+                uc_alarms = combined_alarms.filter(
+                    (pl.col("ORIGIN_TIMESTAMP") >= window_start_dt)
+                    & (pl.col("ORIGIN_TIMESTAMP") <= cutoff_end_dt)
                 )
                 alarm_count = uc_alarms.height
                 if alarm_count > 0 and "LATENCY_SECONDS" in uc_alarms.columns:
@@ -168,5 +188,12 @@ def build_uc_window_features(
         }
         rows.append(row)
 
-    return pl.DataFrame(rows, schema=UC_WINDOW_FEATURES_SCHEMA)
+    if not rows:
+        return pl.DataFrame(schema=UC_WINDOW_FEATURES_SCHEMA)
+    return pl.DataFrame(
+        rows,
+        schema=UC_WINDOW_FEATURES_SCHEMA,
+        strict=False,
+        infer_schema_length=None,
+    )
 

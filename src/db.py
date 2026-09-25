@@ -26,41 +26,68 @@ _TARGET_CONFIG_KEYS: dict[DatabaseTarget, ConfigKey] = {
 }
 
 
+import os
+
+def _load_env_file() -> None:
+    """Load key-value pairs from .env if present."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if env_path.exists():
+        with env_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+
+
 def _load_config() -> dict:
     """Load the JSON config file used for database credentials."""
     if not CONFIG_PATH.exists():
-        raise FileNotFoundError(
-            f"Config file not found: {CONFIG_PATH}. "
-            "Create it from config_example.json."
-        )
+        return {}
 
     with CONFIG_PATH.open("r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def _read_db_config(target: DatabaseTarget = "orca") -> dict[str, str]:
-    """Read and validate the requested DB config from config.json."""
+    """Read and validate the requested DB config from env vars or config.json."""
+    _load_env_file()
     config_key = _TARGET_CONFIG_KEYS.get(target)
     if config_key is None:
         raise ValueError(f"Invalid database target: {target}. Use 'orca', 'cis', or 'geo'.")
 
+    # 1. Try environment variables
+    env_user = os.getenv(f"{config_key}_USER") or os.getenv(f"ORACLE_{config_key}_USER")
+    env_pass = os.getenv(f"{config_key}_PASSWORD") or os.getenv(f"ORACLE_{config_key}_PASSWORD")
+    env_host = os.getenv(f"{config_key}_HOST") or os.getenv(f"ORACLE_{config_key}_HOST")
+    env_port = os.getenv(f"{config_key}_PORT") or os.getenv(f"ORACLE_{config_key}_PORT")
+    env_service = (
+        os.getenv(f"{config_key}_SERVICE_NAME")
+        or os.getenv(f"{config_key}_SERVICE")
+        or os.getenv(f"ORACLE_{config_key}_SERVICE_NAME")
+        or os.getenv(f"ORACLE_{config_key}_SERVICE")
+    )
+
+    if env_user and env_pass and env_host and env_port and env_service:
+        return {
+            "user": env_user,
+            "password": env_pass,
+            "host": env_host,
+            "port": str(env_port),
+            "service_name": env_service,
+        }
+
+    # 2. Fall back to config.json
     raw_config = _load_config()
-    oracle_block = raw_config.get("oracle")
-    if not isinstance(oracle_block, dict):
-        raise ValueError("Invalid config.json: missing top-level 'oracle' object.")
+    oracle_block = raw_config.get("oracle", {}) if isinstance(raw_config, dict) else {}
+    db_config = oracle_block.get(config_key, {}) if isinstance(oracle_block, dict) else {}
 
-    db_config = oracle_block.get(config_key)
-    if not isinstance(db_config, dict):
-        raise ValueError(
-            f"Invalid config.json: missing oracle.{config_key} configuration."
-        )
-
-    service_name = db_config.get("service_name") or db_config.get("service")
+    service_name = db_config.get("service_name") or db_config.get("service") or env_service
     normalized = {
-        "user": db_config.get("user"),
-        "password": db_config.get("password"),
-        "host": db_config.get("host"),
-        "port": db_config.get("port"),
+        "user": env_user or db_config.get("user"),
+        "password": env_pass or db_config.get("password"),
+        "host": env_host or db_config.get("host"),
+        "port": env_port or db_config.get("port"),
         "service_name": service_name,
     }
 
@@ -74,7 +101,7 @@ def _read_db_config(target: DatabaseTarget = "orca") -> dict[str, str]:
         joined = ", ".join(missing)
         raise ValueError(
             f"Missing required config values for target '{target}': {joined}. "
-            f"Check {CONFIG_PATH.name}."
+            f"Set environment variables ({config_key}_USER, etc.) or check {CONFIG_PATH.name}."
         )
 
     return {
