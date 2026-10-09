@@ -1,15 +1,14 @@
 # TCC Extraction — Pipeline AMI & Detecção de Anomalias (Copel / Araucária)
 
-Pipeline de extração, normalização, engenharia de atributos e modelagem de ML
-para detecção de anomalias em medição inteligente (AMI), focado em alimentadores
-da Copel (piloto: **Fonte Nova**, Araucária — `GEO_ID = 6352460`).
+## 1. Visão Geral e Pragmatismo
 
-Unidade analítica: **`UC × cutoff_date`** — todo o lake converge para a matriz final
-`output/model_input/v1/training_dataset.parquet` (convenção `id__* / meta__* / x__* / y__*`).
+Este é o pipeline completo de extração, normalização, engenharia de atributos e modelagem de Machine Learning para detecção de anomalias em medição inteligente (AMI). O **pragmatismo** do TCC reside na convergência absoluta de dados caóticos: medições elétricas (fenômenos), topologia de rede (geográfico) e alarmes operacionais são forçados a convergir em uma única Unidade Analítica rígida (`UC × cutoff_date`). O projeto resolve o problema de treinar algoritmos sobre alimentadores reais da Copel (ex: Fonte Nova), servindo como provador de conceito para modelos especialistas hierárquicos.
 
 ---
 
-## 1. Uso rápido (TUI via `uv`)
+## 3. Como Executar (Reprodutibilidade)
+
+### Uso rápido (TUI via `uv`)
 
 > [!IMPORTANT]
 > Toda interação deve ser feita pelo ambiente gerenciado do `uv`, via TUI em Rich:
@@ -62,7 +61,9 @@ uv run pytest tests -q
 
 ---
 
-## 2. Arquitetura de dados (camadas semânticas)
+## 2. Escolhas de Design (Arquitetura)
+
+### Arquitetura de dados (camadas semânticas)
 
 Princípio: **AMI é fenômeno. Cadastro, medidor e GEO são contexto. Alarmes são eventos.**
 Tudo é projetado na matriz `UC × cutoff_date`.
@@ -98,7 +99,7 @@ Leitura recomendada, nesta ordem:
 
 ---
 
-## 3. Separação de datasets (anti-leakage)
+### Separação de datasets (anti-leakage)
 
 `src/datasets/dataset_splitter.py::DatasetSplitter`:
 
@@ -117,7 +118,7 @@ Convenção estrita de colunas em `training_dataset` (`src/datasets/build_traini
 
 ---
 
-## 4. Modelos (`scripts/train_anomaly_model.py`)
+### Modelos (`scripts/train_anomaly_model.py`)
 
 | Modo | Técnica | Saída |
 |------|---------|-------|
@@ -130,7 +131,7 @@ ajustado só no treino.
 
 ---
 
-## 5. Configuração e credenciais
+### Configuração e credenciais (Dependência para Execução)
 
 **Nunca commitar `config.json`** (está no `.gitignore`). Criar a partir do exemplo:
 
@@ -157,7 +158,9 @@ Weather (Open-Meteo archive, `America/Sao_Paulo`, sem chave): `src/weather.py`
 
 ---
 
-## 6. Estrutura do repo
+## 4. Como Alterar e Evoluir a Base (Modularidade)
+
+### Estrutura do repo
 
 ```text
 main.py                          # entry point da TUI (uv run main.py)
@@ -185,7 +188,7 @@ Convenções ([`.instructions.md`](.instructions.md)): Python 3.11+, type hints,
 **Polars (nunca Pandas)**, SQLAlchemy/oracledb, CSV `;` + `utf-8-sig`, `pathlib`,
 dataclasses frozen, helper `_log()`. Testes: `pytest tests -q`, `tmp_path`, mocks de DB.
 
-## 7. Dicionários e referência de queries
+### Dicionários e referência de queries
 
 - Amostra 200 NIOs (legado CSV): [`docs/data_dictionary_sample200.md`](docs/data_dictionary_sample200.md).
 - Queries por fonte: `queries/cis_*` (cadastro), `queries/geo_*` (topologia),
@@ -213,6 +216,6 @@ output/
 
 ---
 
-## 5. Instruções Detalhadas de Uso
+### Documentação Estendida da TUI
 
 Consulte o documento [TUI_INSTRUCTIONS.md](file:///d:/Projects/tcc_extraction/docs/TUI_INSTRUCTIONS.md) para um guia completo sobre as telas, parâmetros de treinamento e auditoria diária automatizada.
