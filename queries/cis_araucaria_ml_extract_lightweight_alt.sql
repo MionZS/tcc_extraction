@@ -17,7 +17,7 @@ WITH medidores_araucaria AS (
         ON c.cod_loc_uee = tl.cod_loc_loc
     JOIN tab_municipio mu
         ON tl.cod_mun_loc = mu.cod_mun_mun
-    WHERE r.dta_reti_reu IS NULL
+    WHERE (r.dta_reti_reu IS NULL OR r.dta_reti_reu >= DATE '2026-01-01')
       AND UPPER(mu.nom_mun_mun) = 'ARAUCARIA'
 ),
 
@@ -62,7 +62,7 @@ meters_araucaria_base AS (
         AND psx.cod_situ_psx = 'AT'
     LEFT JOIN REDEDES.tab_sub_tipo_equip ste
         ON ste.cod_sub_tipo_eqip_ste = e.cod_sub_tipo_eqip_emd
-    WHERE t.dta_reti_reu IS NULL
+    WHERE (t.dta_reti_reu IS NULL OR t.dta_reti_reu >= DATE '2026-01-01')
 ),
 
 meters_araucaria_classified AS (

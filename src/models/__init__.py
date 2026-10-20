@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from src.models.composite import CompositeAnomalyModel
-from src.models.hierarchical_trainer import HierarchicalModelTrainer
+from src.models.composite import CompositeAnomalyDetector, CompositeAnomalyModel
+from src.models.hierarchical_trainer import (
+    HierarchicalModelOrchestrator,
+    HierarchicalModelTrainer,
+)
 from src.models.moe_router import MoERouter
 from src.models.spurious_filter import filter_spurious_anomalies
 from src.models.voltage_classifier import (
@@ -12,16 +15,20 @@ from src.models.voltage_classifier import (
     RuleBasedVoltageClassifier,
     VoltageDisturbanceType,
     extract_voltage_classifier_features,
+    group_train_test_split,
 )
 
 __all__ = [
+    "CompositeAnomalyDetector",
     "CompositeAnomalyModel",
+    "HierarchicalModelOrchestrator",
     "HierarchicalModelTrainer",
     "MoERouter",
     "filter_spurious_anomalies",
     "VoltageDisturbanceType",
     "ClassificationResult",
     "extract_voltage_classifier_features",
+    "group_train_test_split",
     "RuleBasedVoltageClassifier",
     "MLVoltageDisturbanceClassifier",
 ]

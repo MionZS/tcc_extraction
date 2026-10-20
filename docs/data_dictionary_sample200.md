@@ -1,6 +1,9 @@
-# Dicionário de dados — ARAUCARIA sample joined output
+# Dicionário de dados — ARAUCARIA sample joined output (Legado)
 
-Arquivo-alvo esperado: `output/refined/reports/sample200/araucaria_model_input_sample_200_YYYYMMDD.csv`
+> **Nota de Arquivamento**: Este dicionário documenta o schema legado da amostra de 200 NIOs em CSV gerada por `vault/araucaria_sample_pipeline.py`.
+> Para o contrato e schema oficial do Data Lake em Parquet, consulte [`docs/data_contracts.md`](data_contracts.md).
+
+Arquivo-alvo legado: `output/refined/reports/sample200/araucaria_model_input_sample_200_YYYYMMDD.csv`
 
 > Formato simples: cada coluna aparece com sua descrição, sem tabela e sem coluna extra.
 > 

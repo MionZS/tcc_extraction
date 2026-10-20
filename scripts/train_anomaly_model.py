@@ -56,9 +56,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["composite", "hierarchical", "baseline"],
+        choices=["composite", "hierarchical", "baseline", "voltage"],
         default="composite",
-        help="Training architecture: 'composite', 'hierarchical', or 'baseline'",
+        help="Training architecture: 'composite', 'hierarchical', 'baseline', or 'voltage'",
     )
     parser.add_argument(
         "--feeder",
@@ -90,6 +90,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     show_environment_warning()
     args = parse_args()
+
+    # ── Mode: PRODIST M8 Voltage Disturbance Classifier ──────────────────
+    if args.mode == "voltage":
+        from scripts.train_voltage_classifier import main as train_voltage_main
+        train_voltage_main()
+        return
 
     if not args.input.exists():
         print(f"[-] Input dataset not found: {args.input}")

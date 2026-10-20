@@ -1021,14 +1021,30 @@ def normalize_alarm_events(
 
     now = datetime.now(timezone.utc)
     cols = {c.upper(): c for c in alarm_df.columns}
-
+    alarm_id_col = cols.get("ALARM_ID") or cols.get("EVENT_ID") or cols.get("ID")
     nio_col = cols.get("OBJ_ID") or cols.get("NIO")
-    origin_col = cols.get("ORIGIN_TIMESTAMP") or cols.get("DATA_ORIGEM") or cols.get("TIMESTAMP_ORIGIN")
-    received_col = cols.get("RECEIVED_TIMESTAMP") or cols.get("DATA_RECEPCAO") or cols.get("TIMESTAMP_RECEIVED")
+    origin_col = (
+        cols.get("ORIGIN_TIMESTAMP")
+        or cols.get("ORIGIN_TIME")
+        or cols.get("DATA_ORIGEM")
+        or cols.get("TIMESTAMP_ORIGIN")
+    )
+    received_col = (
+        cols.get("RECEIVED_TIMESTAMP")
+        or cols.get("RECEIVE_TIME")
+        or cols.get("DATA_RECEPCAO")
+        or cols.get("TIMESTAMP_RECEIVED")
+    )
+
+    nio_expr = (
+        pl.col(nio_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("NIO")
+        if nio_col
+        else pl.lit("").alias("NIO")
+    )
 
     exprs: list[pl.Expr] = [
-        (pl.col(cols["ALARM_ID"]).cast(pl.String) if "ALARM_ID" in cols else pl.lit("").alias("ALARM_ID")),
-        (pl.col(nio_col).cast(pl.String).alias("NIO") if nio_col else pl.lit("").alias("NIO")),
+        (pl.col(alarm_id_col).cast(pl.String).alias("ALARM_ID") if alarm_id_col else pl.lit("").alias("ALARM_ID")),
+        nio_expr,
         (pl.col(origin_col).cast(pl.Datetime).alias("ORIGIN_TIMESTAMP") if origin_col else pl.lit(None, dtype=pl.Datetime).alias("ORIGIN_TIMESTAMP")),
         (pl.col(received_col).cast(pl.Datetime).alias("RECEIVED_TIMESTAMP") if received_col else pl.lit(None, dtype=pl.Datetime).alias("RECEIVED_TIMESTAMP")),
     ]

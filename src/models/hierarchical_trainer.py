@@ -194,3 +194,7 @@ class HierarchicalModelOrchestrator:
         print(f"[+] Saved hierarchical anomaly scores to {out_parquet.name}")
 
         return result_filtered
+
+
+# Alias for backward compatibility
+HierarchicalModelTrainer = HierarchicalModelOrchestrator

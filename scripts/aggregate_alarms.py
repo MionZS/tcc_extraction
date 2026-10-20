@@ -23,6 +23,8 @@ def parse_args() -> argparse.Namespace:
                         help="Comma‑separated list of alarm names/codes to include. Empty means all.")
     parser.add_argument("--output-format", type=str, choices=["parquet", "csv", "both"], default="parquet",
                         help="Output format(s) for the aggregated table.")
+    parser.add_argument("--full-events", action="store_true",
+                        help="Extract complete per-NIO events into semantic layer (output/events/alarm_events) using AlarmExtractor.")
     parser.add_argument("--summary-only", type=str, default="",
                         help="Skip DB extraction. Read an existing aggregate CSV/Parquet and output only the distinct alarm summary.")
     return parser.parse_args()
@@ -71,7 +73,24 @@ def main():
         write_summary(df, out_dir, base_name)
         return
 
-    # Normal extraction mode
+    # --full-events mode: extract complete canonical alarm_events partitions
+    if args.full_events:
+        from src.events.alarm_extractor import AlarmExtractor
+        print(f"Extracting full alarm events from {args.start_date} to {args.end_date}...")
+        extractor = AlarmExtractor()
+        start_dt = datetime.datetime.strptime(args.start_date, "%Y%m%d").date()
+        end_dt = datetime.datetime.strptime(args.end_date, "%Y%m%d").date()
+        days = (end_dt - start_dt).days
+        df_all = extractor.extract_window(
+            cutoff_date=end_dt,
+            window_days=days,
+            save_partitions=True,
+            base_dir="output",
+        )
+        print(f"Extraction complete: {df_all.height:,} total alarm events saved to output/events/alarm_events/")
+        return
+
+    # Normal extraction mode (macro counts)
     filter_list = [f.strip() for f in args.filter.split(",") if f.strip()] or None
     engine = create_engine("orca")
     rows = []

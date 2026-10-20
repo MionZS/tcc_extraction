@@ -27,9 +27,9 @@ Menu da TUI (7 opções — `src/tui/tui_app.py::RichPipelineTUI.run_menu`):
 
 | # | Opção | O que faz (código) |
 |---|-------|--------------------|
-| 1 | 📥 Gerar Dataset | Extração por alimentador (`scripts/run_feeder_pipeline.py`) ou Araucária completa (`src/araucaria_sample_pipeline.py`) |
-| 2 | 🤖 Treinar & Validar Modelos | `scripts/train_anomaly_model.py --mode composite\|hierarchical\|baseline` |
-| 3 | 📊 Estatísticas do Data Lake | Tamanhos/dimensões das tabelas Parquet + UCs por alimentador |
+| 1 | 📥 Gerar Dataset | Extração multi-alimentador, sincronização inteligente (auto-backfill) e monitoramento por worker (`scripts/run_araucaria_full.py`) |
+| 2 | 🤖 Treinar & Validar Modelos | Treinamento com recorte temporal/alimentador, PRODIST M8 e Registro de Modelos versionado (`src/models/registry.py`) |
+| 3 | 📊 Estatísticas do Data Lake | Tamanhos/dimensões das tabelas Parquet, UCs por alimentador e Calendário de Continuidade |
 | 4 | ⚡ Especialistas vs Global | Comparação no teste isolado (`compare_experts`) |
 | 5 | 🩺 Auditoria de Saúde & Tests | `DailyAutomationRunner.run_daily_audit()` → `output/reports/daily_health_report_*` |
 | 6 | ⚙️ Configurações Globais | `contamination` (0.001–0.50, padrão 0.05) e `random_state` (padrão 42) da sessão |
@@ -40,6 +40,10 @@ Guia de telas e parâmetros: [`docs/TUI_INSTRUCTIONS.md`](docs/TUI_INSTRUCTIONS.
 ### Atalhos sem TUI (dentro do `uv`)
 
 ```bash
+# Execução Total de Ponta a Ponta (extração + alarmes 30d + features + ML + distúrbios de tensão + auditoria)
+uv run python scripts/run_total_pipeline.py --days-back 1
+uv run python scripts/run_total_pipeline.py --smoke-test
+
 # Pipeline diária CIS → GEO → weather → MDM → join → publish
 uv run python -m src.main --days-back 1
 uv run python -m src.main --start-date 2026-06-01 --end-date 2026-06-10
@@ -53,7 +57,8 @@ uv run python scripts/train_anomaly_model.py --mode composite
 uv run python scripts/train_anomaly_model.py --mode hierarchical --feeder Fonte_Nova
 uv run python scripts/train_anomaly_model.py --mode baseline --contamination 0.05
 
-# Auditoria de saúde + testes
+# Auditoria de saúde + testes (incluindo teste E2E)
+uv run pytest tests/test_full_pipeline_e2e.py -v
 uv run python scripts/daily_automation.py --mode health-check
 uv run python scripts/daily_automation.py --mode test-only
 uv run pytest tests -q
@@ -87,10 +92,11 @@ Leitura recomendada, nesta ordem:
 1. [`docs/nova_arquitetura_dados.md`](docs/nova_arquitetura_dados.md) — arquitetura vigente v2.0 (UC como entidade central).
 2. [`docs/data_contracts.md`](docs/data_contracts.md) — contratos formais por tabela (grão, tipos, unidades, partições).
 3. [`docs/feature_catalog.md`](docs/feature_catalog.md) — catálogo de features (`build_meter_day_features`, `build_uc_window_features`).
-4. [`docs/dataset_architecture_decision.md`](docs/dataset_architecture_decision.md) — histórico da decisão (por que não JSON-no-CSV).
-5. [`docs/dataset_layout_sklearn_tcc.md`](docs/dataset_layout_sklearn_tcc.md) — layout prático p/ scikit-learn (janelas 7/30 dias).
-6. [`docs/vulnerabilities.md`](docs/vulnerabilities.md) — auditoria de vulnerabilidades sutis (todas corrigidas, com testes).
-7. [`docs/reports/relatorio_pipeline.md`](docs/reports/relatorio_pipeline.md) — relatório da pipeline diária (histórico 2026-06; layout `raw/refined` anterior às camadas semânticas).
+4. [`docs/voltage_disturbance_classification.md`](docs/voltage_disturbance_classification.md) — classificação de distúrbios de tensão, desbalanceamento e dados faltantes (PRODIST/IEEE).
+5. [`docs/dataset_architecture_decision.md`](docs/dataset_architecture_decision.md) — histórico da decisão (por que não JSON-no-CSV).
+6. [`docs/dataset_layout_sklearn_tcc.md`](docs/dataset_layout_sklearn_tcc.md) — layout prático p/ scikit-learn (janelas 7/30 dias).
+7. [`docs/vulnerabilities.md`](docs/vulnerabilities.md) — auditoria de vulnerabilidades sutis (todas corrigidas, com testes).
+8. [`docs/reports/relatorio_pipeline.md`](docs/reports/relatorio_pipeline.md) — relatório da pipeline diária (histórico 2026-06; layout `raw/refined` anterior às camadas semânticas).
 
 > Histórico: [`docs/export_and_publish_plan.md`](docs/export_and_publish_plan.md) e
 > [`docs/daily_pipeline_integrity_plan.md`](docs/daily_pipeline_integrity_plan.md) descrevem a fase
@@ -118,13 +124,14 @@ Convenção estrita de colunas em `training_dataset` (`src/datasets/build_traini
 
 ---
 
-### Modelos (`scripts/train_anomaly_model.py`)
+### Modelos (`src/models/` & `scripts/train_anomaly_model.py`)
 
-| Modo | Técnica | Saída |
-|------|---------|-------|
+| Modo / Modelo | Técnica | Saída |
+|---------------|---------|-------|
 | `composite` (padrão) | `CompositeAnomalyDetector`: IsolationForest (0.3) + LOF (0.25) + ECOD (0.25) + PCA/SVD (0.2), + bônus +0.20 por violação física PRODIST (V < 180 ou > 255 V p/ 220 V nominal; reversão RA > 0.8); limiar no percentil `100×(1−contamination)` | `models/composite_anomaly_detector.joblib`, `outputs/anomaly_scores/composite_scores_*.parquet/.csv` |
 | `hierarchical` | `HierarchicalModelOrchestrator` — MoE: especialista do alimentador vs regional vs global | modelos por nível + comparação |
 | `baseline` | `IsolationForest(n=200)` + `KMeans(k=4)` em pipeline `SimpleImputer(median) → RobustScaler` | `models/isolation_forest_pipeline.joblib`, `kmeans_clustering_pipeline.joblib`, `outputs/anomaly_scores/anomaly_scores_*.parquet` |
+| `voltage_classifier` | `RuleBasedVoltageClassifier` (baseline PRODIST M8/IEEE 1159) + `MLVoltageDisturbanceClassifier` (`HistGradientBoostingClassifier`): classificação multiclasse com suporte nativo a dados faltantes | Rótulos de distúrbio, probabilidades de classe e confiança em `src/models/voltage_classifier.py` |
 
 Pré-processamento sempre dentro do `Pipeline` sklearn (imputação/mediana + `RobustScaler`),
 ajustado só no treino.
@@ -170,15 +177,15 @@ src/
   tui/tui_app.py                 # TUI Rich (menu 1–7)
   main.py                        # CLI pipeline diária (single-day + period mode)
   pipeline.py                    # CIS → GEO → weather → MDM → join → publish
-  araucaria_sample_pipeline.py   # pipeline legada de amostra 200 NIOs (CSV)
   db.py / weather.py / export_manager.py / run_manifest.py
   automation/ (daily_runner, health_check)
   checks/ (verify_output, integrity_check, period_coverage, …)
   datasets/ (normalize, partitioning, writers, build_training_dataset, dataset_splitter)
   features/ (meter_day, uc_window, circuit_profile, neighborhood)
-  labels/ / models/ (composite, hierarchical_trainer, moe_router, spurious_filter)
-  visualization/diagnostics.py
-scripts/ (run_feeder_pipeline, train_anomaly_model, daily_automation, aggregate_alarms, join_daily_model_input)
+  labels/ / models/ (composite, hierarchical_trainer, moe_router, spurious_filter, voltage_classifier)
+  visualization/ (diagnostics.py, continuity.py)
+scripts/ (run_araucaria_full, train_voltage_classifier, run_feeder_pipeline, train_anomaly_model, daily_automation, ...)
+vault/ (araucaria_sample_pipeline.py - pipeline legada 200 NIOs CSV arquivada)
 queries/ (cis_*, geo_ucs, geo_feeder_direct, mdm_coluna, meter_*, label_sources/, weather_timegrid)
 tests/ (21 arquivos — splitter, leakage, cadence, composite, MoE, weather, automação…)
 docs/ (ver §2)

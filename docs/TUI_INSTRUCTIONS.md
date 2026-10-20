@@ -39,30 +39,42 @@ Selecione uma opção do Menu Principal:
 ### Detalhamento das Opções:
 
 #### 📥 Opção [1]: Gerar Dataset
-- **O que faz**: Dispara a extração completa dos bancos de dados Oracle (CIS, GEO e ORCA/MDM), normaliza as camadas do datalake em formato Parquet (`output/`) e constrói a matriz consolidada `training_dataset.parquet`.
-- **Implementação**: `RichPipelineTUI.generate_dataset()` em `src/tui/tui_app.py` —
-  modo alimentador único via `scripts/run_feeder_pipeline.py --feeder-name … --feeder-geo-id … --days-back N`
-  (padrão Fonte Nova `6352460`), ou Araucária completa via `src/araucaria_sample_pipeline.py`.
-- **Parâmetros Interativos**:
-  - Nome do Alimentador (padrão: `Fonte_Nova`).
-  - ID GEO do Alimentador (padrão: `6352460`).
-  - Dias atrás / retroativos (`days_back`, padrão: 1).
+- **O que faz**: Dispara a extração completa dos bancos de dados Oracle (CIS, GEO e ORCA/MDM), normaliza as camadas do datalake em formato Parquet e/ou CSV (`output/`) e constrói a matriz consolidada `training_dataset`.
+- **Formato de Saída Flexível**:
+  - `Ambos (Parquet + CSV)` [Padrão]: Garante máxima interoperabilidade e persistência em ambos os formatos.
+  - `Apenas CSV (.csv)`: Exporta todas as tabelas e partições em arquivos `.csv` delimitados por `;`.
+  - `Apenas Parquet (.parquet)`: Modo de alta performance colunar comprimido com Zstandard.
+- **Implementação**: `RichPipelineTUI.generate_dataset()` em `src/tui/tui_app.py` integrando com `scripts/run_araucaria_full.py`:
+  1. **Araucária Completa (Single-Day)**: Extração de todos os alimentadores do município via `scripts/run_araucaria_full.py --days-back N`.
+  2. **Alimentador Específico**: Filtro direcionado via `scripts/run_araucaria_full.py --feeder-name … --feeder-geo-id …`.
+  3. **Período Contínuo (Multi-Day Batch)**: Extração iterativa de período histórico (ex: `2026-08-01` a ontem) com verificação automática de dias já extraídos.
+  4. **⚡ Sincronização Inteligente (Auto-Backfill)**: Detecta a data mais recente gravada no Data Lake e extrai automaticamente até o dia de ontem completo (ex.: de sábado a segunda, caso a última parada tenha sido sexta), identificando e preenchendo quaisquer lacunas históricas pendentes.
+- **Visualização em Tempo Real de Filas e Workers**:
+  - **Barra de Fila Geral**: Monitora o total de lotes pendentes e concluídos do MDM para o dia.
+  - **Barras por Worker**: Cada worker paralelo possui uma barra e status individual (Aguardando na fila, Consultando Oracle MDM, Baixando registros, Gravando Parquet).
+  - **Reutilização Persistente de Conexões**: Conexões de workers dedicadas que mantêm o cursor aberto eliminando o overhead de handshake TCP/TLS a cada lote.
 
 #### 🤖 Opção [2]: Treinar & Validar Modelos de IA
 - **O que faz**: Executa a divisão estrita de dados (`DatasetSplitter`), separando alimentadores por similaridade de circuitos elétricos em conjuntos de **Treino**, **Validação** e **Teste**.
-- **Implementação**: `RichPipelineTUI.train_models()` com entrada fixa
-  `output/model_input/v1/training_dataset.parquet` (+ `output/context/electrical_hierarchy.parquet` no modo MoE)
-  e contaminação/random_state da sessão (opção 6; padrões 0.05 / 42). Chama `scripts/train_anomaly_model.py`
-  (`--mode composite|hierarchical|baseline`):
-- **Modelos Suportados**:
+- **Controle de Período Temporal de Treinamento**:
+  - Permite selecionar se o treinamento utilizará todo o histórico ou um **período específico** (Data Inicial e Data Final), com amostragem balanceada e sem vazamento de UCs.
+- **Modelos e Governança Suportados**:
   1. Modelo Composto Multi-Técnica (IsoForest + LOF + ECOD + PCA + Regras PRODIST).
   2. Mistura de Especialistas (MoE Router - Alimentador vs Regional vs Global).
   3. Baseline (Isolation Forest + KMeans).
+  4. **⚡ Classificador de Perturbações de Tensão (PRODIST M8)**: Permite selecionar o recorte temporal dos dados (todo o período, últimos 30 dias, últimos 7 dias ou intervalo customizado) e o alimentador elétrico alvo. Registra automaticamente a versão no repositório com metadados completos.
+  5. **🏛️ Registro & Governança de Modelos (Model Registry)**: Lista todas as versões treinadas com tags, acurácia, F1-Score e períodos, e permite comparar duas versões lado a lado ($\Delta$ de performance).
 
 #### 📊 Opção [3]: Visualizar Estatísticas do Data Lake
 - Exibe tabelas formatadas com Rich mostrando:
-  - Tamanhos e dimensões das tabelas Parquet no Data Lake.
+  - Tamanhos e dimensões das tabelas Parquet e CSV no Data Lake (`output/`).
   - Alimentadores cadastrados e contagem de UCs vinculadas.
+  - **Filtro de Visualização de Integridade por Tipo de Arquivo**:
+    - `[1] Geral (Ambos Formatos)`: Exibe o calendário com sinalização verde (ambos sincronizados), ciano (formato parcial) e vermelho (lacuna).
+    - `[2] Apenas Parquet`: Audita exclusivamente arquivos `.parquet`.
+    - `[3] Apenas CSV`: Audita exclusivamente arquivos `.csv`.
+  - **🔄 Sincronização de Formatos (Converter Faltantes Parquet ↔ CSV)**:
+    - Converte automaticamente partições que possuem apenas `.parquet` para `.csv` e partições com apenas `.csv` para `.parquet`, garantindo 100% de preenchimento e integridade sem necessidade de nova consulta ao Oracle.
 
 #### ⚡ Opção [4]: Comparar Especialistas vs Modelo Global
 - Roda o teste isolado comparando os modelos especialistas do alimentador/região contra o modelo global âncora, exibindo a tabela comparativa de métricas.
@@ -70,9 +82,10 @@ Selecione uma opção do Menu Principal:
 #### 🩺 Opção [5]: Auditoria de Saúde do Data Lake
 - Executa checagens de integridade física dos dados e dispara a suíte de testes.
 - **Implementação**: `DailyAutomationRunner.run_daily_audit()` → `output/reports/daily_health_report_YYYYMMDD.md/.json`
-  (+ `daily_health_report_latest.md`); statuses `HEALTHY / WARNING / INCOMPLETE / CRITICAL`
-  (tensão fora de [100, 300] V, timestamps futuros = `CRITICAL`). Equivalente CLI:
-  `python scripts/daily_automation.py --mode health-check` (ou `--mode test-only` / `--mode feeder` / `--mode full`).
+  (+ `daily_health_report_latest.md`); statuses `HEALTHY / WARNING / INCOMPLETE / CRITICAL`.
 
 #### ⚙️ Opção [6]: Configurações Globais
-- Permite alterar dinamicamente a taxa de contaminação e a semente aleatória (*random state*).
+- Permite alterar dinamicamente:
+  - Formato padrão de saída dos dados (`both`, `csv`, `parquet`).
+  - Taxa padrão de contaminação dos detectores de anomalia.
+  - Semente aleatória (*random state*).

@@ -162,3 +162,67 @@ def generate_diagnostic_plots(
         saved_plots["spurious_filter_breakdown"] = p4
 
     return saved_plots
+
+
+def generate_voltage_diagnostic_plots(
+    metrics: dict[str, Any],
+    output_dir: Path | str = "output/reports/figures",
+) -> dict[str, Path]:
+    """Generate confusion matrix and performance charts for the voltage classifier."""
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    saved_plots: dict[str, Path] = {}
+
+    classes = metrics.get("classes", [])
+    cm = metrics.get("confusion_matrix", [])
+
+    if classes and cm:
+        fig, ax = plt.subplots(figsize=(9, 7))
+        cm_arr = np.array(cm)
+        cax = ax.matshow(cm_arr, cmap="Blues")
+        fig.colorbar(cax)
+
+        ax.set_xticks(range(len(classes)))
+        ax.set_yticks(range(len(classes)))
+        ax.set_xticklabels(classes, rotation=45, ha="left", fontsize=9)
+        ax.set_yticklabels(classes, fontsize=9)
+
+        for i in range(len(classes)):
+            for j in range(len(classes)):
+                val = cm_arr[i, j]
+                text_color = "white" if val > cm_arr.max() / 2 else "black"
+                ax.text(j, i, f"{val:,}", ha="center", va="center", color=text_color, fontsize=8)
+
+        ax.set_xlabel("Predição do Classificador", fontsize=10, fontweight="bold")
+        ax.set_ylabel("Referência PRODIST M8", fontsize=10, fontweight="bold")
+        ax.set_title("Matriz de Confusão - Classificador de Tensão (PRODIST M8)", fontsize=12, fontweight="bold", pad=20)
+        plt.tight_layout()
+
+        p_cm = out_path / "voltage_confusion_matrix.png"
+        fig.savefig(p_cm, dpi=150)
+        plt.close(fig)
+        saved_plots["voltage_confusion_matrix"] = p_cm
+
+    report = metrics.get("report", {})
+    class_metrics = {k: v for k, v in report.items() if isinstance(v, dict) and k in classes}
+    if class_metrics:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        c_names = list(class_metrics.keys())
+        f1_scores = [class_metrics[k].get("f1-score", 0.0) * 100 for k in c_names]
+
+        bars = ax.barh(c_names[::-1], f1_scores[::-1], color="#3498db")
+        ax.set_xlim(0, 105)
+        ax.set_xlabel("F1-Score (%)", fontsize=10)
+        ax.set_title("F1-Score por Perturbação de Tensão (PRODIST M8)", fontsize=12, fontweight="bold")
+
+        for bar in bars:
+            w = bar.get_width()
+            ax.text(w + 1.0, bar.get_y() + bar.get_height() / 2, f"{w:.1f}%", va="center", fontsize=9)
+
+        plt.tight_layout()
+        p_f1 = out_path / "voltage_f1_by_class.png"
+        fig.savefig(p_f1, dpi=150)
+        plt.close(fig)
+        saved_plots["voltage_f1_by_class"] = p_f1
+
+    return saved_plots

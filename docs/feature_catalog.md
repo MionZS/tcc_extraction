@@ -110,6 +110,14 @@ VOLTAGE_IMBALANCE = max(|U_L1 - U_MEAN|, |U_L2 - U_MEAN|, |U_L3 - U_MEAN|)
 
 Valores altos podem indicar problemas de qualidade de energia ou carga desbalanceada.
 
+### Classificação Avançada de Tensão e Desbalanceamento (PRODIST Módulo 8 / IEEE Std 1159)
+
+Para o diagnóstico aprofundado de distúrbios de tensão, faltas elétricas (monofásica, bifásica, interrupção total) e desbalanceamento crítico com tratamento físico de dados faltantes (nulos estruturais, zeros e quedas de telemetria cruzadas com vizinhança de transformador), consulte:
+- **Documentação Técnica Completa:** [`docs/voltage_disturbance_classification.md`](voltage_disturbance_classification.md)
+- **Módulo:** `src.models.voltage_classifier::extract_voltage_classifier_features`
+- **Modelos:** `RuleBasedVoltageClassifier` (regras PRODIST) e `MLVoltageDisturbanceClassifier` (`HistGradientBoostingClassifier`).
+- **Features Específicas:** `U_L1_PU`, `U_L2_PU`, `U_L3_PU`, `VOLTAGE_IMBALANCE_RATIO`, `IS_ACTIVE_L*`, `IS_NULL_L*`, `IS_ZERO_L*`, `NEIGHBOR_COVERAGE_RATIO`, `HAS_POWER_ALARM`.
+
 ## 6. Features de Registradores
 
 ```python

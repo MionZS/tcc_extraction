@@ -37,6 +37,8 @@ from sqlalchemy.engine import Connection
 from src.db import create_engine
 from src.run_manifest import create_manifest
 from src.export_manager import publish_to_target
+from src.datasets.writers import write_events_table
+from src.events.alarm_extractor import AlarmExtractor
 
 QUERIES_DIR = Path(__file__).resolve().parent / "queries"
 CIS_QUERY_PATH = QUERIES_DIR / "cis_araucaria_ml_extract_lightweight_alt.sql"
@@ -84,6 +86,7 @@ class PipelineResult:
     total_mdm_rows: int
     total_timegrid_rows: int
     total_weather_rows: int
+    total_alarm_rows: int = 0
 
 
 
@@ -842,6 +845,7 @@ def run_daily_araucaria_pipeline(
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
     timegrid_sql_path: Path | str | None = TIMEGRID_QUERY_PATH,
     enable_weather: bool = True,
+    enable_alarms: bool = True,
     publish_target: Path | None = None,
     keep_temp: bool = False,
 ) -> PipelineResult:
@@ -948,6 +952,33 @@ def run_daily_araucaria_pipeline(
         output=str(mdm_result.csv_path) if mdm_result.csv_path else None,
     )
 
+    # --- Step 5b: Alarms extract (T_EVENT_YYYYMMDD) ---
+    total_alarm_rows = 0
+    if enable_alarms:
+        try:
+            _log(f"Extracting alarm events from AMI.T_EVENT_{_date_token(report_day)}...")
+            extractor = AlarmExtractor(batch_size=mdm_batch_size, fetch_size=fetch_size)
+            alarms_df = extractor.extract_day(
+                report_day=report_day,
+                nios=nios,
+                run_id=manifest.run_id if hasattr(manifest, "run_id") else "",
+            )
+            total_alarm_rows = alarms_df.height
+            if total_alarm_rows > 0:
+                events_path = write_events_table(
+                    alarms_df,
+                    table_name="alarm_events",
+                    report_day=report_day,
+                    base_dir=output_dir,
+                )
+                _log(f"Alarm events extracted: {total_alarm_rows:,} rows -> {events_path}")
+            else:
+                _log("Alarm events: 0 rows (table empty or not found).")
+            manifest.record_step("alarm_extract", rows=total_alarm_rows)
+        except Exception as exc:
+            _log(f"⚠️  Alarm extract error (non-fatal): {exc}")
+            manifest.add_warning(f"Alarm extract failed: {exc}")
+
     # --- Step 6: Final join (CIS+GEO + MDM) ---
     joined_parquet, joined_csv = _build_joined_report(
         cis_df=cis_geo_df,
@@ -1039,6 +1070,7 @@ def run_daily_araucaria_pipeline(
         total_mdm_rows=mdm_result.row_count,
         total_timegrid_rows=total_timegrid_rows,
         total_weather_rows=weather_result.row_count,
+        total_alarm_rows=total_alarm_rows,
     )
 
 
@@ -1067,6 +1099,7 @@ def run_period_pipeline(
     mdm_sql_path: Path | str = MDM_QUERY_PATH,
     timegrid_sql_path: Path | str | None = TIMEGRID_QUERY_PATH,
     enable_weather: bool = True,
+    enable_alarms: bool = True,
     publish_target: Path | None = None,
     keep_temp: bool = False,
     continue_on_error: bool = True,
@@ -1136,11 +1169,12 @@ def run_period_pipeline(
                 mdm_sql_path=mdm_sql_path,
                 timegrid_sql_path=timegrid_sql_path,
                 enable_weather=enable_weather,
+                enable_alarms=enable_alarms,
                 publish_target=publish_target,
                 keep_temp=keep_temp,
             )
             results.append(result)
-            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}, WEATHER: {result.total_weather_rows:,}, TIMEGRID: {result.total_timegrid_rows:,}")
+            _log(f"  ✅ Day {day.isoformat()} OK — CIS: {result.total_cis_rows:,}, GEO: {result.total_geo_rows:,}, MDM: {result.total_mdm_rows:,}, ALARMS: {result.total_alarm_rows:,}, WEATHER: {result.total_weather_rows:,}, TIMEGRID: {result.total_timegrid_rows:,}")
         except Exception as exc:
             _log(f"  ❌ Day {day.isoformat()} FAILED: {exc}")
             if not continue_on_error:
@@ -1166,6 +1200,7 @@ def run_period_pipeline(
                 total_mdm_rows=0,
                 total_timegrid_rows=0,
                 total_weather_rows=0,
+                total_alarm_rows=0,
             ))
 
     elapsed = time.perf_counter() - started_at

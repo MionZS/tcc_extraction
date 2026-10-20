@@ -2,6 +2,201 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "pipeline: run TUI (menu principal)",
+			"type": "shell",
+			"command": "uv --system-certs run python main.py",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pipeline: smart sync / auto-backfill (mais recente ate ontem)",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/run_araucaria_full.py --auto-backfill",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pipeline: extract full period (01/Aug to yesterday)",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/run_araucaria_full.py --start-date 2026-08-01",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pipeline: extract single day (yesterday)",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/run_araucaria_full.py --days-back 1",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "governance: model registry table",
+			"type": "shell",
+			"command": "uv --system-certs run python -c \"from src.models.registry import ModelRegistry; ModelRegistry().render_registry_table()\"",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "governance: continuity calendar",
+			"type": "shell",
+			"command": "uv --system-certs run python -c \"from src.visualization.continuity import render_continuity_calendar; render_continuity_calendar()\"",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "ml: train voltage classifier",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/train_voltage_classifier.py",
+			"options": {
+				"env": {
+					"PYTHONPATH": "${workspaceFolder}"
+				}
+			},
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pipeline: run total",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/run_total_pipeline.py --days-back 1",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pipeline: smoke test (offline e2e)",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/run_total_pipeline.py --smoke-test",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run all tests",
+			"type": "shell",
+			"command": "uv --system-certs run pytest tests/ -v",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run with coverage",
+			"type": "shell",
+			"command": "uv --system-certs run pytest tests/ -v --tb=short",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run voltage tests",
+			"type": "shell",
+			"command": "uv --system-certs run pytest tests/test_voltage_classifier.py -v",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run continuity tests",
+			"type": "shell",
+			"command": "uv --system-certs run pytest tests/test_continuity.py -v",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest: run e2e pipeline test",
+			"type": "shell",
+			"command": "uv --system-certs run pytest tests/test_full_pipeline_e2e.py -v",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "weather: integration test",
+			"type": "shell",
+			"command": "uv run python tests/test_weather_integration.py",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "python: run integrity check",
+			"type": "shell",
+			"command": "uv --system-certs run python -m integrity_check --base-dir output",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "check last date",
+			"type": "shell",
+			"command": "scripts\\check_last_date.cmd",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
 			"label": "git: status",
 			"type": "shell",
 			"command": "git status",
@@ -13,9 +208,42 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "git: branch",
+			"type": "shell",
+			"command": "git branch",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
 			"label": "git: create branch",
 			"type": "shell",
 			"command": "git checkout -b ${input:branchName}",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: checkout branch",
+			"type": "shell",
+			"command": "git checkout ${input:branchName}",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "git: checkout main",
+			"type": "shell",
+			"command": "git checkout main",
 			"group": "none",
 			"presentation": {
 				"reveal": "always",
@@ -55,170 +283,6 @@
 				"panel": "shared"
 			},
 			"problemMatcher": []
-		},
-		{
-			"label": "git: branch",
-			"type": "shell",
-			"command": "git branch",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "git: checkout main",
-			"type": "shell",
-			"command": "git checkout main",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "git: checkout branch",
-			"type": "shell",
-			"command": "git checkout ${input:branchName}",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "restructure: move to src",
-			"type": "shell",
-			"command": "git mv araucaria_sample_pipeline.py src/ && git mv db.py src/ && git mv pipeline.py src/ && git mv main.py src/ && git mv verify_output.py src/ && git mv export_manager.py src/ && git mv run_manifest.py src/ && git mv daily_ucs_tracker.py src/",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "restructure: move checks",
-			"type": "shell",
-			"command": "git mv daily_file_naming.py src/checks/ && git mv period_coverage.py src/checks/ && git mv file_size_analysis.py src/checks/ && git mv extract_by_days_back.py src/checks/ && git mv integrity_check.py src/checks/",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "pytest: run all tests",
-			"type": "shell",
-			"command": "uv --native-tls run pytest tests/ -v",
-			"group": "test",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "pytest: run with coverage",
-			"type": "shell",
-			"command": "uv --native-tls run pytest tests/ -v --tb=short",
-			"group": "test",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "python: run pipeline sample",
-			"type": "shell",
-			"command": "uv --native-tls run python araucaria_sample_pipeline.py --days-back 1",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "dedicated"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "python: run integrity check",
-			"type": "shell",
-			"command": "uv --native-tls run python -m integrity_check --base-dir output",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "dedicated"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "git: branch current",
-			"type": "shell",
-			"command": "git branch",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "git: checkout main",
-			"type": "shell",
-			"command": "git checkout main",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "git: add all",
-			"type": "shell",
-			"command": "git add .",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "git: commit",
-			"type": "shell",
-			"command": "git commit -m \"organized checks and tests\"",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "git: status",
-			"type": "shell",
-			"command": "git status",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "git: create branch from main",
-			"type": "shell",
-			"command": "git checkout main && git checkout -b feature/period-pipeline",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "python: run pipeline sample",
-			"type": "shell",
-			"command": "uv run python araucaria_sample_pipeline.py --days-back 1",
-			"problemMatcher": [],
-			"group": "none"
-		},
-		{
-			"label": "weather: integration test",
-			"type": "shell",
-			"command": "uv run python tests/test_weather_integration.py",
-			"group": "none"
-		},
-		{
-			"label": "check last date",
-			"type": "shell",
-			"command": "scripts\check_last_date.cmd",
-			"group": "none",
-			"presentation": {
-				"reveal": "always",
-				"panel": "dedicated"
-			}
 		}
 	],
 	"inputs": [

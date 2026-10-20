@@ -230,3 +230,7 @@ class CompositeAnomalyDetector:
             "rule_violation_flag": rule_flags,
             "is_anomaly": is_anomaly,
         }
+
+
+# Alias for backward compatibility
+CompositeAnomalyModel = CompositeAnomalyDetector
