@@ -108,7 +108,7 @@ class ModelRegistry:
             The generated version_id string.
         """
         now = datetime.now()
-        version_id = custom_version or f"v_{now.strftime('%Y%m%d_%H%M%S')}"
+        version_id = custom_version or f"v_{now.strftime('%Y%m%d_%H%M%S_%f')}"
 
         model_dir = self.registry_dir / model_name / version_id
         model_dir.mkdir(parents=True, exist_ok=True)

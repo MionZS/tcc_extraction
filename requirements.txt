@@ -1,7 +1,6 @@
 # Dependências de runtime (espelho de pyproject.toml; fonte de verdade = pyproject).
 # Instalação recomendada: uv sync  (uv resolve a partir do pyproject/lock).
 # Este arquivo existe para compatibilidade com pip:  pip install -r requirements.txt
-clawmetry>=0.12.887
 joblib>=1.3.0
 matplotlib>=3.8.0
 numpy>=2.4.6

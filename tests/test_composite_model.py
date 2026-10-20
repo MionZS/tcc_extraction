@@ -47,5 +47,5 @@ def test_composite_detector_rule_violation():
     detector.fit(X)
     preds = detector.predict_composite(X, raw_dataframe=df)
 
-    assert preds["rule_violation_flag"][-1] is True
-    assert preds["is_anomaly"][-1] is True
+    assert bool(preds["rule_violation_flag"][-1]) is True
+    assert bool(preds["is_anomaly"][-1]) is True

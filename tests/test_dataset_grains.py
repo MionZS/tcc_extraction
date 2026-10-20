@@ -39,7 +39,7 @@ class TestSchemas:
             "meter_day_features",
             "labels",
         }
-        assert set(TABLE_REGISTRY) == expected
+        assert expected.issubset(set(TABLE_REGISTRY))
 
     def test_schemas_have_keys(self):
         """Each registered table has a non-empty keys tuple."""

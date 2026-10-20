@@ -113,6 +113,11 @@ def _read_db_config(target: DatabaseTarget = "orca") -> dict[str, str]:
     }
 
 
+def load_database_config(target: DatabaseTarget = "orca") -> dict[str, str]:
+    """Public helper to load validated database credentials (alias to _read_db_config)."""
+    return _read_db_config(target)
+
+
 
 def create_engine(target: DatabaseTarget = "orca") -> Engine:
     """Create a new SQLAlchemy engine connected to ORCA, CIS, or GEO Oracle DB."""

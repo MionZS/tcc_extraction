@@ -26,15 +26,14 @@ from sklearn.preprocessing import RobustScaler
 
 
 def _min_max_normalize(scores: np.ndarray) -> np.ndarray:
-    """Normalize score array to [0.0, 1.0] range with 1st and 99th percentile clipping."""
+    """Normalize score array to [0.0, 1.0] range with min and max."""
     if len(scores) == 0:
         return np.array([], dtype=float)
-    p1 = np.nanpercentile(scores, 1)
-    p99 = np.nanpercentile(scores, 99)
-    if p99 <= p1:
+    s_min = float(np.nanmin(scores))
+    s_max = float(np.nanmax(scores))
+    if s_max <= s_min:
         return np.zeros_like(scores, dtype=float)
-    clipped = np.clip(scores, p1, p99)
-    return (clipped - p1) / (p99 - p1)
+    return (scores - s_min) / (s_max - s_min)
 
 
 class RobustPCADetector(BaseEstimator, OutlierMixin):
@@ -230,6 +229,16 @@ class CompositeAnomalyDetector:
             "rule_violation_flag": rule_flags,
             "is_anomaly": is_anomaly,
         }
+
+    def score_samples(self, X: np.ndarray, raw_dataframe: pl.DataFrame | None = None) -> np.ndarray:
+        """Return consensus anomaly scores in [0.0, 1.0]."""
+        res = self.predict_composite(X, raw_dataframe=raw_dataframe)
+        return res["consensus_score"]
+
+    def predict(self, X: np.ndarray, raw_dataframe: pl.DataFrame | None = None) -> np.ndarray:
+        """Return boolean anomaly predictions."""
+        res = self.predict_composite(X, raw_dataframe=raw_dataframe)
+        return res["is_anomaly"]
 
 
 # Alias for backward compatibility

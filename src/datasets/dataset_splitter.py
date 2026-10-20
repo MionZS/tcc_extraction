@@ -179,13 +179,20 @@ class DatasetSplitter:
                     val_dfs.append(c_df.filter(pl.col(actual_feeder_col).is_in(val_f)))
                     train_dfs.append(c_df.filter(pl.col(actual_feeder_col).is_in(train_f)))
                 else:
-                    # Fallback to temporal or stratified split within this small cluster
-                    tr, va, te = self._temporal_or_random_split(c_df, date_col)
-                    train_dfs.append(tr)
-                    val_dfs.append(va)
-                    test_dfs.append(te)
+                    # Allocate cluster feeders across roles if not done yet
+                    assigned_roles = set(feeder_assignments.values())
                     for f in cluster_feeders:
-                        feeder_assignments[f] = "mixed_split"
+                        if "test" not in assigned_roles:
+                            feeder_assignments[f] = "test"
+                            test_dfs.append(c_df.filter(pl.col(actual_feeder_col) == f))
+                            assigned_roles.add("test")
+                        elif "val" not in assigned_roles:
+                            feeder_assignments[f] = "val"
+                            val_dfs.append(c_df.filter(pl.col(actual_feeder_col) == f))
+                            assigned_roles.add("val")
+                        else:
+                            feeder_assignments[f] = "train"
+                            train_dfs.append(c_df.filter(pl.col(actual_feeder_col) == f))
         else:
             # Global fallback temporal or random split
             tr, va, te = self._temporal_or_random_split(working_df, date_col)
@@ -226,8 +233,8 @@ class DatasetSplitter:
 
         if date_col in df.columns and df[date_col].drop_nulls().len() > 0:
             sorted_df = df.sort(date_col)
-            val_idx = int(n * (1.0 - self.val_ratio - self.test_ratio))
-            test_idx = int(n * (1.0 - self.test_ratio))
+            val_idx = int(round(n * (1.0 - self.val_ratio - self.test_ratio)))
+            test_idx = int(round(n * (1.0 - self.test_ratio)))
 
             train_df = sorted_df.slice(0, val_idx)
             val_df = sorted_df.slice(val_idx, test_idx - val_idx)
@@ -236,8 +243,8 @@ class DatasetSplitter:
         else:
             # Shuffled random split
             shuffled = df.sample(fraction=1.0, shuffle=True, seed=self.random_state)
-            val_idx = int(n * (1.0 - self.val_ratio - self.test_ratio))
-            test_idx = int(n * (1.0 - self.test_ratio))
+            val_idx = int(round(n * (1.0 - self.val_ratio - self.test_ratio)))
+            test_idx = int(round(n * (1.0 - self.test_ratio)))
 
             train_df = shuffled.slice(0, val_idx)
             val_df = shuffled.slice(val_idx, test_idx - val_idx)

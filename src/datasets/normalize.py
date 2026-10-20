@@ -1042,17 +1042,29 @@ def normalize_alarm_events(
         else pl.lit("").alias("NIO")
     )
 
+    def _parse_ts(c_name: str | None, alias_name: str) -> pl.Expr:
+        if not c_name:
+            return pl.lit(None, dtype=pl.Datetime).alias(alias_name)
+        # Try direct cast or string parsing if it's string format (e.g. from SQLite)
+        return (
+            pl.coalesce([
+                pl.col(c_name).cast(pl.Datetime, strict=False),
+                pl.col(c_name).cast(pl.String, strict=False).str.to_datetime("%Y-%m-%d %H:%M:%S", strict=False),
+                pl.col(c_name).cast(pl.String, strict=False).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False),
+            ]).alias(alias_name)
+        )
+
     exprs: list[pl.Expr] = [
         (pl.col(alarm_id_col).cast(pl.String).alias("ALARM_ID") if alarm_id_col else pl.lit("").alias("ALARM_ID")),
         nio_expr,
-        (pl.col(origin_col).cast(pl.Datetime).alias("ORIGIN_TIMESTAMP") if origin_col else pl.lit(None, dtype=pl.Datetime).alias("ORIGIN_TIMESTAMP")),
-        (pl.col(received_col).cast(pl.Datetime).alias("RECEIVED_TIMESTAMP") if received_col else pl.lit(None, dtype=pl.Datetime).alias("RECEIVED_TIMESTAMP")),
+        _parse_ts(origin_col, "ORIGIN_TIMESTAMP"),
+        _parse_ts(received_col, "RECEIVED_TIMESTAMP"),
     ]
 
     # Derived latency in seconds
     if origin_col and received_col:
         exprs.append(
-            (pl.col(received_col).cast(pl.Datetime) - pl.col(origin_col).cast(pl.Datetime))
+            (_parse_ts(received_col, "temp_rec") - _parse_ts(origin_col, "temp_orig"))
             .dt.total_seconds()
             .cast(pl.Float64)
             .alias("LATENCY_SECONDS")

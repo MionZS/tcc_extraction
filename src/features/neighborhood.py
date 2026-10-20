@@ -102,34 +102,39 @@ def compute_neighborhood_features(
         t_id = trafo_key[0] if isinstance(trafo_key, tuple) else trafo_key
         peer_count = t_df.height
 
-        if v_col and v_col in t_df.columns:
-            v_vals = t_df.get_column(v_col).to_numpy()
-            v_valid = v_vals[~np.isnan(v_vals)]
-            t_v_mean = float(np.mean(v_valid)) if len(v_valid) > 0 else 220.0
-            t_v_std = float(np.std(v_valid)) if len(v_valid) > 1 else 1.0
-        else:
-            t_v_mean = 220.0
-            t_v_std = 1.0
+        v_vals = t_df.get_column(v_col).to_numpy() if v_col and v_col in t_df.columns else np.array([])
+        c_vals = t_df.get_column(c_col).to_numpy() if c_col and c_col in t_df.columns else np.array([])
 
-        if c_col and c_col in t_df.columns:
-            c_vals = t_df.get_column(c_col).to_numpy()
-            c_valid = c_vals[~np.isnan(c_vals)]
-            t_c_median = float(np.median(c_valid)) if len(c_valid) > 0 else 1.0
-        else:
-            t_c_median = 1.0
-
-        for row in t_df.iter_rows(named=True):
+        for idx, row in enumerate(t_df.iter_rows(named=True)):
             uc_val = str(row[feat_uc_col])
-            uc_v = float(row.get(v_col, t_v_mean) or t_v_mean)
-            uc_c = float(row.get(c_col, t_c_median) or t_c_median)
+            uc_v = float(row.get(v_col, 220.0) or 220.0)
+            uc_c = float(row.get(c_col, 1.0) or 1.0)
+
+            # Exclude self to get true peer statistics
+            if len(v_vals) > 1:
+                peer_v = np.delete(v_vals, idx)
+                peer_v_valid = peer_v[~np.isnan(peer_v)]
+                t_v_mean = float(np.mean(peer_v_valid)) if len(peer_v_valid) > 0 else 220.0
+                t_v_std = float(np.std(peer_v_valid)) if len(peer_v_valid) > 1 else 1.0
+            else:
+                t_v_mean = uc_v
+                t_v_std = 1.0
+
+            if len(c_vals) > 1:
+                peer_c = np.delete(c_vals, idx)
+                peer_c_valid = peer_c[~np.isnan(peer_c)]
+                t_c_median = float(np.median(peer_c_valid)) if len(peer_c_valid) > 0 else 1.0
+            else:
+                t_c_median = uc_c
 
             delta_v = uc_v - t_v_mean
             zscore_v = delta_v / (t_v_std + 1e-6)
             c_ratio = uc_c / (t_c_median + 1e-6)
 
-            # An isolated deviation occurs when this UC is far from peers (> 2.5 std devs)
-            # within a group of at least 3 peers on the transformer
-            is_isolated = bool(peer_count >= 3 and abs(zscore_v) > 2.5)
+            # An isolated deviation occurs when this UC deviates from peers
+            # either by standard deviation (> 2.0) or by absolute voltage delta (> 15V)
+            # within a transformer group of at least 3 peers
+            is_isolated = bool(peer_count >= 3 and (abs(zscore_v) > 2.0 or abs(delta_v) > 15.0))
 
             rows.append({
                 "UC": uc_val,

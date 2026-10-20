@@ -99,6 +99,33 @@ ELECTRICAL_HIERARCHY_SCHEMA = {
 
 ELECTRICAL_HIERARCHY_KEYS = ("UC",)
 
+# Legacy alias for backwards compatibility
+METER_DAY_METADATA_SCHEMA = {
+    "REPORT_DAY": pl.Date,
+    "NIO": pl.String,
+    "UC_KEY": pl.String,
+    "METER_SERIAL_KEY": pl.String,
+    "METER_TYPE": pl.String,
+    "METER_SUBTYPE": pl.String,
+    "PHASE_TYPE": pl.String,
+    "SERVICE_STATUS": pl.String,
+    "INSTALLATION_DATE": pl.Date,
+    "REMOVAL_DATE": pl.Date,
+    "CONSUMER_CLASS": pl.String,
+    "SUBGROUP": pl.String,
+    "INSTALLED_KVA": pl.Float64,
+    "FEEDER_ID": pl.String,
+    "SUBSTATION_ID": pl.String,
+    "NOMINAL_VOLTAGE": pl.Float64,
+    "MUNICIPALITY": pl.String,
+    "LATITUDE_BUCKET": pl.String,
+    "LONGITUDE_BUCKET": pl.String,
+    "SOURCE_UPDATED_AT": pl.Datetime,
+    "SCHEMA_VERSION": pl.String,
+    "RUN_ID": pl.String,
+}
+METER_DAY_METADATA_KEYS = ("NIO", "REPORT_DAY")
+
 
 # ── Measurements Layer (AMI Phenomenon) ───────────────────────────────────────
 
@@ -338,6 +365,10 @@ TRAINING_DATASET_PREFIXES = {
 # ── Registry ─────────────────────────────────────────────────────────────────
 
 TABLE_REGISTRY: dict[str, dict] = {
+    "meter_day_metadata": {
+        "schema": METER_DAY_METADATA_SCHEMA,
+        "keys": METER_DAY_METADATA_KEYS,
+    },
     "uc_context": {
         "schema": UC_CONTEXT_SCHEMA,
         "keys": UC_CONTEXT_KEYS,

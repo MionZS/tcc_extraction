@@ -30,12 +30,12 @@ def test_neighborhood_isolated_deviation():
     assert res.height == 4
 
     outlier_row = res.filter(pl.col("UC") == "UC_OUTLIER").to_dicts()[0]
-    assert outlier_row["IS_ISOLATED_DEVIATION"] is True
+    assert bool(outlier_row["IS_ISOLATED_DEVIATION"]) is True
     assert outlier_row["VOLTAGE_DELTA_TO_PEERS"] < -20.0
     assert outlier_row["TRAFO_PEER_COUNT"] == 4
 
     normal_row = res.filter(pl.col("UC") == "UC_1").to_dicts()[0]
-    assert normal_row["IS_ISOLATED_DEVIATION"] is False
+    assert bool(normal_row["IS_ISOLATED_DEVIATION"]) is False
 
 
 def test_neighborhood_prefixed_columns():
@@ -56,5 +56,5 @@ def test_neighborhood_prefixed_columns():
     assert "UC" in res.columns
 
     outlier_row = res.filter(pl.col("id__uc_id") == "UC_OUTLIER").to_dicts()[0]
-    assert outlier_row["IS_ISOLATED_DEVIATION"] is True
+    assert bool(outlier_row["IS_ISOLATED_DEVIATION"]) is True
 

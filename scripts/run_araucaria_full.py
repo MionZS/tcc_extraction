@@ -746,9 +746,17 @@ def run_pipeline(
     engine_orca.dispose()
 
     # Consolidate daily features and training dataset for latest day in range
-    interval_df = pl.read_parquet(interval_parquet) if interval_parquet.exists() else pl.DataFrame()
-    instant_df = pl.read_parquet(instant_parquet) if instant_parquet.exists() else pl.DataFrame()
-    register_df = pl.read_parquet(register_parquet) if register_parquet.exists() else pl.DataFrame()
+    def _read_layer(parquet_p: Path) -> pl.DataFrame:
+        if parquet_p.exists() and parquet_p.stat().st_size > 0:
+            return pl.read_parquet(parquet_p)
+        csv_p = parquet_p.with_suffix(".csv")
+        if csv_p.exists() and csv_p.stat().st_size > 0:
+            return pl.read_csv(csv_p, separator=";")
+        return pl.DataFrame()
+
+    interval_df = _read_layer(interval_parquet)
+    instant_df = _read_layer(instant_parquet)
+    register_df = _read_layer(register_parquet)
 
     meter_to_uc: dict[str, str] = {}
     if not meter_history.is_empty():
@@ -833,6 +841,7 @@ def main() -> int:
         feeder_name=args.feeder_name,
         feeder_geo_id=args.feeder_geo_id,
         max_workers=args.max_workers,
+        output_format=args.output_format,
         train_model=args.train_model,
     )
 
