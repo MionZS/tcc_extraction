@@ -46,6 +46,11 @@ class RobustPCADetector(BaseEstimator, OutlierMixin):
 
     def fit(self, X: np.ndarray, y: Any = None) -> RobustPCADetector:
         k = min(self.n_components, X.shape[1] - 1) if X.shape[1] > 1 else 1
+        # If matrix is constant or has near zero variance, TruncatedSVD exp_var / full_var triggers divide-by-zero
+        var_sum = float(np.sum(np.var(X, axis=0))) if X.size > 0 else 0.0
+        if var_sum < 1e-9:
+            self.svd_ = None
+            return self
         self.svd_ = TruncatedSVD(n_components=k, random_state=self.random_state)
         self.svd_.fit(X)
         return self
@@ -137,6 +142,11 @@ class CompositeAnomalyDetector:
         X_clean = np.nan_to_num(X_clean, nan=0.0)
         X_scaled = self.scaler.fit_transform(X_clean)
 
+        # Dynamically bound LOF n_neighbors to avoid UserWarning when n_samples <= n_neighbors
+        n_samples = len(X_scaled)
+        effective_neighbors = min(20, max(1, n_samples - 1))
+        self.lof.set_params(n_neighbors=effective_neighbors)
+
         self.iso_forest.fit(X_scaled)
         self.lof.fit(X_scaled)
         self.ecod.fit(X_scaled)
@@ -195,8 +205,10 @@ class CompositeAnomalyDetector:
             ]
             for vc in v_cols:
                 if raw_dataframe[vc].dtype.is_numeric():
-                    v_arr = raw_dataframe[vc].fill_null(220.0).to_numpy()
-                    rule_flags |= (v_arr < 180.0) | (v_arr > 255.0)
+                    valid_mask = raw_dataframe[vc].is_not_null().to_numpy()
+                    v_arr = raw_dataframe[vc].to_numpy()
+                    out_of_bounds = (v_arr < 180.0) | (v_arr > 255.0)
+                    rule_flags |= (valid_mask & out_of_bounds)
 
             # Rule B: Severe active reversal without justification
             rev_cols = [c for c in raw_dataframe.columns if "REVERSAL" in c.upper()]

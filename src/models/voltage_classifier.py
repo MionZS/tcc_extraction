@@ -117,19 +117,36 @@ def extract_voltage_classifier_features(
     l2_col = next((c for c in u_cols if "L2" in c), None)
     l3_col = next((c for c in u_cols if "L3" in c), None)
 
-    # 1. Structural Phase Activation Flags based on FASE_CIRCUITO (with safe fallback)
-    # Monofásico -> L1 active; Bifásico -> L1, L2 active; Trifásico -> L1, L2, L3 active
+    # 1. Structural Phase Activation Flags
+    # If FASE_CIRCUITO is available from context:
+    #   Monofásico -> L1 active; Bifásico -> L1, L2 active; Trifásico -> L1, L2, L3 active
+    # If FASE_CIRCUITO is null or absent, do NOT invent data: infer physical presence
+    # from available telemetry columns and observed values (e.g., presence of non-null L2/L3 readings).
+    has_l2_phys = (l2_col is not None) and (df.select(pl.col(l2_col).is_not_null().any()).item() is True)
+    has_l3_phys = (l3_col is not None) and (df.select(pl.col(l3_col).is_not_null().any()).item() is True)
+
     if "FASE_CIRCUITO" in df.columns:
-        phase_type = pl.col("FASE_CIRCUITO").fill_null("TRIFASICO").str.to_uppercase()
+        phase_col = pl.col("FASE_CIRCUITO").str.to_uppercase()
+        is_active_l2 = (
+            pl.when(phase_col.is_not_null())
+            .then(phase_col.str.contains("BIFASICO") | phase_col.str.contains("TRIFASICO"))
+            .otherwise(pl.lit(has_l2_phys))
+            .alias("IS_ACTIVE_L2")
+        )
+        is_active_l3 = (
+            pl.when(phase_col.is_not_null())
+            .then(phase_col.str.contains("TRIFASICO"))
+            .otherwise(pl.lit(has_l3_phys))
+            .alias("IS_ACTIVE_L3")
+        )
     else:
-        phase_type = pl.lit("TRIFASICO")
+        is_active_l2 = pl.lit(has_l2_phys).alias("IS_ACTIVE_L2")
+        is_active_l3 = pl.lit(has_l3_phys).alias("IS_ACTIVE_L3")
 
     df = df.with_columns([
         pl.lit(True).alias("IS_ACTIVE_L1"),
-        pl.when(phase_type.str.contains("BIFASICO") | phase_type.str.contains("TRIFASICO"))
-        .then(True).otherwise(False).alias("IS_ACTIVE_L2"),
-        pl.when(phase_type.str.contains("TRIFASICO"))
-        .then(True).otherwise(False).alias("IS_ACTIVE_L3"),
+        is_active_l2,
+        is_active_l3,
     ])
 
     # 2. Per-Unit Voltages (PU) and Missing/Zero Indicators

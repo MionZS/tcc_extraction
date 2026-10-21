@@ -97,23 +97,26 @@ def build_uc_window_features(
         load_factors = (
             uc_daily.get_column("LOAD_FACTOR").drop_nulls().to_numpy()
             if "LOAD_FACTOR" in uc_daily.columns
-            else np.array([0.0])
+            else np.array([], dtype=float)
         )
-        lf_mean = float(np.nanmean(load_factors)) if len(load_factors) > 0 else 0.0
+        valid_lf = load_factors[~np.isnan(load_factors)] if len(load_factors) > 0 else np.array([])
+        lf_mean = float(np.mean(valid_lf)) if len(valid_lf) > 0 else 0.0
 
         u_imb = (
             uc_daily.get_column("VOLTAGE_IMBALANCE_MAX").drop_nulls().to_numpy()
             if "VOLTAGE_IMBALANCE_MAX" in uc_daily.columns
-            else np.array([0.0])
+            else np.array([], dtype=float)
         )
-        u_imb_max = float(np.nanmax(u_imb)) if len(u_imb) > 0 else 0.0
+        valid_u_imb = u_imb[~np.isnan(u_imb)] if len(u_imb) > 0 else np.array([])
+        u_imb_max = float(np.max(valid_u_imb)) if len(valid_u_imb) > 0 else 0.0
 
         i_imb = (
             uc_daily.get_column("CURRENT_IMBALANCE_MAX").drop_nulls().to_numpy()
             if "CURRENT_IMBALANCE_MAX" in uc_daily.columns
-            else np.array([0.0])
+            else np.array([], dtype=float)
         )
-        i_imb_max = float(np.nanmax(i_imb)) if len(i_imb) > 0 else 0.0
+        valid_i_imb = i_imb[~np.isnan(i_imb)] if len(i_imb) > 0 else np.array([])
+        i_imb_max = float(np.max(valid_i_imb)) if len(valid_i_imb) > 0 else 0.0
 
         # Linear trend slope
         if len(fa_sums) >= 3:

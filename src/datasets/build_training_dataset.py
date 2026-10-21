@@ -39,6 +39,8 @@ def build_training_dataset(
     df = uc_window_features_df
 
     # ── Identifiers and Meta ──────────────────────────────────────────────
+    feature_set = kwargs.get("feature_set", "all").lower()
+
     exprs: list[pl.Expr] = [
         pl.col("UC").cast(pl.String).alias("id__uc_id"),
         pl.col("CUTOFF_DATE").cast(pl.Date).alias("meta__cutoff_date"),
@@ -46,10 +48,16 @@ def build_training_dataset(
         pl.lit(split_policy).cast(pl.String).alias("meta__split"),
     ]
 
+    # Data quality metadata indicator
+    if "AVG_INTERVAL_COVERAGE" in df.columns:
+        exprs.append(pl.col("AVG_INTERVAL_COVERAGE").cast(pl.Float64).alias("meta__data_quality"))
+    elif "COVERAGE_RELIABLE_DAYS" in df.columns:
+        exprs.append((pl.col("COVERAGE_RELIABLE_DAYS") / 30.0).clip(0.0, 1.0).cast(pl.Float64).alias("meta__data_quality"))
+    else:
+        exprs.append(pl.lit(1.0).alias("meta__data_quality"))
+
     # ── Feature mapping from window features ──────────────────────────────
-    window_feature_cols = [
-        "COVERAGE_RELIABLE_DAYS",
-        "AVG_INTERVAL_COVERAGE",
+    electrical_features = [
         "HIST_FA_SUM_MEDIAN",
         "HIST_FA_SUM_MAD",
         "HIST_RA_REVERSAL_DAYS",
@@ -58,14 +66,47 @@ def build_training_dataset(
         "HIST_VOLTAGE_IMBALANCE_MAX",
         "HIST_CURRENT_IMBALANCE_MAX",
         "TREND_FA_SLOPE",
-        "METER_AGE_DAYS",
-        "METER_CHANGED_30D",
-        "METER_CHANGED_90D",
+    ]
+    communication_features = [
+        "COVERAGE_RELIABLE_DAYS",
+        "AVG_INTERVAL_COVERAGE",
         "ALARM_COUNT_WINDOW",
         "AVG_ALARM_LATENCY_SEC",
     ]
+    tamper_features = [
+        "ALARM_COUNT_WINDOW",
+        "METER_CHANGED_30D",
+        "METER_CHANGED_90D",
+        "METER_AGE_DAYS",
+        "TREND_FA_SLOPE",
+    ]
 
-    for col_name in window_feature_cols:
+    if feature_set == "electrical":
+        target_cols = electrical_features
+    elif feature_set == "communication":
+        target_cols = communication_features
+    elif feature_set == "tamper":
+        target_cols = tamper_features
+    else:  # "all"
+        target_cols = [
+            "COVERAGE_RELIABLE_DAYS",
+            "AVG_INTERVAL_COVERAGE",
+            "HIST_FA_SUM_MEDIAN",
+            "HIST_FA_SUM_MAD",
+            "HIST_RA_REVERSAL_DAYS",
+            "HIST_RA_REVERSAL_RATIO_MAX",
+            "HIST_LOAD_FACTOR_MEAN",
+            "HIST_VOLTAGE_IMBALANCE_MAX",
+            "HIST_CURRENT_IMBALANCE_MAX",
+            "TREND_FA_SLOPE",
+            "METER_AGE_DAYS",
+            "METER_CHANGED_30D",
+            "METER_CHANGED_90D",
+            "ALARM_COUNT_WINDOW",
+            "AVG_ALARM_LATENCY_SEC",
+        ]
+
+    for col_name in target_cols:
         if col_name in df.columns:
             exprs.append(pl.col(col_name).alias(f"x__{col_name.lower()}"))
 

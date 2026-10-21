@@ -194,6 +194,7 @@ def test_full_pipeline_e2e(tmp_path: Path, simulated_database):
 
         for h in range(4):
             inst_records.append({
+                "UC": uc,
                 "NIO": nio,
                 "REPORT_DAY": cutoff_date,
                 "TIMESTAMP_UTC": datetime(2026, 6, 23, h, 0, 0),

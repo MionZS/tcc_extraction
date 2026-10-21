@@ -18,9 +18,22 @@ from src.models.voltage_classifier import (
     group_train_test_split,
 )
 
+from src.models.specialized_detectors import (
+    BehavioralClusterer,
+    CommunicationAnomalyDetector,
+    ElectricalAnomalyDetector,
+    MultiViewAnomalyPipeline,
+    TamperAnomalyDetector,
+)
+
 __all__ = [
     "CompositeAnomalyDetector",
     "CompositeAnomalyModel",
+    "CommunicationAnomalyDetector",
+    "ElectricalAnomalyDetector",
+    "TamperAnomalyDetector",
+    "BehavioralClusterer",
+    "MultiViewAnomalyPipeline",
     "HierarchicalModelOrchestrator",
     "HierarchicalModelTrainer",
     "MoERouter",
