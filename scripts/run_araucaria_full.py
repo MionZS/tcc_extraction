@@ -61,11 +61,13 @@ from src.datasets.partitioning import (
 )
 from src.datasets.writers import (
     write_context_table,
+    write_events_table,
     write_features,
     write_training_dataset,
     write_window_features,
 )
 from src.db import create_engine
+from src.events.alarm_extractor import AlarmExtractor
 from src.features.meter_day import build_meter_day_features
 from src.features.uc_window import build_uc_window_features
 from src.run_manifest import create_manifest
@@ -743,6 +745,25 @@ def run_pipeline(
         shutil.rmtree(norm_temp_dir, ignore_errors=True)
         _log(f"[+] Medições normalizadas ({current_day.isoformat()}): {total_interval:,} intervalos | {total_instant:,} instantâneos | {total_register:,} registradores.")
 
+        # Alarms extraction: AMI.T_EVENT_YYYYMMDD for the day's active meters
+        _log(f"[*] Extraindo alarmes de medidores de AMI.T_EVENT_{curr_token} para {len(day_nios):,} NIOs...")
+        alarm_extractor = AlarmExtractor(engine=engine_orca)
+        raw_events_dir = output_dir / "raw" / "ORCA" / "events"
+        try:
+            day_alarms = alarm_extractor.extract_day(
+                report_day=current_day,
+                nios=day_nios,
+                run_id=manifest.run_id,
+                raw_dir=raw_events_dir,
+            )
+            if not day_alarms.is_empty():
+                write_events_table(day_alarms, "alarm_events", current_day, base_dir=output_dir, write_csv=write_csv)
+                _log(f"[+] Alarmes refinados ({current_day.isoformat()}): {day_alarms.height:,} eventos registrados.")
+            else:
+                _log(f"[-] Nenhum alarme registrado para os NIOs selecionados em {current_day.isoformat()}.")
+        except Exception as exc:
+            _log(f"[yellow]⚠ Aviso na extração de alarmes para {current_day.isoformat()}: {exc}[/yellow]")
+
     engine_orca.dispose()
 
     # Consolidate daily features and training dataset for latest day in range
@@ -775,10 +796,23 @@ def run_pipeline(
     )
     write_features(daily_features, "v1", report_day, base_dir=output_dir, write_csv=write_csv)
 
-    # Window features
+    # Load 30-day historical window alarms from refined events layer
+    alarms_list: list[pl.DataFrame] = []
+    events_base = output_dir / "events" / "alarm_events"
+    if events_base.exists():
+        for d_offset in range(31):
+            check_d = report_day - timedelta(days=d_offset)
+            d_tok = _date_token(check_d)
+            part_p = events_base / f"report_day={d_tok}" / "data.parquet"
+            if part_p.exists():
+                alarms_list.append(pl.read_parquet(part_p))
+    window_alarms_df = pl.concat(alarms_list, how="vertical_relaxed") if alarms_list else pl.DataFrame()
+
+    # Window features (incorporating alarms)
     window_features = build_uc_window_features(
         daily_features,
         meter_history_df=meter_history,
+        alarm_events_df=window_alarms_df,
         cutoff_date=report_day,
         window_days=30,
         feature_set_version="v1",

@@ -199,8 +199,12 @@ def write_training_dataset(
     base_dir: Path | str = "data",
     write_csv: bool = False,
     compression: str = "zstd",
+    **kwargs: Any,
 ) -> Path:
     """Write final model input dataset (UC × cutoff_date)."""
+    if "version" in kwargs:
+        dataset_version = kwargs["version"]
+
     if isinstance(df, pl.DataFrame) and df.is_empty():
         return Path()
 

@@ -25,13 +25,14 @@ from src.datasets.schemas import METER_DAY_FEATURES_SCHEMA
 
 def build_meter_day_features(
     interval_df: pl.DataFrame,
-    instantaneous_df: pl.DataFrame,
-    register_df: pl.DataFrame,
-    metadata_df: pl.DataFrame | None,
+    instantaneous_df: pl.DataFrame | None = None,
+    register_df: pl.DataFrame | None = None,
+    metadata_df: pl.DataFrame | None = None,
     *,
     report_day: date,
     feature_set_version: str = "v1",
     meter_to_uc_map: dict[str, str] | None = None,
+    **kwargs: Any,
 ) -> pl.DataFrame:
     """Build feature rows for all NIOs/UCs on a given report_day.
 
@@ -51,14 +52,26 @@ def build_meter_day_features(
     Returns:
         DataFrame with one row per UC/NIO and feature columns.
     """
-    if interval_df.is_empty():
+    # Support parameter aliases: registers_df -> register_df, context_df -> metadata_df
+    if register_df is None and "registers_df" in kwargs:
+        register_df = kwargs["registers_df"]
+    if metadata_df is None and "context_df" in kwargs:
+        metadata_df = kwargs["context_df"]
+    if register_df is None:
+        register_df = pl.DataFrame()
+
+    if interval_df.is_empty() and (instantaneous_df is None or instantaneous_df.is_empty()):
         return _empty_features_frame()
 
     # Fast O(N) partitioning across frames instead of O(N*M) repeated filters
-    interval_by_nio = interval_df.partition_by("NIO", as_dict=True)
+    interval_by_nio = (
+        interval_df.partition_by("NIO", as_dict=True)
+        if not interval_df.is_empty() and "NIO" in interval_df.columns
+        else {}
+    )
     instant_by_nio = (
         instantaneous_df.partition_by("NIO", as_dict=True)
-        if not instantaneous_df.is_empty() and "NIO" in instantaneous_df.columns
+        if instantaneous_df is not None and not instantaneous_df.is_empty() and "NIO" in instantaneous_df.columns
         else {}
     )
     register_by_nio = (
@@ -71,12 +84,29 @@ def build_meter_day_features(
         if metadata_df is not None and not metadata_df.is_empty() and "NIO" in metadata_df.columns
         else {}
     )
+    metadata_by_uc = (
+        metadata_df.partition_by("UC", as_dict=True)
+        if metadata_df is not None and not metadata_df.is_empty() and "UC" in metadata_df.columns
+        else {}
+    )
+
+    # Derive meter_to_uc_map from metadata_df if available and not explicitly provided
+    if not meter_to_uc_map and metadata_df is not None and not metadata_df.is_empty():
+        if "NIO" in metadata_df.columns and "UC" in metadata_df.columns:
+            m_df = metadata_df.select(["NIO", "UC"]).drop_nulls().unique()
+            meter_to_uc_map = dict(zip(m_df["NIO"].to_list(), m_df["UC"].to_list()))
+
+    # Union of all known NIO keys across available frames
+    all_nio_keys = set(interval_by_nio.keys()) | set(instant_by_nio.keys()) | set(register_by_nio.keys())
+    if not all_nio_keys and metadata_by_nio:
+        all_nio_keys = set(metadata_by_nio.keys())
 
     feature_rows: list[dict[str, Any]] = []
     empty_df = pl.DataFrame()
 
-    for nio_key, nio_interval in sorted(interval_by_nio.items(), key=lambda kv: kv[0][0] if isinstance(kv[0], tuple) else kv[0]):
+    for nio_key in sorted(all_nio_keys, key=lambda k: k[0] if isinstance(k, tuple) else k):
         nio = nio_key[0] if isinstance(nio_key, tuple) else nio_key
+        nio_interval = interval_by_nio.get(nio_key, empty_df)
         nio_instant = instant_by_nio.get(nio_key, empty_df)
         nio_register = register_by_nio.get(nio_key, empty_df)
         uc_val = meter_to_uc_map.get(nio, nio) if meter_to_uc_map else nio
@@ -91,12 +121,21 @@ def build_meter_day_features(
             feature_set_version=feature_set_version,
         )
 
-        # Merge metadata context if available
-        meta_sub = metadata_by_nio.get(nio_key)
+        # Merge metadata context if available (check by NIO, then by UC)
+        meta_sub = metadata_by_nio.get(nio_key) or metadata_by_nio.get(nio)
+        if meta_sub is None and metadata_by_uc:
+            meta_sub = metadata_by_uc.get((uc_val,)) or metadata_by_uc.get(uc_val)
         if meta_sub is not None and meta_sub.height > 0:
             for col in ("PHASE_TYPE", "CONSUMER_CLASS", "METER_TYPE", "INSTALLED_KVA"):
                 if col in meta_sub.columns:
                     row[col] = meta_sub[col][0]
+            # Map canonical context column names if standard names weren't present
+            if row.get("PHASE_TYPE") is None and "FASE_CIRCUITO" in meta_sub.columns:
+                row["PHASE_TYPE"] = meta_sub["FASE_CIRCUITO"][0]
+            if row.get("CONSUMER_CLASS") is None and "CLASSE" in meta_sub.columns:
+                row["CONSUMER_CLASS"] = meta_sub["CLASSE"][0]
+            if row.get("INSTALLED_KVA") is None and "POT_INST_KVA" in meta_sub.columns:
+                row["INSTALLED_KVA"] = meta_sub["POT_INST_KVA"][0]
 
         feature_rows.append(row)
 
@@ -170,7 +209,13 @@ def _compute_nio_features(
 
     # ── Voltage imbalance ────────────────────────────────────────────────
     v_imb = compute_voltage_imbalance(interval_df, instantaneous_df)
-    row["VOLTAGE_IMBALANCE_MAX"] = round(v_imb, 4) if v_imb is not None else None
+    if isinstance(v_imb, tuple):
+        v_imb_val = v_imb[0]
+    elif v_imb is not None:
+        v_imb_val = float(v_imb)
+    else:
+        v_imb_val = None
+    row["VOLTAGE_IMBALANCE_MAX"] = round(v_imb_val, 4) if v_imb_val is not None else None
 
     # ── Current imbalance ────────────────────────────────────────────────
     c_imb = compute_current_imbalance(interval_df, instantaneous_df)

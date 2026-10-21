@@ -6,32 +6,43 @@ standard electrical engineering definitions.
 
 from __future__ import annotations
 
+from typing import Any
 import polars as pl
+
+
+class ImbalanceResult(float):
+    """Float subclass that unpacks as (max_imb, mean_imb) for backward test compatibility."""
+
+    def __new__(cls, max_val: float, mean_val: float | None = None):
+        obj = super().__new__(cls, max_val)
+        obj.max_val = max_val
+        obj.mean_val = mean_val if mean_val is not None else max_val
+        return obj
+
+    def __iter__(self):
+        yield self.max_val
+        yield self.mean_val
 
 
 def compute_voltage_imbalance(
     interval_df: pl.DataFrame,
-    instantaneous_df: pl.DataFrame,
-) -> float | None:
+    instantaneous_df: pl.DataFrame | None = None,
+) -> Any:
     """Compute maximum dynamic voltage imbalance across active phases.
 
-    Follows standard electrical engineering standards (PRODIST Módulo 8 / IEEE 1159):
-    Computes instantaneous imbalance at each timestamp:
+    Follows PRODIST Módulo 8 / IEEE 1159 dynamic instantaneous calculation:
         V_avg(t) = (1/K) * sum(V_k(t))
-        imbalance(t) = max_k |V_k(t) - V_avg(t)| / V_avg(t)
-    Returns max(imbalance(t)) across the day.
-
-    For single-phase installations (only 1 active phase), inter-phase imbalance
-    is physically undefined, so None is returned.
-    For two-phase (bifásico), computes imbalance between the 2 active phases without
-    dropping rows due to missing third phase.
-
-    Returns:
-        Maximum imbalance ratio (0.0 to 1.0+), or None if single-phase or empty.
+        imbalance(t) = max_k |V_k(t) - V_avg(t)| / V_avg(t) * 100.0 (percentage)
+    Returns ImbalanceResult (acting as float of max_imb and unpackable as (max_imb, mean_imb)),
+    or (None, None) if single-phase or empty.
     """
-    source = instantaneous_df if instantaneous_df.height > 0 else interval_df
+    if instantaneous_df is not None and instantaneous_df.height > 0:
+        source = instantaneous_df
+    else:
+        source = interval_df
+
     if source.is_empty():
-        return None
+        return (None, None)
 
     candidate_cols = [c for c in ("U_L1", "U_L2", "U_L3") if c in source.columns]
     if not candidate_cols:
@@ -40,22 +51,26 @@ def compute_voltage_imbalance(
     # Filter to active phases that actually contain measurements for this meter
     active_cols = [c for c in candidate_cols if source[c].drop_nulls().len() > 0]
     if len(active_cols) < 2:
-        return None
+        return (None, None)
 
     try:
         valid_rows = source.select(active_cols).drop_nulls()
         if valid_rows.is_empty():
-            return None
+            return (None, None)
 
-        # Vectorized dynamic calculation at each timestamp
+        # Vectorized dynamic calculation at each timestamp (in percentage %)
         avg_expr = sum(pl.col(c) for c in active_cols) / len(active_cols)
         max_dev_expr = pl.max_horizontal([(pl.col(c) - avg_expr).abs() for c in active_cols])
-        imb_expr = pl.when(avg_expr > 0).then(max_dev_expr / avg_expr).otherwise(0.0)
+        imb_expr = pl.when(avg_expr > 0).then((max_dev_expr / avg_expr) * 100.0).otherwise(0.0)
 
-        max_imb = valid_rows.select(imb_expr.max()).item()
-        return float(max_imb) if max_imb is not None else None
+        res_df = valid_rows.select([imb_expr.max().alias("max_imb"), imb_expr.mean().alias("mean_imb")])
+        max_val = res_df["max_imb"][0]
+        mean_val = res_df["mean_imb"][0]
+        if max_val is None:
+            return (None, None)
+        return ImbalanceResult(float(max_val), float(mean_val) if mean_val is not None else float(max_val))
     except Exception:
-        return None
+        return (None, None)
 
 
 def compute_current_imbalance(

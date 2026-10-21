@@ -85,14 +85,22 @@ def extract_voltage_classifier_features(
 
     df = instantaneous_df.clone()
 
-    # Join context if available (match on UC, or on NIO if UC not present in instantaneous_df)
+    # Join context if available (match on UC, or on NIO, or bridge if only one key is present)
     if context_df is not None and not context_df.is_empty():
-        if "UC" in df.columns and "UC" in context_df.columns:
-            context_cols = [c for c in ["UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in context_df.columns]
-            df = df.join(context_df.select(context_cols), on="UC", how="left")
-        elif "NIO" in df.columns and "NIO" in context_df.columns:
-            context_cols = [c for c in ["NIO", "UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in context_df.columns]
-            df = df.join(context_df.select(context_cols), on="NIO", how="left")
+        context_cols = [c for c in ["UC", "NIO", "FASE_CIRCUITO", "TENSAO_BASE"] if c in context_df.columns]
+        sub_context = context_df.select(context_cols).drop_nulls(subset=[c for c in ["UC", "NIO"] if c in context_cols]).unique()
+
+        if "UC" in df.columns and "UC" in sub_context.columns:
+            join_cols = [c for c in ["UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in sub_context.columns]
+            df = df.join(sub_context.select(join_cols), on="UC", how="left")
+        elif "NIO" in df.columns and "NIO" in sub_context.columns:
+            join_cols = [c for c in ["NIO", "UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in sub_context.columns]
+            df = df.join(sub_context.select(join_cols), on="NIO", how="left")
+        elif "NIO" in df.columns and "UC" in sub_context.columns and "NIO" not in sub_context.columns:
+            # If sub_context only has UC, check if UC values correspond to NIOs
+            sub_renamed = sub_context.rename({"UC": "NIO"})
+            join_cols = [c for c in ["NIO", "FASE_CIRCUITO", "TENSAO_BASE"] if c in sub_renamed.columns]
+            df = df.join(sub_renamed.select(join_cols), on="NIO", how="left")
 
     # Determine base voltage column or fallback
     if "TENSAO_BASE" not in df.columns:
@@ -109,9 +117,13 @@ def extract_voltage_classifier_features(
     l2_col = next((c for c in u_cols if "L2" in c), None)
     l3_col = next((c for c in u_cols if "L3" in c), None)
 
-    # 1. Structural Phase Activation Flags based on FASE_CIRCUITO
+    # 1. Structural Phase Activation Flags based on FASE_CIRCUITO (with safe fallback)
     # Monofásico -> L1 active; Bifásico -> L1, L2 active; Trifásico -> L1, L2, L3 active
-    phase_type = pl.col("FASE_CIRCUITO").fill_null("TRIFASICO").str.to_uppercase()
+    if "FASE_CIRCUITO" in df.columns:
+        phase_type = pl.col("FASE_CIRCUITO").fill_null("TRIFASICO").str.to_uppercase()
+    else:
+        phase_type = pl.lit("TRIFASICO")
+
     df = df.with_columns([
         pl.lit(True).alias("IS_ACTIVE_L1"),
         pl.when(phase_type.str.contains("BIFASICO") | phase_type.str.contains("TRIFASICO"))
@@ -224,6 +236,9 @@ def extract_voltage_classifier_features(
         elif "NIO" in df.columns and "NIO" in neighborhood_df.columns:
             neigh_cols = [c for c in ["NIO", "NEIGHBOR_COVERAGE_RATIO", "TRAFO_PEER_COUNT"] if c in neighborhood_df.columns]
             df = df.join(neighborhood_df.select(neigh_cols), on="NIO", how="left")
+        elif "NIO" in df.columns and "UC" in neighborhood_df.columns and "NIO" not in neighborhood_df.columns:
+            neigh_cols = [c for c in ["UC", "NEIGHBOR_COVERAGE_RATIO", "TRAFO_PEER_COUNT"] if c in neighborhood_df.columns]
+            df = df.join(neighborhood_df.select(neigh_cols).rename({"UC": "NIO"}), on="NIO", how="left")
 
     if "NEIGHBOR_COVERAGE_RATIO" not in df.columns:
         df = df.with_columns(pl.lit(1.0).alias("NEIGHBOR_COVERAGE_RATIO"))
@@ -231,15 +246,21 @@ def extract_voltage_classifier_features(
         df = df.with_columns(pl.col("NEIGHBOR_COVERAGE_RATIO").fill_null(1.0))
 
     # 5. Integrate Power Failure Alarms (Last Gasp)
-    if alarms_df is not None and not alarms_df.is_empty() and "NIO" in alarms_df.columns:
-        alarm_mask = pl.col("CONTENT").str.to_uppercase().str.contains("FALTA|POWER|LAST_GASP|QUEDA|OUTAGE")
-        alarm_nios = set(
-            alarms_df.filter(alarm_mask)
-            .get_column("NIO")
-            .to_list()
-        )
-        if "NIO" in df.columns:
-            df = df.with_columns(pl.col("NIO").is_in(alarm_nios).alias("HAS_POWER_ALARM"))
+    if alarms_df is not None and not alarms_df.is_empty():
+        alarm_mask = pl.col("CONTENT").str.to_uppercase().str.contains("FALTA|POWER|LAST_GASP|QUEDA|OUTAGE") if "CONTENT" in alarms_df.columns else pl.lit(True)
+        filtered_alarms = alarms_df.filter(alarm_mask)
+        alarm_keys = set()
+        if "NIO" in filtered_alarms.columns:
+            alarm_keys.update(filtered_alarms.get_column("NIO").drop_nulls().to_list())
+        if "UC" in filtered_alarms.columns:
+            alarm_keys.update(filtered_alarms.get_column("UC").drop_nulls().to_list())
+
+        if "NIO" in df.columns and "UC" in df.columns:
+            df = df.with_columns((pl.col("NIO").is_in(alarm_keys) | pl.col("UC").is_in(alarm_keys)).alias("HAS_POWER_ALARM"))
+        elif "NIO" in df.columns:
+            df = df.with_columns(pl.col("NIO").is_in(alarm_keys).alias("HAS_POWER_ALARM"))
+        elif "UC" in df.columns:
+            df = df.with_columns(pl.col("UC").is_in(alarm_keys).alias("HAS_POWER_ALARM"))
         else:
             df = df.with_columns(pl.lit(False).alias("HAS_POWER_ALARM"))
     else:

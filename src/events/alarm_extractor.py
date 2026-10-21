@@ -73,6 +73,8 @@ class AlarmExtractor:
         nios: Sequence[str] | None = None,
         connection: Connection | None = None,
         run_id: str = "",
+        raw_dir: Path | str | None = None,
+        **kwargs: Any,
     ) -> pl.DataFrame:
         """Extract alarm events from AMI.T_EVENT_YYYYMMDD for a single day.
 
@@ -158,6 +160,14 @@ class AlarmExtractor:
                 return build_empty_frame("alarm_events")
 
             combined_raw = pl.concat(chunks, how="vertical_relaxed")
+
+            # Save raw extraction if raw_dir is provided
+            raw_events_dir = kwargs.get("raw_dir")
+            if raw_events_dir:
+                raw_path = Path(raw_events_dir)
+                raw_path.mkdir(parents=True, exist_ok=True)
+                combined_raw.write_parquet(raw_path / f"events_{_date_token(report_day)}.parquet")
+
             return normalize_alarm_events(combined_raw, run_id=run_id)
 
         if connection is not None:
@@ -180,6 +190,7 @@ class AlarmExtractor:
         nios: Sequence[str] | None = None,
         run_id: str = "",
         save_partitions: bool = True,
+        save_raw: bool = True,
         base_dir: Path | str = "output",
     ) -> pl.DataFrame:
         """Extract and aggregate alarm events across all days in [cutoff_date - window_days, cutoff_date].
@@ -189,7 +200,8 @@ class AlarmExtractor:
             window_days: Number of days to look back (inclusive).
             nios: Target NIOs to filter.
             run_id: Run ID for metadata.
-            save_partitions: If True, saves each available day to output/events/alarm_events/.
+            save_partitions: If True, saves refined day to output/events/alarm_events/.
+            save_raw: If True, saves raw events to output/raw/ORCA/events/.
             base_dir: Base directory for partition storage.
 
         Returns:
@@ -200,6 +212,7 @@ class AlarmExtractor:
         owned_engine = self._engine is None
 
         daily_dfs: list[pl.DataFrame] = []
+        raw_events_dir = Path(base_dir) / "raw" / "ORCA" / "events" if save_raw else None
 
         try:
             with engine.connect() as conn:
@@ -209,6 +222,7 @@ class AlarmExtractor:
                         nios=nios,
                         connection=conn,
                         run_id=run_id,
+                        raw_dir=raw_events_dir,
                     )
                     if not day_df.is_empty():
                         daily_dfs.append(day_df)

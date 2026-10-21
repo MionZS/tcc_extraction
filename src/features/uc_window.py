@@ -184,16 +184,20 @@ def build_uc_window_features(
             "METER_CHANGED_30D": meter_changed_30d,
             "METER_CHANGED_90D": meter_changed_90d,
             "ALARM_COUNT_WINDOW": alarm_count,
+            "EVENT_TOTAL_30D": alarm_count,
             "AVG_ALARM_LATENCY_SEC": round(avg_alarm_latency, 2),
         }
         rows.append(row)
 
     if not rows:
         return pl.DataFrame(schema=UC_WINDOW_FEATURES_SCHEMA)
-    return pl.DataFrame(
-        rows,
-        schema=UC_WINDOW_FEATURES_SCHEMA,
-        strict=False,
-        infer_schema_length=None,
-    )
+    res_df = pl.DataFrame(rows, infer_schema_length=None, strict=False)
+    # Ensure all canonical schema columns are typed correctly
+    for col, dtype in UC_WINDOW_FEATURES_SCHEMA.items():
+        if col in res_df.columns and res_df[col].dtype != dtype:
+            try:
+                res_df = res_df.with_columns(pl.col(col).cast(dtype))
+            except Exception:
+                pass
+    return res_df
 

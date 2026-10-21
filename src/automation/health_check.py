@@ -151,6 +151,13 @@ class DataLakeHealthChecker:
         else:
             global_status = "HEALTHY"
 
+        reports_dir = self.base_dir / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        date_token = datetime.now().strftime("%Y%m%d")
+        report_md = f"# Relatório Diário de Saúde do Pipeline\n- Timestamp: {datetime.now().isoformat()}\n- Status Geral: {global_status}\n"
+        (reports_dir / "daily_health_report_latest.md").write_text(report_md, encoding="utf-8")
+        (reports_dir / f"daily_health_report_{date_token}.md").write_text(report_md, encoding="utf-8")
+
         return {
             "audit_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "global_status": global_status,

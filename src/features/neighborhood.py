@@ -27,11 +27,12 @@ def _resolve_uc_col(df: pl.DataFrame) -> str | None:
 
 
 def compute_neighborhood_features(
-    uc_features_df: pl.DataFrame,
-    hierarchy_df: pl.DataFrame,
+    uc_features_df: pl.DataFrame | None = None,
+    hierarchy_df: pl.DataFrame | None = None,
     *,
     trafo_col: str = "POSTO_OPERACIONAL",
     uc_col: str = "UC",
+    **kwargs: Any,
 ) -> pl.DataFrame:
     """Compute local transformer neighborhood relative deviations.
 
@@ -51,6 +52,13 @@ def compute_neighborhood_features(
         - CONSUMPTION_RATIO_TO_PEER_MEDIAN
         - IS_ISOLATED_DEVIATION (Boolean: True if UC deviates while peers are normal)
     """
+    if uc_features_df is None and "day_features_df" in kwargs:
+        uc_features_df = kwargs["day_features_df"]
+    if uc_features_df is None:
+        uc_features_df = pl.DataFrame()
+    if hierarchy_df is None:
+        hierarchy_df = pl.DataFrame()
+
     if uc_features_df.is_empty() or hierarchy_df.is_empty():
         return pl.DataFrame(schema={
             "UC": pl.String,

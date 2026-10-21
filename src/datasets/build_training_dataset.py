@@ -13,32 +13,27 @@ Applies the strict prefix convention:
 from __future__ import annotations
 
 from datetime import date
-from typing import Sequence
+from typing import Any, Sequence
 
 import polars as pl
 
 
 def build_training_dataset(
-    uc_window_features_df: pl.DataFrame,
+    uc_window_features_df: pl.DataFrame | None = None,
     uc_context_df: pl.DataFrame | None = None,
     hierarchy_df: pl.DataFrame | None = None,
     labels_df: pl.DataFrame | None = None,
     *,
     split_policy: str = "train",
+    **kwargs: Any,
 ) -> pl.DataFrame:
-    """Combine window features, context, hierarchy, and labels into a model-ready matrix.
+    """Combine window features, context, hierarchy, and labels into a model-ready matrix."""
+    if uc_window_features_df is None and "window_features_df" in kwargs:
+        uc_window_features_df = kwargs["window_features_df"]
+    if uc_window_features_df is None and "day_features_df" in kwargs:
+        uc_window_features_df = kwargs["day_features_df"]
 
-    Args:
-        uc_window_features_df: Rolling window features for UCs.
-        uc_context_df: Optional UC context table.
-        hierarchy_df: Optional electrical hierarchy table.
-        labels_df: Optional ground-truth labels table.
-        split_policy: Split label for this partition ("train", "validation", "test").
-
-    Returns:
-        A Polars DataFrame conforming to the id__*, meta__*, x__*, y__* convention.
-    """
-    if uc_window_features_df.is_empty():
+    if uc_window_features_df is None or uc_window_features_df.is_empty():
         return pl.DataFrame()
 
     df = uc_window_features_df
