@@ -91,14 +91,14 @@ def test_electrical_data_quality_gating():
     quality = [0.95, 0.25, 0.95]
 
     res = detector.predict_electrical(X_test, data_quality=quality)
-    assert res["is_reliable"][0] is True
-    assert res["is_reliable"][1] is False  # Low quality: score is unreliable!
-    assert res["is_reliable"][2] is True
+    assert bool(res["is_reliable"][0]) is True
+    assert bool(res["is_reliable"][1]) is False  # Low quality: score is unreliable!
+    assert bool(res["is_reliable"][2]) is True
 
     # Crucial assertion: Meter 2 cannot be declared an electrical anomaly because data was missing/insufficient!
-    assert res["is_electrical_anomaly"][1] is False
+    assert bool(res["is_electrical_anomaly"][1]) is False
     # Meter 3 had sufficient data and is an anomaly
-    assert res["is_electrical_anomaly"][2] is True
+    assert bool(res["is_electrical_anomaly"][2]) is True
 
 
 def test_tamper_anomaly_scoring():
