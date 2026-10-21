@@ -767,6 +767,13 @@ def run_pipeline(
     engine_orca.dispose()
 
     # Consolidate daily features and training dataset for latest day in range
+    interval_dir = measurements_partition_path("ami_interval", report_day, base_dir=output_dir)
+    instant_dir = measurements_partition_path("ami_instantaneous", report_day, base_dir=output_dir)
+    register_dir = measurements_partition_path("ami_registers", report_day, base_dir=output_dir)
+    interval_parquet = interval_dir / "data.parquet"
+    instant_parquet = instant_dir / "data.parquet"
+    register_parquet = register_dir / "data.parquet"
+
     def _read_layer(parquet_p: Path) -> pl.DataFrame:
         if parquet_p.exists() and parquet_p.stat().st_size > 0:
             return pl.read_parquet(parquet_p)

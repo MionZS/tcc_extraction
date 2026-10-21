@@ -91,7 +91,7 @@ def build_meter_day_features(
     )
 
     # Derive meter_to_uc_map from metadata_df if available and not explicitly provided
-    if not meter_to_uc_map and metadata_df is not None and not metadata_df.is_empty():
+    if (meter_to_uc_map is None or len(meter_to_uc_map) == 0) and metadata_df is not None and not metadata_df.is_empty():
         if "NIO" in metadata_df.columns and "UC" in metadata_df.columns:
             m_df = metadata_df.select(["NIO", "UC"]).drop_nulls().unique()
             meter_to_uc_map = dict(zip(m_df["NIO"].to_list(), m_df["UC"].to_list()))

@@ -341,10 +341,10 @@ class RichPipelineTUI:
             res = sync_datalake_formats(self.base_dir)
             console.print(
                 Panel(
-                    f"[bold green]✔ Sincronização de Formatos Concluída com Sucesso![/bold green]\n\n"
+                    f"[bold green]✔ Sincronização de Formatos Concluída![/bold green]\n\n"
                     f"• Parquet → CSV convertidos: [bold cyan]{res['parquet_to_csv']:,}[/bold cyan]\n"
                     f"• CSV → Parquet convertidos: [bold green]{res['csv_to_parquet']:,}[/bold green]\n"
-                    f"• Erros encontrados:         [bold {'green' if res['errors'] == 0 else 'red'}]{res['errors']}[/bold]",
+                    f"• Erros encontrados:         [{'bold green' if res['errors'] == 0 else 'bold red'}]{res['errors']}[/]",
                     title="Resultado da Sincronização",
                     border_style="green",
                 )
