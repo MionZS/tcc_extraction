@@ -126,8 +126,8 @@ class RichPipelineTUI:
         console.print("Escopo de Extração:")
         console.print("  [bold yellow][1][/bold yellow] 🌍 Araucária Completa (dia único via days_back)")
         console.print("  [bold yellow][2][/bold yellow] 🔌 Alimentador específico (teste rápido ou re-extração pontual)")
-        console.print("  [bold yellow][3][/bold yellow] 📅 Extração de Período Histórico (01/08/2026 a ontem — preenchimento de lacunas)")
-        console.print("  [bold yellow][4][/bold yellow] ⚡ Sincronização Inteligente (Auto-Backfill da data mais recente até ontem + preenchimento de gaps)")
+        console.print("  [bold yellow][3][/bold yellow] 📅 Extração de Período Histórico (01/08/2026 até a data mais recente — preenchimento de lacunas)")
+        console.print("  [bold yellow][4][/bold yellow] ⚡ Sincronização Inteligente (Auto-Backfill da data mais recente + preenchimento de gaps)")
         scope_choice = Prompt.ask("Escopo", choices=["1", "2", "3", "4"], default="4")
 
         console.print("\nFormato de Armazenamento:")
@@ -155,7 +155,7 @@ class RichPipelineTUI:
                     console.print(
                         Panel(
                             "[bold green]✔ Sincronização do Data Lake concluída com sucesso![/bold green]\n"
-                            "O Data Lake agora está atualizado até ontem sem lacunas.\n"
+                            "O Data Lake agora está atualizado com o calendário sem lacunas.\n"
                             "Consulte a [bold yellow]Opção 3[/bold yellow] para auditar a continuidade no calendário.",
                             title="Auto-Backfill Concluído",
                             border_style="green",
@@ -858,7 +858,19 @@ class RichPipelineTUI:
         registry = ModelRegistry(self.base_dir / "models" / "registry")
         default_tag = "baseline" if test_ratio <= 0.0 else "candidate"
         tag = Prompt.ask("Tag no Model Registry", choices=["candidate", "production", "baseline"], default=default_tag)
-        default_desc = f"Padrão de treinamento PRODIST M8 (81 dias: {start_date or '01/08/2026'} a {end_date or '20/10/2026'})" if test_ratio <= 0.0 else f"Treino de tensão ({start_date or 'inicio'} a {end_date or 'fim'})"
+
+        # Formatação exata do período baseado nas datas reais de dados
+        loaded_dates = sorted(data_metadata.get("dates_loaded", []))
+        eff_start = start_date or (date.fromisoformat(loaded_dates[0]) if loaded_dates else min_avail)
+        eff_end = end_date or (date.fromisoformat(loaded_dates[-1]) if loaded_dates else max_avail)
+        n_days = len(loaded_dates) if loaded_dates else (eff_end - eff_start).days + 1
+
+        period_label = f"{eff_start.strftime('%d/%m/%Y')} a {eff_end.strftime('%d/%m/%Y')}"
+        if test_ratio <= 0.0:
+            default_desc = f"Padrão de treinamento PRODIST M8 ({n_days} dias: {period_label})"
+        else:
+            default_desc = f"Treino de tensão ({period_label} | Teste: {test_ratio:.0%})"
+
         desc = Prompt.ask("Descrição / Anotação da Versão", default=default_desc)
 
         version_id = registry.register_model(
@@ -866,8 +878,9 @@ class RichPipelineTUI:
             model_obj=clf,
             metrics=metrics,
             data_slice={
-                "start_date": start_date.isoformat() if start_date else None,
-                "end_date": end_date.isoformat() if end_date else None,
+                "start_date": eff_start.isoformat(),
+                "end_date": eff_end.isoformat(),
+                "days_count": n_days,
                 "feeder": feeder_name or "TODOS",
                 "total_samples": inst_df.height,
                 "train_samples": train_df.height,
@@ -891,7 +904,7 @@ class RichPipelineTUI:
                 f"[bold green]✔ Modelo registrado com sucesso no Model Registry![/bold green]\n\n"
                 f"• Versão:      [bold white]{version_id}[/bold white]\n"
                 f"• Tag:         [bold yellow]{tag}[/bold yellow]\n"
-                f"• Período:     [bold cyan]{start_date or 'Início'} → {end_date or 'Ontem'}[/bold cyan]\n"
+                f"• Período:     [bold cyan]{eff_start.strftime('%d/%m/%Y')} → {eff_end.strftime('%d/%m/%Y')} ({n_days} dias identificados)[/bold cyan]\n"
                 f"• Alimentador: [bold magenta]{feeder_name or 'TODOS'}[/bold magenta]\n"
                 f"• Acurácia:    [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white] | F1 Macro: [bold green]{metrics.get('f1_macro', 0.0):.4f}[/bold green]",
                 title="Governança de Modelos",
