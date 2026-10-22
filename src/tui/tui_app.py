@@ -75,6 +75,9 @@ class RichPipelineTUI:
         self.default_feeder = "Fonte_Nova"
         self.default_geo_id = 6352460
         self.output_format = "both"
+        self.default_voltage_max_samples = 0  # 0 = sem limite (usa 100% dos dados)
+        self.default_voltage_slice = "1"     # 1 = todo o período disponível no Data Lake
+        self.default_voltage_feeder_choice = "1"  # 1 = todos os alimentadores
 
     @property
     def input_file(self) -> Path:
@@ -376,21 +379,48 @@ class RichPipelineTUI:
             )
             return
 
-        console.print("Modos de Treinamento Disponíveis:")
-        console.print("  [1] Modelo Composto Multi-Técnica (IsoForest + LOF + ECOD + PCA + Regras)")
-        console.print("  [2] Mistura de Especialistas (MoE Router)")
-        console.print("  [3] Modelo Baseline (Isolation Forest + KMeans)")
-        console.print("  [4] ⚡ Classificador de Perturbações & Desbalanceamento de Tensão (PRODIST M8)")
-        console.print("  [5] 🏛️ Registro & Governança de Modelos (Listar, Auditar e Comparar Versões)")
+        console.print("[bold white]Hierarquia & Ordem de Treinamento dos Modelos de IA:[/bold white]\n")
 
-        mode_choice = Prompt.ask("Escolha o modelo para treinamento", choices=["1", "2", "3", "4", "5"], default="4")
+        console.print("[bold yellow]── NÍVEL 1: MODELO FÍSICO DA REDE (Sinal & Qualidade de Energia) ──[/bold yellow]")
+        console.print("  [bold white][1][/bold white] ⚡ Classificador de Perturbações de Tensão (PRODIST M8 / IEEE 1159)")
+        console.print("      [dim]• Classificação física da onda (afundamento, elevação, faltas, desbalanceamento)[/dim]\n")
 
-        if mode_choice == "4":
+        console.print("[bold yellow]── NÍVEL 2: MODELOS COMPORTAMENTAIS DA UC (Matriz UC × Cutoff) ──[/bold yellow]")
+        console.print("  [bold white][2][/bold white] 🌍 Modelo Global Âncora (População Copel Araucária Completa)")
+        console.print("      [dim]• Comitê Composto (IsoForest 0.3 + LOF 0.25 + ECOD 0.25 + PCA 0.20 + Bônus Físico)[/dim]")
+        console.print("  [bold white][3][/bold white] 🔌 Especialistas Locais por Alimentador (Fonte Nova, Angélica, CSN...)")
+        console.print("      [dim]• Modelos especialistas dedicados às peculiaridades de cada circuito elétrico[/dim]")
+        console.print("  [bold white][4][/bold white] 🔀 Mistura Hierárquica de Especialistas (MoE Router)")
+        console.print("      [dim]• Roteamento inteligente adaptativo: Especialista do Alimentador vs Modelo Global[/dim]")
+        console.print("  [bold white][5][/bold white] 🎯 Pipeline Especialista Multi-Visão (Comunicação, Elétrica, Fraude & Clusters)")
+        console.print("      [dim]• Decomposição explícita em escores S_comm, S_elec, S_tamper e diagnóstico operacional[/dim]\n")
+
+        console.print("[bold yellow]── NÍVEL 3: REFERÊNCIA BASELINE, PIPELINE COMPLETO & GOVERNANÇA ──[/bold yellow]")
+        console.print("  [bold white][6][/bold white] 📊 Modelo Baseline de Referência (Isolation Forest + KMeans)")
+        console.print("  [bold white][7][/bold white] 🚀 Treinamento Completo em Cadeia (Pipeline Hierárquico Ponta a Ponta)")
+        console.print("      [dim]• Executa todos os níveis na ordem ideal: Tensão → Global → Especialistas → MoE[/dim]")
+        console.print("  [bold white][8][/bold white] 🏛️ Registro & Governança de Modelos (Model Registry)")
+
+        mode_choice = Prompt.ask("\nEscolha a etapa de treinamento", choices=["1", "2", "3", "4", "5", "6", "7", "8"], default="1")
+
+        if mode_choice == "1":
             self.train_voltage_classifier()
             return
 
-        if mode_choice == "5":
+        if mode_choice == "8":
             self.manage_model_registry()
+            return
+
+        # Para as opções 2 a 7, valida existência do dataset de features da UC
+        if not self.input_file.exists():
+            console.print(
+                Panel(
+                    f"[bold red]Dataset de treinamento não encontrado em {self.input_file}.[/bold red]\n"
+                    "Por favor, selecione a [bold yellow]Opção 1[/bold yellow] para gerar o dataset primeiro.",
+                    title="Erro de Pré-requisito",
+                    border_style="red",
+                )
+            )
             return
 
         contam = FloatPrompt.ask("Taxa de Contaminação (Contamination) [0.001 - 0.50]", default=self.contamination)
@@ -455,8 +485,9 @@ class RichPipelineTUI:
 
         feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
 
-        if mode_choice == "1":
-            console.print("\n[bold yellow][*] Treinando Modelo Composto Multi-Técnica no conjunto de TREINO...[/bold yellow]")
+        # ── Opção 2 ou parte da Cadeia: Modelo Global Âncora ─────────────
+        if mode_choice in ("2", "7"):
+            console.print("\n[bold yellow][*] Treinando Modelo Global Âncora (Comitê Composto) no conjunto de TREINO...[/bold yellow]")
             X_train = split_res.train_df.select(feature_cols).to_numpy()
             detector = CompositeAnomalyDetector(contamination=contam, random_state=self.random_state)
             detector.fit(X_train)
@@ -465,18 +496,22 @@ class RichPipelineTUI:
             X_test = split_res.test_df.select(feature_cols).to_numpy()
             preds = detector.predict_composite(X_test, raw_dataframe=split_res.test_df)
 
+            models_dir = self.base_dir / "models"
+            models_dir.mkdir(parents=True, exist_ok=True)
+            joblib.dump(detector, models_dir / "composite_anomaly_detector.joblib")
+
             n_anom = int(preds["is_anomaly"].sum())
             res_panel = Panel(
-                f"[bold green]✔ Treinamento e Validação Concluídos![/bold green]\n\n"
+                f"[bold green]✔ Treinamento do Modelo Global Âncora Concluído![/bold green]\n\n"
                 f"• Total de Amostras no Teste: [bold white]{split_res.test_df.height:,}[/bold white]\n"
                 f"• Anomalias Identificadas:    [bold red]{n_anom:,} ({n_anom/max(1, split_res.test_df.height):.1%})[/bold red]\n"
-                f"• Score Médio de Consenso:    [bold yellow]{preds['consensus_score'].mean():.4f}[/bold yellow]",
-                title="Resultado do Teste - Modelo Composto",
+                f"• Score Médio de Consenso:    [bold yellow]{preds['consensus_score'].mean():.4f}[/bold yellow]\n"
+                f"• Artefato Salvo em:          [dim]{models_dir / 'composite_anomaly_detector.joblib'}[/dim]",
+                title="Resultado do Teste - Modelo Global Âncora",
                 border_style="green",
             )
             console.print(res_panel)
 
-            # Generate Diagnostic Visualizations
             eval_df = split_res.test_df.with_columns([
                 pl.Series("consensus_score", preds["consensus_score"]),
                 pl.Series("is_anomaly", preds["is_anomaly"]),
@@ -485,14 +520,35 @@ class RichPipelineTUI:
                 pl.Series("ecod_score", preds["ecod_score"]),
                 pl.Series("pca_score", preds["pca_score"]),
             ])
-            plots = generate_diagnostic_plots(eval_df, output_dir=self.base_dir / "output" / "reports" / "figures", title_prefix="Modelo Composto")
+            plots = generate_diagnostic_plots(eval_df, output_dir=self.base_dir / "output" / "reports" / "figures", title_prefix="Modelo Global Âncora")
             if plots:
                 console.print("\n[bold cyan]📊 Gráficos Diagnósticos Gerados com Sucesso:[/bold cyan]")
                 for p_name, p_path in plots.items():
                     console.print(f"  • {p_name}: [underline]{p_path}[/underline]")
 
-        elif mode_choice == "2":
-            console.print("\n[bold yellow][*] Executando Orchestrator MoE (Treinamento Hierárquico)...[/bold yellow]")
+        # ── Opção 3 ou parte da Cadeia: Especialistas por Alimentador ────
+        if mode_choice in ("3", "7"):
+            target_f = None
+            if mode_choice == "3":
+                console.print("\nEscolha o escopo dos especialistas:")
+                console.print("  [1] Todos os alimentadores elétricos cadastrados")
+                console.print("  [2] Alimentador específico (ex: Fonte_Nova)")
+                f_ch = Prompt.ask("Escopo", choices=["1", "2"], default="1")
+                if f_ch == "2":
+                    target_f = Prompt.ask("Nome do Alimentador", default=self.default_feeder)
+
+            console.print(f"\n[bold yellow][*] Treinando Especialistas Locais ({target_f or 'Todos os alimentadores'})...[/bold yellow]")
+            orchestrator = HierarchicalModelOrchestrator(
+                output_dir=self.base_dir,
+                contamination=contam,
+                random_state=self.random_state,
+            )
+            scores_df = orchestrator.train_and_score(split_res.train_df, hierarchy_df=hdf, target_feeder=target_f)
+            console.print("[bold green]✔ Especialistas por Alimentador Treinados com Sucesso![/bold green]")
+
+        # ── Opção 4: Mistura Hierárquica MoE ─────────────────────────────
+        elif mode_choice == "4":
+            console.print("\n[bold yellow][*] Executando Orchestrator MoE (Treinamento Hierárquico Completo)...[/bold yellow]")
             orchestrator = HierarchicalModelOrchestrator(
                 output_dir=self.base_dir,
                 contamination=contam,
@@ -507,6 +563,74 @@ class RichPipelineTUI:
                 for p_name, p_path in plots.items():
                     console.print(f"  • {p_name}: [underline]{p_path}[/underline]")
 
+        # ── Opção 5: Pipeline Multi-Visão ────────────────────────────────
+        elif mode_choice == "5":
+            from src.models.specialized_detectors import MultiViewAnomalyPipeline
+
+            console.print("\n[bold yellow][*] Treinando Pipeline Especialista Multi-Visão (S_comm, S_elec, S_tamper, Clusters)...[/bold yellow]")
+            comm_cols = [c for c in feature_cols if any(k in c.lower() for k in ("coverage", "interval_coverage", "alarm_count", "latency", "gap"))]
+            elec_cols = [c for c in feature_cols if c not in comm_cols and not any(k in c.lower() for k in ("meter_changed", "meter_age"))]
+
+            X_comm = split_res.train_df.select(comm_cols).to_numpy() if comm_cols else np.zeros((split_res.train_df.height, 1))
+            X_elec = split_res.train_df.select(elec_cols).to_numpy() if elec_cols else np.zeros((split_res.train_df.height, 1))
+
+            data_qual = split_res.train_df["meta__data_quality"].to_numpy() if "meta__data_quality" in split_res.train_df.columns else np.ones(split_res.train_df.height)
+            tamper_al = split_res.train_df["x__alarm_count_window"].to_numpy() if "x__alarm_count_window" in split_res.train_df.columns else np.zeros(split_res.train_df.height)
+            fa_slopes = split_res.train_df["x__trend_fa_slope"].to_numpy() if "x__trend_fa_slope" in split_res.train_df.columns else None
+            m_changed = split_res.train_df["x__meter_changed_30d"].to_numpy() if "x__meter_changed_30d" in split_res.train_df.columns else None
+            uc_ids = split_res.train_df["id__uc_id"].to_list() if "id__uc_id" in split_res.train_df.columns else None
+
+            mv_pipeline = MultiViewAnomalyPipeline(contamination=contam, random_state=self.random_state)
+            scored_mv = mv_pipeline.fit_and_score(
+                X_comm=X_comm,
+                X_elec=X_elec,
+                data_quality=data_qual,
+                tamper_alarms=tamper_al,
+                fa_trend_slopes=fa_slopes,
+                meter_changed_30d=m_changed,
+                raw_dataframe=split_res.train_df,
+                uc_ids=uc_ids,
+            )
+
+            models_dir = self.base_dir / "models"
+            models_dir.mkdir(parents=True, exist_ok=True)
+            joblib.dump(mv_pipeline, models_dir / "specialized_multiview_pipeline.joblib")
+            console.print("[bold green]✔ Pipeline Especialista Multi-Visão Treinado com Sucesso![/bold green]")
+            console.print("\nDiagnóstico Operacional das UCs:")
+            for row in scored_mv["operational_diagnosis"].value_counts().to_dicts():
+                console.print(f"  • {row['operational_diagnosis']}: {row['count']:,} UCs")
+
+        # ── Opção 6: Baseline (Isolation Forest + KMeans) ────────────────
+        elif mode_choice == "6":
+            from sklearn.cluster import KMeans
+            from sklearn.ensemble import IsolationForest
+            from sklearn.impute import SimpleImputer
+            from sklearn.pipeline import make_pipeline
+            from sklearn.preprocessing import RobustScaler
+
+            console.print("\n[bold yellow][*] Treinando Modelo Baseline (Isolation Forest + KMeans)...[/bold yellow]")
+            X_train = split_res.train_df.select(feature_cols).to_numpy()
+            iso_pipe = make_pipeline(SimpleImputer(strategy="median"), RobustScaler(), IsolationForest(n_estimators=200, contamination=contam, random_state=self.random_state))
+            iso_pipe.fit(X_train)
+
+            km_pipe = make_pipeline(SimpleImputer(strategy="median"), RobustScaler(), KMeans(n_clusters=4, random_state=self.random_state))
+            km_pipe.fit(X_train)
+
+            models_dir = self.base_dir / "models"
+            models_dir.mkdir(parents=True, exist_ok=True)
+            joblib.dump(iso_pipe, models_dir / "isolation_forest_pipeline.joblib")
+            joblib.dump(km_pipe, models_dir / "kmeans_clustering_pipeline.joblib")
+            console.print("[bold green]✔ Modelos Baseline (Isolation Forest + KMeans) Treinados e Salvos![/bold green]")
+
+        # ── Finalização da Cadeia (Opção 7) ──────────────────────────────
+        if mode_choice == "7":
+            console.print("\n[bold cyan]🚀 EXECUÇÃO COMPLETA EM CADEIA CONCLUÍDA COM SUCESSO![/bold cyan]")
+            console.print("  ✔ Nível 1: Modelo Físico de Tensão")
+            console.print("  ✔ Nível 2A: Modelo Global Âncora")
+            console.print("  ✔ Nível 2B: Especialistas Locais por Alimentador")
+            console.print("  ✔ Nível 2C: Roteamento Adaptativo MoE")
+            console.print("[bold green]Todos os artefatos foram treinados e versionados em output/models/.[/bold green]")
+
     def train_voltage_classifier(self) -> None:
         """Trains and validates the PRODIST Módulo 8 Voltage Disturbance Classifier with data slice filters and registry."""
         console.print("\n[bold cyan]⚡ TREINAMENTO: CLASSIFICADOR DE PERTURBAÇÕES DE TENSÃO (PRODIST M8)[/bold cyan]\n")
@@ -519,28 +643,51 @@ class RichPipelineTUI:
         meter_hist_file = self.base_dir / "context" / "meter_installation_history.parquet"
         alarms_dir = self.base_dir / "events"
 
+        # 1. Detect Available Dates from Data Lake / Continuity Calendar
+        from src.visualization.continuity import scan_datalake_dates
+
+        records = scan_datalake_dates(self.base_dir, file_type="both")
+        inst_dates = sorted([d for d, info in records.items() if info.get("instantaneous")])
+        if not inst_dates:
+            inst_dates = sorted(list(records.keys()))
+
+        if inst_dates:
+            min_avail = inst_dates[0]
+            max_avail = inst_dates[-1]
+            n_days = len(inst_dates)
+            lake_summary = f"{min_avail.strftime('%d/%m/%Y')} até {max_avail.strftime('%d/%m/%Y')} ({n_days} dias com telemetria identificados no calendário)"
+        else:
+            min_avail = date(2026, 8, 1)
+            max_avail = date.today()
+            lake_summary = "período completo disponível no Data Lake"
+
         # 1. Select Data Slice (Temporal filter)
         console.print("[bold yellow]📅 1. Seleção do Recorte Temporal (Data Slice):[/bold yellow]")
-        console.print("  [1] Todo o período disponível no Data Lake (01/08 a ontem)")
-        console.print("  [2] Últimos 30 dias")
-        console.print("  [3] Últimos 7 dias")
+        console.print(f"  [dim]Período detectado no Data Lake: {lake_summary}[/dim]")
+        console.print(f"  [1] Todo o período disponível no Data Lake ({min_avail.strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')}) [Padrão]")
+        d30 = max_avail - timedelta(days=30)
+        d7 = max_avail - timedelta(days=7)
+        console.print(f"  [2] Últimos 30 dias com dados ({max(min_avail, d30).strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
+        console.print(f"  [3] Últimos 7 dias com dados ({max(min_avail, d7).strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
         console.print("  [4] Intervalo Personalizado (Data Início → Data Fim)")
-        slice_choice = Prompt.ask("Escolha o recorte temporal", choices=["1", "2", "3", "4"], default="1")
+        slice_choice = Prompt.ask("Escolha o recorte temporal", choices=["1", "2", "3", "4"], default=self.default_voltage_slice)
 
         start_date: date | None = None
         end_date: date | None = None
-        today = date.today()
-        yesterday = today - timedelta(days=1)
 
-        if slice_choice == "2":
-            start_date = today - timedelta(days=30)
-            end_date = yesterday
+        if slice_choice == "1":
+            # Período completo: None/None lê todas as partições existentes no disco, sem truncar em 'ontem'
+            start_date = None
+            end_date = None
+        elif slice_choice == "2":
+            start_date = max(min_avail, d30)
+            end_date = max_avail
         elif slice_choice == "3":
-            start_date = today - timedelta(days=7)
-            end_date = yesterday
+            start_date = max(min_avail, d7)
+            end_date = max_avail
         elif slice_choice == "4":
-            s_str = Prompt.ask("Data Inicial (AAAA-MM-DD)", default="2026-08-01")
-            e_str = Prompt.ask("Data Final (AAAA-MM-DD)", default=yesterday.isoformat())
+            s_str = Prompt.ask("Data Inicial (AAAA-MM-DD)", default=min_avail.isoformat())
+            e_str = Prompt.ask("Data Final (AAAA-MM-DD)", default=max_avail.isoformat())
             try:
                 start_date = date.fromisoformat(s_str)
                 end_date = date.fromisoformat(e_str)
@@ -552,13 +699,15 @@ class RichPipelineTUI:
         console.print("\n[bold yellow]🔌 2. Filtro por Alimentador Elétrico:[/bold yellow]")
         console.print("  [1] Todos os alimentadores de Araucária (Recomendado)")
         console.print("  [2] Alimentador específico (ex: Fonte_Nova, Angelica, CSN...)")
-        feeder_choice = Prompt.ask("Escolha", choices=["1", "2"], default="1")
+        feeder_choice = Prompt.ask("Escolha", choices=["1", "2"], default=self.default_voltage_feeder_choice)
         feeder_name: str | None = None
         if feeder_choice == "2":
             feeder_name = Prompt.ask("Nome do Alimentador", default=self.default_feeder)
 
-        # 3. Max Samples
-        max_samples = IntPrompt.ask("\nLimite máximo de amostras para treino", default=200000)
+        # 3. Max Samples (0 = usar todas as amostras / desabilitar limite)
+        console.print("\n[bold yellow]🔢 3. Limite Máximo de Amostras para Treino:[/bold yellow]")
+        console.print("  [dim]Defina 0 (zero) para desabilitar o limite e utilizar 100% dos dados disponíveis.[/dim]")
+        max_samples = IntPrompt.ask("Limite de amostras (0 = sem limite / usar tudo)", default=self.default_voltage_max_samples)
 
         console.print("\n[*] Carregando telemetria e contexto elétrico correspondente...")
         hierarchy_df = pl.read_parquet(hierarchy_file) if hierarchy_file.exists() else None
@@ -568,20 +717,56 @@ class RichPipelineTUI:
             end_date=end_date,
             feeder_name=feeder_name,
             hierarchy_df=hierarchy_df,
+            sample_quota_total=max_samples,
+            random_state=self.random_state,
         )
         context_df = pl.read_parquet(context_file) if context_file.exists() else None
         meter_history_df = pl.read_parquet(meter_hist_file) if meter_hist_file.exists() else None
         alarms_df = load_alarms_data(alarms_dir)
 
-        if not inst_df.is_empty() and "UC" not in inst_df.columns and "NIO" in inst_df.columns:
-            if meter_history_df is not None and "NIO" in meter_history_df.columns and "UC" in meter_history_df.columns:
-                nio_to_uc = meter_history_df.select(["NIO", "UC"]).unique(subset=["NIO"])
-                inst_df = inst_df.join(nio_to_uc, on="NIO", how="left")
-                console.print("[dim][*] Telemetria enriquecida com identificador de UC.[/dim]")
+        # Enriquecimento robusto de UC normalizando NIOs
+        if not inst_df.is_empty():
+            mapping_dfs = []
+            for ref_df in [meter_history_df, hierarchy_df]:
+                if ref_df is not None and not ref_df.is_empty() and "NIO" in ref_df.columns and "UC" in ref_df.columns:
+                    m = (
+                        ref_df.select(["NIO", "UC"])
+                        .drop_nulls()
+                        .with_columns([
+                            pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("CLEAN_NIO"),
+                            pl.col("UC").cast(pl.String).str.strip_chars().alias("MAPPED_UC"),
+                        ])
+                        .filter(pl.col("CLEAN_NIO") != "")
+                        .unique(subset=["CLEAN_NIO"])
+                    )
+                    mapping_dfs.append(m)
 
-        if not inst_df.is_empty() and inst_df.height > max_samples:
-            console.print(f"[*] Amostrando {max_samples:,} de {inst_df.height:,} medições...")
-            inst_df = inst_df.sample(n=max_samples, seed=self.random_state)
+            if mapping_dfs and "NIO" in inst_df.columns:
+                full_map = pl.concat(mapping_dfs).unique(subset=["CLEAN_NIO"])
+                inst_clean = inst_df.with_columns(
+                    pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("CLEAN_NIO")
+                )
+                if "UC" in inst_clean.columns:
+                    inst_clean = inst_clean.drop("UC")
+                inst_df = (
+                    inst_clean.join(full_map.select(["CLEAN_NIO", "MAPPED_UC"]), on="CLEAN_NIO", how="left")
+                    .with_columns(
+                        pl.coalesce([pl.col("MAPPED_UC"), pl.col("CLEAN_NIO"), pl.col("NIO").cast(pl.String)]).alias("UC")
+                    )
+                    .drop(["CLEAN_NIO", "MAPPED_UC"])
+                )
+                n_ucs = inst_df.select(pl.col("UC").n_unique()).item()
+                console.print(f"[dim][*] Telemetria enriquecida com identificador de UC ({n_ucs:,} UCs distintas identificadas).[/dim]")
+            elif "NIO" in inst_df.columns and "UC" not in inst_df.columns:
+                inst_df = inst_df.with_columns(pl.col("NIO").cast(pl.String).alias("UC"))
+
+        # Amostragem condicional (apenas se max_samples > 0)
+        if not inst_df.is_empty():
+            if max_samples and max_samples > 0 and inst_df.height > max_samples:
+                console.print(f"[*] Amostrando {max_samples:,} de {inst_df.height:,} medições...")
+                inst_df = inst_df.sample(n=max_samples, seed=self.random_state)
+            else:
+                console.print(f"[bold green]✔ Carregadas {inst_df.height:,} medições homogeneamente distribuídas entre os dias do calendário (100% estável em RAM).[/bold green]")
 
         if inst_df.is_empty():
             console.print("[bold yellow]Aviso: Nenhuma telemetria instantânea encontrada no intervalo. Gerando benchmark PRODIST...[/bold yellow]")
@@ -614,26 +799,34 @@ class RichPipelineTUI:
             dist_table.add_row(r["BASELINE_VOLTAGE_LABEL"], f"{cnt:,}", f"{cnt/total_rows:.1%}")
         console.print(dist_table)
 
-        # Group Split
+        # Group Split / Estratégia de Particionamento
         uc_col = "UC" if "UC" in labeled_df.columns else labeled_df.columns[0]
-        test_ratio = FloatPrompt.ask("Fração reservada para Teste (Disjoint UC)", default=0.25)
+        console.print("\n[bold cyan]🎯 4. Estratégia de Particionamento & Teste:[/bold cyan]")
+        console.print("  [dim]Padrão Cadastrado: 100% do período de 81 dias alocado para Treinamento (Baseline Oficial).[/dim]")
+        console.print("  [dim]A generalização será avaliada de forma temporal (Out-of-Time) sobre dados futuros/novos.[/dim]")
+        test_ratio = FloatPrompt.ask("Fração reservada para Teste (0.0 = usar 100% para treino padrão)", default=0.0)
         train_df, test_df = group_train_test_split(labeled_df, group_col=uc_col, test_size=test_ratio, random_state=self.random_state)
 
-        console.print(f"[*] Treino: [bold green]{train_df.height:,}[/bold green] amostras | Teste: [bold yellow]{test_df.height:,}[/bold yellow] amostras (sem vazamento de UC).")
+        if test_ratio <= 0.0:
+            console.print(f"[bold green]✔ Treino Padrão (81 dias):[/bold green] [bold white]{train_df.height:,}[/bold white] amostras (100% da base alocada para treino do baseline oficial).")
+            console.print("[dim][*] Estratégia de teste: Validação contínua out-of-time sobre novos dados do calendário.[/dim]")
+        else:
+            console.print(f"[*] Treino: [bold green]{train_df.height:,}[/bold green] amostras | Teste: [bold yellow]{test_df.height:,}[/bold yellow] amostras (sem vazamento de UC).")
 
         # Train model
         console.print("[*] Treinando HistGradientBoosting com pesos balanceados...")
         clf = MLVoltageDisturbanceClassifier(random_state=self.random_state)
         clf.fit(train_df)
 
-        # Evaluate on Test Set
+        # Evaluate Model
         metrics = clf.evaluate(test_df)
+        panel_title = "Consistência Interna do Modelo Padrão (Base de Treino - 81 Dias)" if test_ratio <= 0.0 else "Performance no Conjunto de Teste (Disjoint UC)"
         res_panel = Panel(
             f"[bold green]✔ Classificador de Tensão Treinado com Sucesso![/bold green]\n\n"
-            f"• Acurácia Global (Test Set):  [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white]\n"
+            f"• Acurácia Global:              [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white]\n"
             f"• F1-Score Macro:              [bold yellow]{metrics.get('f1_macro', 0.0):.4f}[/bold yellow]\n"
             f"• F1-Score Ponderado:          [bold cyan]{metrics.get('f1_weighted', 0.0):.4f}[/bold cyan]",
-            title="Performance no Conjunto de Teste",
+            title=panel_title,
             border_style="green",
         )
         console.print(res_panel)
@@ -663,8 +856,10 @@ class RichPipelineTUI:
         # 4. Register in Model Registry
         from src.models.registry import ModelRegistry
         registry = ModelRegistry(self.base_dir / "models" / "registry")
-        tag = Prompt.ask("Tag no Model Registry", choices=["candidate", "production", "baseline"], default="candidate")
-        desc = Prompt.ask("Descrição / Anotação da Versão", default=f"Treino de tensão ({start_date or 'inicio'} a {end_date or 'ontem'})")
+        default_tag = "baseline" if test_ratio <= 0.0 else "candidate"
+        tag = Prompt.ask("Tag no Model Registry", choices=["candidate", "production", "baseline"], default=default_tag)
+        default_desc = f"Padrão de treinamento PRODIST M8 (81 dias: {start_date or '01/08/2026'} a {end_date or '20/10/2026'})" if test_ratio <= 0.0 else f"Treino de tensão ({start_date or 'inicio'} a {end_date or 'fim'})"
+        desc = Prompt.ask("Descrição / Anotação da Versão", default=default_desc)
 
         version_id = registry.register_model(
             model_name="voltage_disturbance_classifier",
@@ -676,7 +871,9 @@ class RichPipelineTUI:
                 "feeder": feeder_name or "TODOS",
                 "total_samples": inst_df.height,
                 "train_samples": train_df.height,
-                "test_samples": test_df.height,
+                "test_samples": 0 if test_ratio <= 0.0 else test_df.height,
+                "test_strategy": "out_of_time_future" if test_ratio <= 0.0 else f"disjoint_uc_{test_ratio:.0%}",
+                "standard_training_baseline": True if test_ratio <= 0.0 else False,
             },
             hyperparameters={
                 "max_iter": clf.max_iter,
@@ -941,7 +1138,27 @@ class RichPipelineTUI:
         fmt_ch = Prompt.ask("Escolha o formato padrão", choices=["1", "2", "3"], default="1" if self.output_format == "both" else ("2" if self.output_format == "csv" else "3"))
         self.output_format = {"1": "both", "2": "csv", "3": "parquet"}[fmt_ch]
 
-        console.print(f"[bold green]✔ Configurações salvas (Formato: {self.output_format.upper()}, Contaminação: {self.contamination:.3f}, Seed: {self.random_state}).[/bold green]")
+        console.print("\nConfigurações de Treinamento de Tensão (PRODIST M8):")
+        self.default_voltage_max_samples = IntPrompt.ask(
+            "Limite Padrão de Amostras de Tensão (0 = usar todas / sem limite)",
+            default=self.default_voltage_max_samples,
+        )
+        self.default_voltage_slice = Prompt.ask(
+            "Recorte Temporal Padrão [1=Todo o período, 2=Últimos 30d, 3=Últimos 7d, 4=Custom]",
+            choices=["1", "2", "3", "4"],
+            default=self.default_voltage_slice,
+        )
+        self.default_feeder = Prompt.ask(
+            "Alimentador Específico Padrão",
+            default=self.default_feeder,
+        )
+
+        console.print(
+            f"[bold green]✔ Configurações salvas (Formato: {self.output_format.upper()}, "
+            f"Contaminação: {self.contamination:.3f}, Seed: {self.random_state}, "
+            f"Max Amostras Tensão: {'Todas (0)' if self.default_voltage_max_samples <= 0 else self.default_voltage_max_samples}, "
+            f"Recorte Tensão: Opção {self.default_voltage_slice}).[/bold green]"
+        )
 
     def run_menu(self) -> None:
         """Main interactive loop."""

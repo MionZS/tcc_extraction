@@ -91,7 +91,6 @@ def test_rule_based_voltage_classifier_cases():
             "UC_BI_FAULT",
             "UC_INTERRUPT",
             "UC_DESBAL",
-            "UC_TELEMETRY_OUT",
         ],
         "FASE_CIRCUITO": [
             "TRIFASICO",
@@ -101,13 +100,12 @@ def test_rule_based_voltage_classifier_cases():
             "TRIFASICO",
             "TRIFASICO",
             "TRIFASICO",
-            "TRIFASICO",
         ],
-        "TENSAO_BASE": [127.0] * 8,
-        "U_L1": [127.0, 95.0, 145.0, 0.0, 0.0, 0.0, 127.0, None],
-        "U_L2": [127.0, 95.0, 145.0, 127.0, 0.0, 0.0, 127.0, None],
-        "U_L3": [127.0, 95.0, 145.0, 127.0, 127.0, 0.0, 118.0, None],
-        "NEIGHBOR_COVERAGE_RATIO": [1.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0, 0.95],
+        "TENSAO_BASE": [127.0] * 7,
+        "U_L1": [127.0, 95.0, 145.0, 0.0, 0.0, 0.0, 127.0],
+        "U_L2": [127.0, 95.0, 145.0, 127.0, 0.0, 0.0, 127.0],
+        "U_L3": [127.0, 95.0, 145.0, 127.0, 127.0, 0.0, 118.0],
+        "NEIGHBOR_COVERAGE_RATIO": [1.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0],
     })
 
     feat_df = extract_voltage_classifier_features(instantaneous_df=inst_df)
@@ -122,7 +120,6 @@ def test_rule_based_voltage_classifier_cases():
     assert labels["UC_BI_FAULT"] == VoltageDisturbanceType.FALTA_BIFASICA.value
     assert labels["UC_INTERRUPT"] == VoltageDisturbanceType.INTERRUPCAO_TOTAL.value
     assert labels["UC_DESBAL"] == VoltageDisturbanceType.DESBALANCEAMENTO_CRITICO.value
-    assert labels["UC_TELEMETRY_OUT"] == VoltageDisturbanceType.DESCONEXAO_TELEMETRIA.value
 
 
 def test_group_train_test_split():
@@ -131,6 +128,12 @@ def test_group_train_test_split():
         "VAL": [1, 2, 3, 4, 5, 6, 7, 8],
     })
 
+    # 1. Standard canonical baseline split (100% train, test_size=0.0)
+    train_full, test_full = group_train_test_split(df, group_col="UC", test_size=0.0)
+    assert train_full.height == df.height
+    assert test_full.height == df.height
+
+    # 2. Disjoint UC partition split (test_size > 0.0)
     train_df, test_df = group_train_test_split(df, group_col="UC", test_size=0.25, random_state=42)
 
     train_ucs = set(train_df.get_column("UC").to_list())

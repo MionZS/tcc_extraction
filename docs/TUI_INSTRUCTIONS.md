@@ -58,12 +58,18 @@ Selecione uma opção do Menu Principal:
 - **O que faz**: Executa a divisão estrita de dados (`DatasetSplitter`), separando alimentadores por similaridade de circuitos elétricos em conjuntos de **Treino**, **Validação** e **Teste**.
 - **Controle de Período Temporal de Treinamento**:
   - Permite selecionar se o treinamento utilizará todo o histórico ou um **período específico** (Data Inicial e Data Final), com amostragem balanceada e sem vazamento de UCs.
-- **Modelos e Governança Suportados**:
-  1. Modelo Composto Multi-Técnica (IsoForest + LOF + ECOD + PCA + Regras PRODIST).
-  2. Mistura de Especialistas (MoE Router - Alimentador vs Regional vs Global).
-  3. Baseline (Isolation Forest + KMeans).
-  4. **⚡ Classificador de Perturbações de Tensão (PRODIST M8)**: Permite selecionar o recorte temporal dos dados (todo o período, últimos 30 dias, últimos 7 dias ou intervalo customizado) e o alimentador elétrico alvo. Registra automaticamente a versão no repositório com metadados completos.
-  5. **🏛️ Registro & Governança de Modelos (Model Registry)**: Lista todas as versões treinadas com tags, acurácia, F1-Score e períodos, e permite comparar duas versões lado a lado ($\Delta$ de performance).
+- **Hierarquia & Ordem de Treinamento (3 Níveis Estruturados)**:
+  - **Nível 1 (Físico da Rede / Qualidade de Energia)**:
+    1. **⚡ Classificador de Perturbações de Tensão (PRODIST M8 / IEEE 1159)**: Classificação física multiclasse (Sag, Swell, Desbalanço, Faltas Monofásica/Bifásica, Blackout) com amostragem diária homogênea e sem risco de OOM.
+  - **Nível 2 (Modelos Comportamentais da UC — Matriz $UC \times \text{cutoff}$)**:
+    2. **🌍 Modelo Global Âncora**: Comitê Composto (IsoForest + LOF + ECOD + PCA + Regras PRODIST).
+    3. **🔌 Especialistas Locais por Alimentador**: Treinamento dedicado para cada circuito elétrico (Fonte Nova, Angélica, etc.).
+    4. **🔀 Mistura Hierárquica de Especialistas (MoE Router)**: Roteamento inteligente adaptativo (Especialista vs Global).
+    5. **🎯 Pipeline Especialista Multi-Visão**: Decomposição em escores $S_{comm}$, $S_{elec}$, $S_{tamper}$ e diagnóstico operacional por UC.
+  - **Nível 3 (Referência, Cadeia Completa & Governança)**:
+    6. **📊 Modelo Baseline de Referência**: Isolation Forest + KMeans.
+    7. **🚀 Treinamento Completo em Cadeia**: Executa todos os níveis na sequência ideal (Físico → Global → Especialistas → MoE).
+    8. **🏛️ Registro & Governança de Modelos (Model Registry)**: Catálogo versionado com auditoria e comparação lado a lado.
 
 #### 📊 Opção [3]: Visualizar Estatísticas do Data Lake
 - Exibe tabelas formatadas com Rich mostrando:

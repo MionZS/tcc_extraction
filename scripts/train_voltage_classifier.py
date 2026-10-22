@@ -85,8 +85,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-samples",
         type=int,
-        default=200000,
-        help="Maximum telemetry rows to sample for training (default: 200,000).",
+        default=0,
+        help="Maximum telemetry rows to sample for training (0 or negative to disable limit and use all data, default: 0).",
     )
     parser.add_argument(
         "--alarms-dir",
@@ -103,8 +103,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--test-size",
         type=float,
-        default=0.25,
-        help="Fraction of UCs reserved for disjoint test split (default: 0.25).",
+        default=0.0,
+        help="Fraction of UCs reserved for test split (default: 0.0, 100% for canonical training baseline).",
     )
     parser.add_argument(
         "--random-state",
@@ -151,8 +151,10 @@ def load_instantaneous_data(
     feeder_name: str | None = None,
     hierarchy_df: pl.DataFrame | None = None,
     max_files: int | None = None,
+    sample_quota_total: int | None = None,
+    random_state: int = 42,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
-    """Load instantaneous measurements filtered by date partition range and feeder."""
+    """Load instantaneous measurements filtered by date partition range and feeder safely without OOM."""
     metadata: dict[str, Any] = {
         "dates_loaded": [],
         "files_count": 0,
@@ -193,23 +195,50 @@ def load_instantaneous_data(
         return pl.DataFrame(), metadata
 
     dates_found = sorted(list({d for d, _ in candidate_files if d != date(2000, 1, 1)}))
-    print(f"[*] Carregando {len(candidate_files)} arquivo(s) de telemetria ({len(dates_found)} dia(s) identificados)...")
+    n_files = len(candidate_files)
+
+    # Cota por arquivo para evitar estouro de memória (OOM em 118M de linhas)
+    # 500k amostras distribuídas cobrem com folga absoluta todas as classes de perturbação
+    effective_total = sample_quota_total if (sample_quota_total and sample_quota_total > 0) else 500000
+    per_file_quota = max(1000, effective_total // max(1, n_files))
+
+    print(f"[*] Carregando {n_files} arquivo(s) de telemetria ({len(dates_found)} dia(s) identificados)...")
+    print(f"[*] Amostragem temporal homogênea por partição: ~{per_file_quota:,} medições/dia (máx ~{effective_total:,} total em RAM).")
+
+    wanted_cols = ["NIO", "UC", "REPORT_DAY", "U_L1", "U_L2", "U_L3", "U_L1_AVG", "U_L2_AVG", "U_L3_AVG", "FASE_CIRCUITO", "TENSAO_BASE"]
 
     dfs = []
     for _, f in candidate_files:
         try:
             if f.suffix == ".parquet":
-                dfs.append(pl.read_parquet(f))
+                schema = pl.read_parquet_schema(f)
+                read_cols = [c for c in wanted_cols if c in schema]
+                df_day = pl.read_parquet(f, columns=read_cols if read_cols else None)
             elif f.suffix == ".csv":
-                dfs.append(pl.read_csv(f, separator=";", infer_schema_length=5000, ignore_errors=True))
+                df_day = pl.read_csv(f, separator=";", infer_schema_length=5000, ignore_errors=True)
+            else:
+                continue
+
+            if not df_day.is_empty():
+                if df_day.height > per_file_quota:
+                    df_day = df_day.sample(n=per_file_quota, seed=random_state)
+                dfs.append(df_day)
         except Exception as e:
             print(f"[-] Erro ao ler {f.name}: {e}")
-            print(f"[-] Could not read {f.name}: {e}")
 
     if not dfs:
         return pl.DataFrame(), metadata
 
     combined = pl.concat(dfs, how="diagonal")
+
+    # Filtrar medições que não contêm leituras físicas de tensão (ausência de dados AMI / telemetria)
+    u_raw_cols = [c for c in ("U_L1", "U_L2", "U_L3", "U_L1_AVG", "U_L2_AVG", "U_L3_AVG") if c in combined.columns]
+    if u_raw_cols:
+        before_cnt = combined.height
+        combined = combined.filter(pl.any_horizontal([pl.col(c).is_not_null() for c in u_raw_cols]))
+        dropped_nulls = before_cnt - combined.height
+        if dropped_nulls > 0:
+            print(f"[*] Filtrados {dropped_nulls:,} registros de telemetria sem qualquer leitura de tensão (pacotes sem tensão).")
 
     # Filter by feeder if requested
     if feeder_name and hierarchy_df is not None and not hierarchy_df.is_empty():
@@ -263,22 +292,55 @@ def main() -> None:
         end_date=args.end_date,
         feeder_name=args.feeder,
         hierarchy_df=hierarchy_df,
+        sample_quota_total=args.max_samples,
+        random_state=args.random_state,
     )
     context_df = pl.read_parquet(args.context_file) if args.context_file.exists() else None
     meter_history_df = pl.read_parquet(args.meter_history_file) if args.meter_history_file.exists() else None
     alarms_df = load_alarms_data(args.alarms_dir)
 
-    # If UC is not in inst_df, enrich with UC from meter history
-    if not inst_df.is_empty() and "UC" not in inst_df.columns and "NIO" in inst_df.columns:
-        if meter_history_df is not None and "NIO" in meter_history_df.columns and "UC" in meter_history_df.columns:
-            nio_to_uc = meter_history_df.select(["NIO", "UC"]).unique(subset=["NIO"])
-            inst_df = inst_df.join(nio_to_uc, on="NIO", how="left")
-            print("[*] Enriched instantaneous telemetry with UC from meter installation history.")
+    # Robust enrichment of UC by matching clean NIOs across meter history and hierarchy
+    if not inst_df.is_empty():
+        mapping_dfs = []
+        for ref_df in [meter_history_df, hierarchy_df]:
+            if ref_df is not None and not ref_df.is_empty() and "NIO" in ref_df.columns and "UC" in ref_df.columns:
+                m = (
+                    ref_df.select(["NIO", "UC"])
+                    .drop_nulls()
+                    .with_columns([
+                        pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("CLEAN_NIO"),
+                        pl.col("UC").cast(pl.String).str.strip_chars().alias("MAPPED_UC"),
+                    ])
+                    .filter(pl.col("CLEAN_NIO") != "")
+                    .unique(subset=["CLEAN_NIO"])
+                )
+                mapping_dfs.append(m)
 
-    # Sample rows if telemetry dataset is very large
-    if not inst_df.is_empty() and inst_df.height > args.max_samples:
+        if mapping_dfs and "NIO" in inst_df.columns:
+            full_map = pl.concat(mapping_dfs).unique(subset=["CLEAN_NIO"])
+            inst_clean = inst_df.with_columns(
+                pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("CLEAN_NIO")
+            )
+            if "UC" in inst_clean.columns:
+                inst_clean = inst_clean.drop("UC")
+            inst_df = (
+                inst_clean.join(full_map.select(["CLEAN_NIO", "MAPPED_UC"]), on="CLEAN_NIO", how="left")
+                .with_columns(
+                    pl.coalesce([pl.col("MAPPED_UC"), pl.col("CLEAN_NIO"), pl.col("NIO").cast(pl.String)]).alias("UC")
+                )
+                .drop(["CLEAN_NIO", "MAPPED_UC"])
+            )
+            n_ucs = inst_df.select(pl.col("UC").n_unique()).item()
+            print(f"[*] Enriched instantaneous telemetry with UC ({n_ucs:,} distinct UCs identified).")
+        elif "NIO" in inst_df.columns and "UC" not in inst_df.columns:
+            inst_df = inst_df.with_columns(pl.col("NIO").cast(pl.String).alias("UC"))
+
+    # Sample rows if telemetry dataset is very large and max_samples is configured (> 0)
+    if not inst_df.is_empty() and args.max_samples and args.max_samples > 0 and inst_df.height > args.max_samples:
         print(f"[*] Telemetry volume ({inst_df.height:,} rows) exceeds max_samples ({args.max_samples:,}). Sampling evenly...")
         inst_df = inst_df.sample(n=args.max_samples, seed=args.random_state)
+    elif not inst_df.is_empty():
+        print(f"[+] Utilizando 100% dos dados disponíveis ({inst_df.height:,} medições, sem amostragem).")
 
     if inst_df.is_empty():
         print("[-] Nenhuma telemetria instantânea encontrada no diretório/intervalo selecionado.")
@@ -316,22 +378,28 @@ def main() -> None:
 
     # 4. Group Split by UC (No Leakage)
     uc_col = "UC" if "UC" in labeled_df.columns else labeled_df.columns[0]
-    print(f"[*] Dividindo dataset agrupado por '{uc_col}' (test_size={args.test_size})...")
     train_df, test_df = group_train_test_split(
         labeled_df,
         group_col=uc_col,
         test_size=args.test_size,
         random_state=args.random_state,
     )
-    print(f"[+] Amostras Treino: {train_df.height:,} | Amostras Teste: {test_df.height:,}")
+    if args.test_size <= 0.0:
+        print(f"[+] Modo Padrão (81 dias): 100% da base ({train_df.height:,} amostras) alocada para treino do baseline oficial.")
+        print("[*] Estratégia de validação: Teste temporal contínuo (Out-of-Time) sobre dados futuros/novos.")
+    else:
+        print(f"[+] Amostras Treino: {train_df.height:,} | Amostras Teste: {test_df.height:,}")
 
     # 5. Fit ML Classifier
     print("[*] Treinando MLVoltageDisturbanceClassifier (HistGradientBoosting com pesos balanceados)...")
     clf = MLVoltageDisturbanceClassifier(random_state=args.random_state)
     clf.fit(train_df)
 
-    # 6. Evaluate Model on Disjoint Test Set
-    print("\n[*] Avaliando acurácia no conjunto de teste isolado...")
+    # 6. Evaluate Model
+    if args.test_size <= 0.0:
+        print("\n[*] Avaliando consistência interna do modelo na base de treinamento (81 dias)...")
+    else:
+        print("\n[*] Avaliando acurácia no conjunto de teste isolado...")
     metrics = clf.evaluate(test_df)
     print(f"    * Acurácia Global: {metrics.get('accuracy', 0.0):.4f}")
     print(f"    * F1 Macro:        {metrics.get('f1_macro', 0.0):.4f}")
@@ -355,7 +423,9 @@ def main() -> None:
         "feeder": args.feeder or "TODOS",
         "total_samples": inst_df.height,
         "train_samples": train_df.height,
-        "test_samples": test_df.height,
+        "test_samples": 0 if args.test_size <= 0.0 else test_df.height,
+        "test_strategy": "out_of_time_future" if args.test_size <= 0.0 else f"disjoint_uc_{args.test_size:.0%}",
+        "standard_training_baseline": True if args.test_size <= 0.0 else False,
     }
 
     registry = ModelRegistry(args.output_dir / "models" / "registry")

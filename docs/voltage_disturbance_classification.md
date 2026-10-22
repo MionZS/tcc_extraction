@@ -44,46 +44,34 @@ A arquitetura segmenta os dados faltantes em **três categorias físicas bem del
 
 ```
                               ┌────────────────────────────────────────┐
-                              │    Ausência de Medição de Tensão      │
-                              └───────────────────┬────────────────────┘
-                                                  │
-             ┌────────────────────────────────────┼────────────────────────────────────┐
-             │                                    │                                    │
-    ┌────────▼─────────┐                 ┌────────▼─────────┐                 ┌────────▼─────────┐
-    │ Null Estrutural  │                 │  Medição 0.0V    │                 │ Ausência Total   │
-    │ (Fase não existe)│                 │ (Telemetria ok)  │                 │  de Telemetria   │
-    └────────┬─────────┘                 └────────┬─────────┘                 └────────┬─────────┘
-             │                                    │                                    │
-    `IS_ACTIVE_L1..L3`                    `IS_ZERO_L1..L3`                     Verifica Trafo & Alarmes
-    (Contexto da UC:                      (Falta de Fase com                   `NEIGHBOR_COVERAGE_RATIO`
-     Monofásica/Bifásica)                  medidor energizado)                  + `HAS_POWER_ALARM`
-                                                                                       │
-                                                                     ┌─────────────────┴─────────────────┐
-                                                                     │                                   │
-                                                            <= 30% (Apagão Geral)               > 50% (Falha Comunicação)
-                                                           `INTERRUPCAO_TOTAL`                `DESCONEXAO_TELEMETRIA`
+                              │               ┌────────────────────────────────────┴────────────────────────────────────┐
+             │                                                                         │
+    ┌────────▼─────────┐                                                      ┌────────▼─────────┐
+    │ Null Estrutural  │                                                      │  Medição 0.0V    │
+    │ (Fase não existe)│                                                      │ (Falta de Fase)  │
+    └────────┬─────────┘                                                      └────────┬─────────┘
+             │                                                                         │
+    `IS_ACTIVE_L1..L3`                                                         `IS_ZERO_L1..L3`
+    (Contexto da UC:                                                           (Tensão <= 5.0V com
+     Monofásica/Bifásica)                                                       medidor energizado)
 ```
 
 ### 3.1. Null Estrutural (Fase Não Existente no Cadastro)
 - **Causa:** Uma UC **monofásica** possui fisicamente apenas a fase $L1$ conectada; os canais $L2$ e $L3$ constarão como nulos no MDM. Uma UC **bifásica** não possui a fase $L3$.
-- **Tratamento:** A função `extract_voltage_classifier_features()` cruza a medição com o cadastro estático da UC (`FASE_CIRCUITO` em `uc_context`). Cria os flags booleanos:
+- **Tratamento:** A função `extract_voltage_classifier_features()` cruza a medição com o cadastro estático da UC (`FASE_CIRCUITO` em `uc_context`) ou infere a ativação a partir das leituras físicas presentes por linha. Cria os flags booleanos:
   - `IS_ACTIVE_L1`, `IS_ACTIVE_L2`, `IS_ACTIVE_L3`
   - Fases estruturalmente inativas são descartadas do cálculo de desbalanceamento e não contam como "falta de energia".
 
-### 3.2. Medição Zero ($V \approx 0.0\text{V}$) com Telemetria Ativa
-- **Causa:** O medidor está energizado por outra fase (ou pelo capacitor interno) e transmitindo dados normalmente, mas uma ou duas fases registram valor próximo de zero ($\le 5\text{V}$).
+### 3.2. Medição Zero ($V \le 5.0\text{V}$) com Medidor Energizado
+- **Causa:** O medidor está energizado por outra fase (ou por bateria/capacitor) e transmitindo dados normalmente, mas uma ou duas fases registram valor próximo de zero ($\le 5\text{V}$).
 - **Tratamento:** Criação dos indicadores `IS_ZERO_L1`, `IS_ZERO_L2`, `IS_ZERO_L3`.
-  - Se 1 de 3 fases ativas estiver zerada $\rightarrow$ `FALTA_MONOFASICA` (ex.: queima de fusível em ramal).
+  - Se 1 de 2 ou 3 fases ativas estiver zerada $\rightarrow$ `FALTA_MONOFASICA` (ex.: queima de fusível em ramal).
   - Se 2 de 3 fases ativas estiverem zeradas $\rightarrow$ `FALTA_BIFASICA`.
+  - Se todas as fases ativas estiverem zeradas $\rightarrow$ `INTERRUPCAO_TOTAL` (queda física de energia na UC).
 
-### 3.3. Ausência Total de Telemetria (Pacotes Nulos / "Caiu Tudo")
-- **Causa:** Nenhuma medição chega para o medidor. Isso pode indicar tanto **interrupção física da rede (queda geral de energia)** quanto **falha de comunicação (GPRS/Mesh fora do ar com a rede elétrica normal)**.
-- **Tratamento Multidimensional (Física + Vizinhança + Eventos):**
-  O classificador cruza as medições com o contexto espacial e operacional da rede:
-  1. **Topologia de Vizinhança (`NEIGHBOR_COVERAGE_RATIO`):** Calculado a partir de `src/features/neighborhood.py`, mede a proporção de vizinhos no mesmo posto transformador (`POSTO_OPERACIONAL`) que conseguiram transmitir pacotes no período.
-     - Se `NEIGHBOR_COVERAGE_RATIO <= 0.3` (a maioria dos vizinhos também parou de transmitir) $\rightarrow$ **Falta física coletiva na rede (`INTERRUPCAO_TOTAL`)**.
-     - Se `NEIGHBOR_COVERAGE_RATIO > 0.5` (a vizinhança continua transmitindo normalmente) $\rightarrow$ **Falha isolada de comunicação (`DESCONEXAO_TELEMETRIA`)**.
-  2. **Alarmes de Operação (`HAS_POWER_ALARM`):** Presença de alarmes de último suspiro (*last gasp* / *power failure*) registrados em `alarm_events`. Se houver alarme registrado no instante do apagão, confirma-se o evento de rede.
+### 3.3. Segregação de Domínio: Telemetria Ausente vs. Qualidade da Tensão PRODIST M8
+- **Separação Arquitetural:** Pacotes de telemetria sem medições de tensão (ausência de dados de telecomunicação) pertencem ao domínio de **Saúde da Infraestrutura AMI e Redes de Telecomunicação ($S_{comm}$ no Multi-View)**.
+- O classificador PRODIST Módulo 8 foca com precisão matemática nas **perturbações físicas da onda de tensão**. Registros sem medição de tensão são descartados antes do treinamento físico, evitando contaminação da qualidade de energia por artefatos de comunicação.
 
 ---
 
@@ -104,11 +92,21 @@ Onde $\text{TENSAO\_BASE}$ é obtida diretamente do cadastro da UC (`uc_context.
 | **`NORMAL`** | Fornecimento adequado e equilibrado | $0.93 \le V_{\text{pu}} \le 1.05$ em todas as fases ativas e $V_{\text{imb}} < 2\%$ |
 | **`SUBTENSAO`** | Afundamento de tensão (*voltage sag*) | $0.05 < V_{\text{pu}} < 0.90$ em uma ou mais fases ativas |
 | **`SOBRETENSAO`** | Elevação de tensão (*voltage swell*) | $V_{\text{pu}} > 1.05$ em uma ou mais fases |
-| **`FALTA_MONOFASICA`** | Queda total em apenas 1 fase | 1 fase ativa com $V \approx 0\text{V}$, demais fases normais |
-| **`FALTA_BIFASICA`** | Queda total em 2 fases | 2 fases ativas com $V \approx 0\text{V}$, 1 fase normal |
-| **`INTERRUPCAO_TOTAL`** | Apagão ou desligamento geral da UC/rede | Todas as fases ativas em $0\text{V}$ OU ausência total com vizinhos afetados / alarme |
-| **`DESBALANCEAMENTO_CRITICO`** | Assimetria severa inter-fases | $V_{\text{imb}} \ge 2\%$ com tensões $\ge 0.90 \text{ p.u.}$ |
-| **`DESCONEXAO_TELEMETRIA`** | Perda de comunicação/sinal | Medições ausentes enquanto vizinhos do mesmo trafo operam normalmente |
+| **`FALTA_MONOFASICA`** | Queda total em apenas 1 fase | 1 fase ativa com $V \le 5\text{V}$, demais fases operacionais |
+| **`FALTA_BIFASICA`** | Queda total em 2 fases | 2 fases ativas com $V \le 5\text{V}$, 1 fase operacional |
+| **`INTERRUPCAO_TOTAL`** | Apagão ou desligamento geral da UC/rede | Todas as fases ativas em $0\text{V}$ OU alarme *Last Gasp* confirmado |
+| **`DESBALANCEAMENTO_CRITICO`** | Assimetria severa inter-fases | $V_{\text{imb}} \ge 3\%$ (PRODIST Seção 8.2) com tensões $\ge 0.90 \text{ p.u.}$ |
+
+---
+
+## 6. Estratégia de Treinamento e Teste (Baseline Canônico de 81 Dias)
+
+### 6.1. Padrão de Treinamento Histórico
+- O período de **81 dias** do Data Lake (01/08/2026 a 20/10/2026) é cadastrado como o **Padrão de Treinamento Oficial (Baseline de Treinamento)**.
+- **100% dos dados desta janela** são utilizados para ajustar o classificador (`test_size = 0.0`), garantindo máxima cobertura estatística de todos os alimentadores e eventos de perturbação raros.
+
+### 6.2. Estratégia de Teste: Validação Temporal Contínua (Out-of-Time)
+- O teste e avaliação de generalização são executados **fora do tempo** (*out-of-time*) sobre novos dados coletados em períodos futuros/subsequentes, refletindo perfeitamente a operação real em produção.
 
 ---
 

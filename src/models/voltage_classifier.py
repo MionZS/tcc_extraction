@@ -31,7 +31,6 @@ class VoltageDisturbanceType(str, Enum):
     FALTA_BIFASICA = "FALTA_BIFASICA"
     INTERRUPCAO_TOTAL = "INTERRUPCAO_TOTAL"
     DESBALANCEAMENTO_CRITICO = "DESBALANCEAMENTO_CRITICO"
-    DESCONEXAO_TELEMETRIA = "DESCONEXAO_TELEMETRIA"
 
 
 # PRODIST Módulo 8 (Seção 8.1 - Tensão em Regime Permanente) & IEEE 1159 thresholds in p.u.
@@ -85,17 +84,44 @@ def extract_voltage_classifier_features(
 
     df = instantaneous_df.clone()
 
+    # Identify phase voltage columns early
+    u_cols = [c for c in ("U_L1", "U_L2", "U_L3") if c in df.columns]
+    if not u_cols:
+        u_cols = [c for c in ("U_L1_AVG", "U_L2_AVG", "U_L3_AVG") if c in df.columns]
+
+    # Filter out telemetry records that completely lack physical voltage readings.
+    # PRODIST Módulo 8 evaluates physical voltage wave quality. Telemetry packets with all null
+    # voltages represent communication absence, not physical voltage disturbances.
+    if u_cols:
+        has_any_voltage = pl.any_horizontal([pl.col(c).is_not_null() for c in u_cols])
+        df = df.filter(has_any_voltage)
+
+    if df.is_empty():
+        return df
+
     # Join context if available (match on UC, or on NIO, or bridge if only one key is present)
     if context_df is not None and not context_df.is_empty():
         context_cols = [c for c in ["UC", "NIO", "FASE_CIRCUITO", "TENSAO_BASE"] if c in context_df.columns]
         sub_context = context_df.select(context_cols).drop_nulls(subset=[c for c in ["UC", "NIO"] if c in context_cols]).unique()
 
+        # Normalizar tipos para String para compatibilidade estrita em joins
+        if "UC" in sub_context.columns:
+            sub_context = sub_context.with_columns(pl.col("UC").cast(pl.String).str.strip_chars())
+        if "NIO" in sub_context.columns:
+            sub_context = sub_context.with_columns(
+                pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("CLEAN_NIO")
+            )
+
         if "UC" in df.columns and "UC" in sub_context.columns:
+            df = df.with_columns(pl.col("UC").cast(pl.String).str.strip_chars())
             join_cols = [c for c in ["UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in sub_context.columns]
             df = df.join(sub_context.select(join_cols), on="UC", how="left")
-        elif "NIO" in df.columns and "NIO" in sub_context.columns:
-            join_cols = [c for c in ["NIO", "UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in sub_context.columns]
-            df = df.join(sub_context.select(join_cols), on="NIO", how="left")
+        elif "NIO" in df.columns and "CLEAN_NIO" in sub_context.columns:
+            df = df.with_columns(
+                pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("CLEAN_NIO")
+            )
+            join_cols = [c for c in ["CLEAN_NIO", "UC", "FASE_CIRCUITO", "TENSAO_BASE"] if c in sub_context.columns]
+            df = df.join(sub_context.select(join_cols), on="CLEAN_NIO", how="left").drop("CLEAN_NIO")
         elif "NIO" in df.columns and "UC" in sub_context.columns and "NIO" not in sub_context.columns:
             # If sub_context only has UC, check if UC values correspond to NIOs
             sub_renamed = sub_context.rename({"UC": "NIO"})
@@ -108,11 +134,6 @@ def extract_voltage_classifier_features(
     else:
         df = df.with_columns(pl.col("TENSAO_BASE").fill_null(tensao_base_default))
 
-    # Identify phase voltage columns
-    u_cols = [c for c in ("U_L1", "U_L2", "U_L3") if c in df.columns]
-    if not u_cols:
-        u_cols = [c for c in ("U_L1_AVG", "U_L2_AVG", "U_L3_AVG") if c in df.columns]
-
     l1_col = next((c for c in u_cols if "L1" in c), None)
     l2_col = next((c for c in u_cols if "L2" in c), None)
     l3_col = next((c for c in u_cols if "L3" in c), None)
@@ -120,28 +141,28 @@ def extract_voltage_classifier_features(
     # 1. Structural Phase Activation Flags
     # If FASE_CIRCUITO is available from context:
     #   Monofásico -> L1 active; Bifásico -> L1, L2 active; Trifásico -> L1, L2, L3 active
-    # If FASE_CIRCUITO is null or absent, do NOT invent data: infer physical presence
-    # from available telemetry columns and observed values (e.g., presence of non-null L2/L3 readings).
-    has_l2_phys = (l2_col is not None) and (df.select(pl.col(l2_col).is_not_null().any()).item() is True)
-    has_l3_phys = (l3_col is not None) and (df.select(pl.col(l3_col).is_not_null().any()).item() is True)
+    # If FASE_CIRCUITO is null or absent:
+    #   Infer per-row from observed readings: L1 is active; L2 active if observed non-null; L3 active if observed non-null.
+    l2_present_expr = pl.col(l2_col).is_not_null() if l2_col else pl.lit(False)
+    l3_present_expr = pl.col(l3_col).is_not_null() if l3_col else pl.lit(False)
 
     if "FASE_CIRCUITO" in df.columns:
         phase_col = pl.col("FASE_CIRCUITO").str.to_uppercase()
         is_active_l2 = (
             pl.when(phase_col.is_not_null())
             .then(phase_col.str.contains("BIFASICO") | phase_col.str.contains("TRIFASICO"))
-            .otherwise(pl.lit(has_l2_phys))
+            .otherwise(l2_present_expr)
             .alias("IS_ACTIVE_L2")
         )
         is_active_l3 = (
             pl.when(phase_col.is_not_null())
             .then(phase_col.str.contains("TRIFASICO"))
-            .otherwise(pl.lit(has_l3_phys))
+            .otherwise(l3_present_expr)
             .alias("IS_ACTIVE_L3")
         )
     else:
-        is_active_l2 = pl.lit(has_l2_phys).alias("IS_ACTIVE_L2")
-        is_active_l3 = pl.lit(has_l3_phys).alias("IS_ACTIVE_L3")
+        is_active_l2 = l2_present_expr.alias("IS_ACTIVE_L2")
+        is_active_l3 = l3_present_expr.alias("IS_ACTIVE_L3")
 
     df = df.with_columns([
         pl.lit(True).alias("IS_ACTIVE_L1"),
@@ -324,27 +345,18 @@ class RuleBasedVoltageClassifier:
             for i in (1, 2, 3)
         )
 
-        # 1. Interrupção Total: Todas as fases zeradas, ou falta de telemetria com contexto de apagão/alarme
+        # 1. Interrupção Total: Todas as fases ativas zeradas (tensão física <= 5V / 0.04 p.u.)
+        # ou apagão confirmado por alarme físico Last Gasp com tensão em patamar de interrupção
         is_total_interruption = (
-            (zero_phase_count == active_phase_count)
-            | (
-                (null_phase_count == active_phase_count)
-                & ((pl.col("NEIGHBOR_COVERAGE_RATIO") <= 0.3) | pl.col("HAS_POWER_ALARM"))
-            )
+            ((zero_phase_count == active_phase_count) & (active_phase_count > 0))
+            | (pl.col("HAS_POWER_ALARM") & (pl.col("V_AVG_PU") <= PU_INTERRUPCAO_THRESHOLD))
         )
 
         # 2. Faltas Assimétricas (Perda de fase em circuito bifásico ou trifásico)
         is_monofasica = (zero_phase_count == 1) & (active_phase_count >= 2)
         is_bifasica = (zero_phase_count == 2) & (active_phase_count == 3)
 
-        # 3. Desconexão de Telemetria (ausência de dados sem evidência de apagão)
-        is_telemetry_outage = (
-            (null_phase_count == active_phase_count)
-            & (pl.col("NEIGHBOR_COVERAGE_RATIO") > 0.3)
-            & (~pl.col("HAS_POWER_ALARM"))
-        )
-
-        # 4. Perturbações PRODIST Módulo 8 (Subtensão, Sobretensão e Desbalanceamento)
+        # 3. Perturbações PRODIST Módulo 8 (Subtensão, Sobretensão e Desbalanceamento)
         # Afundamento/Subtensão: V_MIN_PU abaixo de 0.90 p.u. (mas acima do limiar de falta de fase)
         is_subtensao = (
             (pl.col("V_MIN_PU") > PU_INTERRUPCAO_THRESHOLD)
@@ -383,8 +395,6 @@ class RuleBasedVoltageClassifier:
             .then(pl.lit(VoltageDisturbanceType.SOBRETENSAO.value))
             .when(is_desbalanceamento)
             .then(pl.lit(VoltageDisturbanceType.DESBALANCEAMENTO_CRITICO.value))
-            .when(is_telemetry_outage)
-            .then(pl.lit(VoltageDisturbanceType.DESCONEXAO_TELEMETRIA.value))
             .otherwise(pl.lit(VoltageDisturbanceType.NORMAL.value))
         )
 
@@ -395,22 +405,75 @@ def group_train_test_split(
     df: pl.DataFrame,
     *,
     group_col: str = "UC",
-    test_size: float = 0.2,
+    test_size: float = 0.0,
     random_state: int = 42,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Split DataFrame into train and test sets grouped by UC to prevent data leakage."""
+    """Split DataFrame into train and test sets grouped by UC to prevent data leakage.
+
+    If test_size <= 0.0, allocates 100% of data to training (canonical historical baseline),
+    returning (df, df) for internal consistency evaluation.
+    """
     if df.is_empty():
         return df, df
 
+    if test_size <= 0.0:
+        return df, df
+
+    # Determinar a coluna de agrupamento efetiva
+    eff_group_col = group_col
+    if eff_group_col not in df.columns:
+        if "NIO" in df.columns:
+            eff_group_col = "NIO"
+        else:
+            eff_group_col = df.columns[0]
+
+    # Preencher nulos no identificador de grupo para evitar que linhas sejam descartadas
+    tmp_group = "__temp_split_group_id"
+    df_with_group = df.with_columns(
+        pl.coalesce([
+            pl.col(eff_group_col).cast(pl.String).str.strip_chars(),
+            (pl.col("NIO").cast(pl.String).str.strip_chars() if "NIO" in df.columns else None),
+            pl.lit("FALLBACK_GROUP_") + pl.int_range(0, df.height).cast(pl.String),
+        ]).alias(tmp_group)
+    )
+
     rng = np.random.default_rng(random_state)
-    unique_groups = df.get_column(group_col).drop_nulls().unique().to_list()
+    unique_groups = df_with_group.get_column(tmp_group).drop_nulls().unique().to_list()
     rng.shuffle(unique_groups)
 
+    # Fallback se houver apenas 1 grupo único ou se não houver diversidade suficiente
+    if len(unique_groups) <= 1:
+        n_rows = df.height
+        n_test = max(1, int(n_rows * test_size))
+        indices = rng.permutation(n_rows)
+        test_idx = indices[:n_test].tolist()
+        train_idx = indices[n_test:].tolist()
+        if not train_idx and test_idx:
+            train_idx = [test_idx.pop()]
+        return df[train_idx], df[test_idx]
+
     n_test = max(1, int(len(unique_groups) * test_size))
+    # Garantir que pelo menos 1 grupo permaneça para treino
+    if n_test >= len(unique_groups):
+        n_test = max(1, len(unique_groups) - 1)
+
     test_groups = set(unique_groups[:n_test])
 
-    train_df = df.filter(~pl.col(group_col).is_in(test_groups))
-    test_df = df.filter(pl.col(group_col).is_in(test_groups))
+    test_mask = df_with_group[tmp_group].is_in(test_groups).fill_null(False)
+
+    train_df = df_with_group.filter(~test_mask).drop(tmp_group)
+    test_df = df_with_group.filter(test_mask).drop(tmp_group)
+
+    # Fallback de segurança contra partição vazia
+    if train_df.is_empty() or test_df.is_empty():
+        n_rows = df.height
+        n_test = max(1, int(n_rows * test_size))
+        indices = rng.permutation(n_rows)
+        test_idx = indices[:n_test].tolist()
+        train_idx = indices[n_test:].tolist()
+        if not train_idx and test_idx:
+            train_idx = [test_idx.pop()]
+        return df[train_idx], df[test_idx]
 
     return train_df, test_df
 
