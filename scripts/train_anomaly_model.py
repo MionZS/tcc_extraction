@@ -29,6 +29,7 @@ from sklearn.preprocessing import RobustScaler
 from src.datasets.dataset_splitter import DatasetSplitter
 from src.models.composite import CompositeAnomalyDetector
 from src.models.hierarchical_trainer import HierarchicalModelOrchestrator
+from src.models.specialized_detectors import MultiViewAnomalyPipeline
 from src.models.spurious_filter import filter_spurious_anomalies
 from src.tui.tui_app import show_environment_warning
 
@@ -56,9 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["composite", "hierarchical", "baseline", "voltage"],
-        default="composite",
-        help="Training architecture: 'composite', 'hierarchical', 'baseline', or 'voltage'",
+        choices=["specialized", "composite", "hierarchical", "baseline", "voltage"],
+        default="specialized",
+        help="Training architecture: 'specialized', 'composite', 'hierarchical', 'baseline', or 'voltage'",
     )
     parser.add_argument(
         "--feeder",
@@ -117,6 +118,61 @@ def main() -> None:
 
     if not feature_cols:
         raise ValueError("No numeric features found with 'x__' prefix in dataset.")
+
+    # ── Mode 0: Specialized Multi-View Pipeline (S_comm, S_elec, S_tamper, Clusters)
+    if args.mode == "specialized":
+        print(f"\n[*] Training Specialized Multi-View Anomaly Pipeline (S_comm, S_elec, S_tamper, Clusters)...")
+        comm_cols = [c for c in feature_cols if any(k in c.lower() for k in ("coverage", "interval_coverage", "alarm_count", "latency", "gap"))]
+        elec_cols = [c for c in feature_cols if c not in comm_cols and not any(k in c.lower() for k in ("meter_changed", "meter_age"))]
+
+        print(f"[+] Communication features ({len(comm_cols)}): {comm_cols}")
+        print(f"[+] Electrical features ({len(elec_cols)}): {elec_cols}")
+
+        X_comm = df.select(comm_cols).to_numpy() if comm_cols else np.zeros((df.height, 1))
+        X_elec = df.select(elec_cols).to_numpy() if elec_cols else np.zeros((df.height, 1))
+
+        data_quality = df["meta__data_quality"].to_numpy() if "meta__data_quality" in df.columns else np.ones(df.height)
+        tamper_alarms = df["x__alarm_count_window"].to_numpy() if "x__alarm_count_window" in df.columns else np.zeros(df.height)
+        fa_trend_slopes = df["x__trend_fa_slope"].to_numpy() if "x__trend_fa_slope" in df.columns else None
+        meter_changed_30d = df["x__meter_changed_30d"].to_numpy() if "x__meter_changed_30d" in df.columns else None
+        uc_ids = df["id__uc_id"].to_list() if "id__uc_id" in df.columns else None
+
+        pipeline = MultiViewAnomalyPipeline(
+            contamination=args.contamination,
+            random_state=args.random_state,
+        )
+        scored_df = pipeline.fit_and_score(
+            X_comm=X_comm,
+            X_elec=X_elec,
+            data_quality=data_quality,
+            tamper_alarms=tamper_alarms,
+            fa_trend_slopes=fa_trend_slopes,
+            meter_changed_30d=meter_changed_30d,
+            raw_dataframe=df,
+            uc_ids=uc_ids,
+        )
+
+        scores_dir = args.output_dir / "outputs" / "specialized_scores"
+        scores_dir.mkdir(parents=True, exist_ok=True)
+        models_dir = args.output_dir / "models"
+        models_dir.mkdir(parents=True, exist_ok=True)
+
+        joblib.dump(pipeline, models_dir / "specialized_multiview_pipeline.joblib")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_p = scores_dir / f"specialized_scores_{timestamp}.parquet"
+        out_c = scores_dir / f"specialized_scores_{timestamp}.csv"
+        scored_df.write_parquet(out_p)
+        scored_df.write_csv(out_c, separator=";")
+
+        print(f"[+] Saved specialized pipeline to {models_dir / 'specialized_multiview_pipeline.joblib'}")
+        print(f"[+] Saved specialized scores to {out_p.name}")
+        print("\n" + "=" * 50)
+        print("SPECIALIZED MULTI-VIEW DIAGNOSTIC SUMMARY")
+        print("=" * 50)
+        for row in scored_df["operational_diagnosis"].value_counts().to_dicts():
+            print(f"  - {row['operational_diagnosis']}: {row['count']:,} UCs")
+        return
 
     # ── Mode 1: Hierarchical / MoE Training ──────────────────────────────
     if args.mode == "hierarchical":
