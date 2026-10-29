@@ -110,22 +110,45 @@ Onde $\text{TENSAO\_BASE}$ é obtida diretamente do cadastro da UC (`uc_context.
 
 ---
 
-## 6. Modelos: Baseline Heurístico vs. Machine Learning
+## 7. Modelos: Baseline Heurístico vs. Machine Learning
 
-### 6.1. Baseline Determinístico (`RuleBasedVoltageClassifier`)
+### 7.1. Baseline Determinístico (`RuleBasedVoltageClassifier`)
 - Implementa diretamente as equações de limiares físicos e regulatórios do PRODIST Módulo 8.
 - Serve como rotulador *cold-start* (gera rótulos de treino a partir de medições brutas, sem depender de marcações manuais).
 - Totalmente transparente, auditável e determinístico.
 
-### 6.2. Modelo de Machine Learning (`MLVoltageDisturbanceClassifier`)
-- Baseado em **`HistGradientBoostingClassifier`** da Scikit-Learn:
-  - **Suporte Nativo a NaNs:** Lida diretamente com valores ausentes sem necessidade de imputações artificiais agressivas que mascarem a ausência da fase.
-  - **Classificação Multiclasse Não-Linear:** Aprende fronteiras suaves para estados limítrofes ("quase desbalanceados" ou transientes).
-  - **Probabilidades por Classe e Confiança:** Retorna não apenas a classe prevista (`PREDICTED_DISTURBANCE_CLASS`), mas o vetor completo de probabilidades (`PROB_NORMAL`, `PROB_SUBTENSAO`, etc.) e o nível de certeza da previsão (`DISTURBANCE_CONFIDENCE`).
+### 7.3. Modo 100% Alinhado ao Determinístico (`align_with_rules=True`)
+Para ambientes operacionais onde a conformidade estrita com o PRODIST Módulo 8 é mandatória, o classificador oferece o modo `align_with_rules=True`:
+- **Garantia de 100% de Concordância:** O rótulo entregue em `PREDICTED_DISTURBANCE_CLASS` segue rigorosamente a decisão determinística da norma.
+- **Preservação de Inteligência Probabilística:** O modelo de Machine Learning continua gerando o vetor completo de probabilidades contínuas (`PROB_NORMAL`, `PROB_SUBTENSAO`, etc.) e a confiança da classificação.
+- **Rastreabilidade de Ruído:** Quando a árvore subjacente diverge da norma, a predição bruta é salva em `RAW_ML_PREDICTION` e o sinalizador `IS_ML_DISCREPANCY` é ativado.
 
 ---
 
-## 7. Catálogo de Features Extraídas
+## 8. Auditoria de Ruído & Cadastro de Erros para Revisão Manual
+
+O módulo disponibiliza o subsistema [`VoltageDiscrepancyAuditor`](file:///d:/Projects/tcc_extraction/src/models/voltage_classifier.py), que compara predições da árvore contra a regra determinística e cadastra todos os erros e discrepâncias em arquivos `.csv` estruturados em `output/reports/` para auditoria manual de engenharia:
+
+### 8.1. Categorias de Fontes de Ruído Diagnosticadas
+
+| Categoria (`NOISE_SOURCE`) | Condição Típica | Causa-Raiz Operacional |
+| :--- | :--- | :--- |
+| **`BORDERLINE_SUBTENSAO`** | $V_{\text{min\_pu}} \in [0.880, 0.920]$ | Ponto limítrofe na fronteira de 0.90 p.u.; histerese de transição do afundamento |
+| **`BORDERLINE_SOBRETENSAO`** | $V_{\text{max\_pu}} \in [1.035, 1.065]$ | Ponto limítrofe na fronteira de 1.05 p.u.; histerese de elevação de tensão |
+| **`BORDERLINE_DESBALANCEAMENTO`** | $V_{\text{imb}} \in [2.4\%, 3.6\%]$ | Ponto limítrofe no limiar regulatório crítico de 3.0% (PRODIST M8 Seção 8.2) |
+| **`ZERO_VOLTAGE_CUTOFF`** | $V_{\text{fase}} \in [2.0\text{V}, 8.0\text{V}]$ | Tensão em torno do limiar de 5.0V de corte físico de falta/queda de fase |
+| **`PRECEDENCE_CONFLICT`** | Múltiplas condições ativas | Subtensão e Desbalanço ocorrendo juntos; a norma prioriza uma ordem estrita |
+| **`CLASS_WEIGHT_BIAS`** | Falta prevista em linha normal | Ponderação balanceada de classes raras induz falso positivo isolado |
+| **`PROBABILITY_UNCERTAINTY`** | Confiança $< 60\%$ | Região de alta entropia/ambiguidade onde o modelo não atinge certeza |
+| **`TELEMETRY_OUTAGE_AMBIGUITY`** | Cobertura trafo $\approx 0.30$ | Ambiguidade entre perda de comunicação e queda física corroborada |
+
+### 8.2. Arquivos de Saída Gerados para Revisão Manual
+- **CSV de Erros Detalhados:** `output/reports/voltage_classification_errors_latest.csv` (delimitado por `;`, codificação `utf-8-sig`, pronto para abertura direta no Microsoft Excel).
+- **Relatório Diagnóstico:** `output/reports/voltage_classification_audit_latest.md` (resumo executivo, tabela de fontes de ruído e orientações).
+
+---
+
+## 9. Catálogo de Features Extraídas
 
 As seguintes colunas são geradas por `extract_voltage_classifier_features()`:
 
@@ -143,7 +166,28 @@ As seguintes colunas são geradas por `extract_voltage_classifier_features()`:
 
 ---
 
-## 8. Guia Rápido de Uso
+## 9. Como Executar (CLI, TUI e Tarefas)
+
+```bash
+# Execução direta via script dedicado
+uv run python scripts/train_voltage_classifier.py
+
+# Com filtro de período e alimentador específico
+uv run python scripts/train_voltage_classifier.py --start-date 2026-08-01 --end-date 2026-10-18 --feeder Fonte_Nova
+
+# Roteador unificado de modelos
+uv run python scripts/train_anomaly_model.py --mode voltage
+
+# Via TUI Interativa (Opção 2 -> Opção 1)
+uv run main.py
+
+# Via VS Code Task
+# Execute a tarefa: "ml: train voltage classifier"
+```
+
+---
+
+## 10. Guia Rápido de Uso em Python
 
 ```python
 from __future__ import annotations

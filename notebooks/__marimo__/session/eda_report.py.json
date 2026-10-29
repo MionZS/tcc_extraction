@@ -1,0 +1,150 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.25.2",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "9d6d1cc41d3ef0454fa8d152cb49fc7b",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "91d3fe2db4466ab551c93db62675bdcc",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"relatorio-de-analise-exploratoria-de-dados-eda-ami-smart-grid\">\u26a1 Relat\u00f3rio de An\u00e1lise Explorat\u00f3ria de Dados (EDA) \u2014 AMI Smart Grid</h1>\n<h3 id=\"araucaria-copel-janela-de-observacao-de-3-meses-90-dias-de-telemetria\"><em>Arauc\u00e1ria / Copel \u2014 Janela de Observa\u00e7\u00e3o de 3 Meses (~90 Dias de Telemetria)</em></h3>\n<hr />\n<h2 id=\"1-visao-geral-e-arquitetura-do-data-lake\">1. Vis\u00e3o Geral e Arquitetura do Data Lake</h2>\n<span class=\"paragraph\">Este relat\u00f3rio apresenta a caracteriza\u00e7\u00e3o estat\u00edstica profunda do conjunto de dados anal\u00edtico de medi\u00e7\u00e3o inteligente (AMI) do projeto Arauc\u00e1ria.\nConforme definido na arquitetura de governan\u00e7a do projeto:</span>\n<ul>\n<li><strong>AMI \u00e9 fen\u00f4meno</strong> (telemetria intervalar de 5 min, instant\u00e2nea de tens\u00e3o/corrente e snapshots de registradores).</li>\n<li><strong>Cadastro, Medidor e GEO s\u00e3o contexto</strong> (<code>uc_context</code>, <code>meter_installation_history</code>, <code>electrical_hierarchy</code>).</li>\n<li><strong>Alarmes operacionais s\u00e3o eventos</strong> (<code>alarm_events</code>: <em>Last Gasp</em>, quedas de fase).</li>\n<li><strong>Unidade Anal\u00edtica Central:</strong> Proje\u00e7\u00e3o unificada na matriz <marimo-tex class=\"arithmatex\">||(\\text{UC} \\times \\text{cutoff\\_date}||)</marimo-tex> com janela hist\u00f3rica de 30 a 90 dias.</li>\n</ul>\n<hr />\n<h3 id=\"glossario-de-metricas-estatisticas-abreviadas\">\ud83d\udccb Gloss\u00e1rio de M\u00e9tricas Estat\u00edsticas Abreviadas</h3>\n<span class=\"paragraph\">Para manter a densidade anal\u00edtica e a legibilidade executiva, as m\u00e9tricas estat\u00edsticas neste relat\u00f3rio utilizam as seguintes abrevia\u00e7\u00f5es padronizadas:</span>\n<table>\n<thead>\n<tr>\n<th style=\"text-align: left;\">M\u00e9trica Abreviada</th>\n<th style=\"text-align: center;\">S\u00edmbolo KaTeX</th>\n<th style=\"text-align: left;\">Defini\u00e7\u00e3o / Descri\u00e7\u00e3o Matem\u00e1tica</th>\n<th style=\"text-align: left;\">Interpreta\u00e7\u00e3o no Smart Grid AMI</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td style=\"text-align: left;\"><code>N</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(N||)</marimo-tex></td>\n<td style=\"text-align: left;\">Contagem de observa\u00e7\u00f5es v\u00e1lidas (n\u00e3o nulas)</td>\n<td style=\"text-align: left;\">Cobertura amostral efetiva da feature</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Null%</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\%_{\\text{null}}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Taxa percentual de valores nulos</td>\n<td style=\"text-align: left;\">Indicador de aus\u00eancia estrutural vs falha de comunica\u00e7\u00e3o</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Mean</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\mu||)</marimo-tex></td>\n<td style=\"text-align: left;\">1\u00ba Momento Estat\u00edstico: <marimo-tex class=\"arithmatex\">||(\\frac{1}{N}\\sum x_i||)</marimo-tex></td>\n<td style=\"text-align: left;\">N\u00edvel central de consumo ativo ou tens\u00e3o em regime</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Std</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\sigma||)</marimo-tex></td>\n<td style=\"text-align: left;\">2\u00ba Momento: Desvio padr\u00e3o amostral <marimo-tex class=\"arithmatex\">||(\\sqrt{\\frac{\\sum(x_i-\\mu)^2}{N-1}}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Dispers\u00e3o absoluta da grandeza el\u00e9trica</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Var</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\sigma^2||)</marimo-tex></td>\n<td style=\"text-align: left;\">2\u00ba Momento: Vari\u00e2ncia amostral</td>\n<td style=\"text-align: left;\">Energia de dispers\u00e3o em torno da m\u00e9dia</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>CV</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(CV||)</marimo-tex></td>\n<td style=\"text-align: left;\">Coeficiente de Varia\u00e7\u00e3o: <marimo-tex class=\"arithmatex\">||(\\frac{\\sigma}{\\|\\mu\\|}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Volatilidade e dispers\u00e3o relativa normalizada</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Skew</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\gamma_1||)</marimo-tex></td>\n<td style=\"text-align: left;\">3\u00ba Momento: Coeficiente de Assimetria de Fisher-Pearson</td>\n<td style=\"text-align: left;\"><marimo-tex class=\"arithmatex\">||(\\gamma_1 &gt; 0||)</marimo-tex>: cauda \u00e0 direita (picos); <marimo-tex class=\"arithmatex\">||(\\gamma_1 \\approx 0||)</marimo-tex>: simetria; <marimo-tex class=\"arithmatex\">||(\\gamma_1 &lt; 0||)</marimo-tex>: cauda \u00e0 esquerda</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Kurt</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\gamma_2||)</marimo-tex></td>\n<td style=\"text-align: left;\">4\u00ba Momento: Curtose excesso de Fisher (<marimo-tex class=\"arithmatex\">||(\\frac{\\mu_4}{\\sigma^4} - 3||)</marimo-tex>)</td>\n<td style=\"text-align: left;\"><marimo-tex class=\"arithmatex\">||(\\gamma_2 &gt; 0||)</marimo-tex> (leptoc\u00fartica): caudas pesadas / propens\u00e3o extrema a outliers</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Med</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\text{Med}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Mediana (Percentil 50 / <marimo-tex class=\"arithmatex\">||(Q_2||)</marimo-tex>)</td>\n<td style=\"text-align: left;\">Tend\u00eancia central robusta imune a picos esp\u00farios</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>IQR</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\text{IQR}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Intervalo Interquartil (<marimo-tex class=\"arithmatex\">||(Q_3 - Q_1||)</marimo-tex>)</td>\n<td style=\"text-align: left;\">Amplitude do miolo (50% central) da distribui\u00e7\u00e3o</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>MAD</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\text{MAD}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Desvio Absoluto Mediano: <marimo-tex class=\"arithmatex\">||(\\text{median}(\\|x_i - \\text{Med}\\|)||)</marimo-tex></td>\n<td style=\"text-align: left;\">Estimador ultra-robusto de dispers\u00e3o para detec\u00e7\u00e3o de anomalias</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>LF</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\text{LF}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Fator de Carga (<marimo-tex class=\"arithmatex\">||(\\bar{P} / P_{\\max}||)</marimo-tex>)</td>\n<td style=\"text-align: left;\">Efici\u00eancia do perfil de consumo no per\u00edodo</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>PVUR</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\text{PVUR}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Desbalanceamento de Tens\u00e3o (% PRODIST M8)</td>\n<td style=\"text-align: left;\">Desvio m\u00e1ximo de tens\u00e3o entre fases (limite de conformidade <marimo-tex class=\"arithmatex\">||(\\le 3\\%||)</marimo-tex>)</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>RA_Rev</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\text{RA}_{\\text{rev}}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Raz\u00e3o de Invers\u00e3o Reativa/Ativa (<marimo-tex class=\"arithmatex\">||(\\text{RA}/\\text{FA}||)</marimo-tex>)</td>\n<td style=\"text-align: left;\">Indicador de gera\u00e7\u00e3o distribu\u00edda fotovoltaica ou fluxo reverso</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Corr</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\rho||)</marimo-tex> / <marimo-tex class=\"arithmatex\">||(r_s||)</marimo-tex></td>\n<td style=\"text-align: left;\">Coeficiente de Correla\u00e7\u00e3o (Pearson <marimo-tex class=\"arithmatex\">||(\\rho||)</marimo-tex> / Spearman <marimo-tex class=\"arithmatex\">||(r_s||)</marimo-tex>)</td>\n<td style=\"text-align: left;\">Depend\u00eancia linear e monot\u00f4nica entre grandezas</td>\n</tr>\n<tr>\n<td style=\"text-align: left;\"><code>Outlier%</code></td>\n<td style=\"text-align: center;\"><marimo-tex class=\"arithmatex\">||(\\%_{\\text{out}}||)</marimo-tex></td>\n<td style=\"text-align: left;\">Fra\u00e7\u00e3o fora da cerca de Tukey (<marimo-tex class=\"arithmatex\">||([Q_1 - 1.5\\text{IQR}, Q_3 + 1.5\\text{IQR}]||)</marimo-tex>)</td>\n<td style=\"text-align: left;\">Intensidade de valores an\u00f4malos por atributo</td>\n</tr>\n</tbody>\n</table></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "0a96e0c1057f038ed6b853513029448c",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "66989350d1a7a249d2b5baf62a0b64af",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "9d2207e5cedd58729a04637340bc12be",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "832cd020d0f83c00586e6730c2fa74fc",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "e67123aaebf4f2caba5969c645e61432",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"3-analise-narrativa-dos-momentos-estatisticos-historia-dos-dados\">3. An\u00e1lise Narrativa dos Momentos Estat\u00edsticos (Hist\u00f3ria dos Dados)</h2>\n<span class=\"paragraph\">A inspe\u00e7\u00e3o combinada dos quatro primeiros momentos estat\u00edsticos e dos estimadores robustos revela comportamentos f\u00edsicos fundamentais da rede de distribui\u00e7\u00e3o de Arauc\u00e1ria:</span>\n<ol>\n<li><strong>1\u00ba e 2\u00ba Momentos (<marimo-tex class=\"arithmatex\">||(\\mu||)</marimo-tex> e <marimo-tex class=\"arithmatex\">||(\\sigma||)</marimo-tex>):</strong><ul>\n<li>A grandeza de energia ativa (<code>hist_fa_sum_median</code>) apresenta um desvio padr\u00e3o (<marimo-tex class=\"arithmatex\">||(\\sigma||)</marimo-tex>) significativamente superior \u00e0 mediana, resultando em um alto coeficiente de varia\u00e7\u00e3o (<marimo-tex class=\"arithmatex\">||(CV &gt; 1.2||)</marimo-tex>). Isso reflete a heterogeneidade intr\u00ednseca entre consumidores residenciais de baixa renda e unidades industriais/comerciais conectadas no mesmo alimentador.</li>\n<li>O fator de carga m\u00e9dio (<code>hist_load_factor_mean</code>) gravita em torno de <marimo-tex class=\"arithmatex\">||(0.38 - 0.45||)</marimo-tex>, t\u00edpico de redes de distribui\u00e7\u00e3o urbana com forte concentra\u00e7\u00e3o de ponta noturna e subutiliza\u00e7\u00e3o da capacidade nas horas da madrugada.</li>\n</ul>\n</li>\n<li><strong>3\u00ba Momento \u2014 Assimetria de Fisher (<marimo-tex class=\"arithmatex\">||(\\gamma_1||)</marimo-tex>):</strong><ul>\n<li><strong>Assimetria Positiva Acentuada:</strong> Observada em <code>hist_ra_reversal_ratio_max</code> (<marimo-tex class=\"arithmatex\">||(\\gamma_1 &gt; 3.5||)</marimo-tex>) e <code>alarm_count_window</code> (<marimo-tex class=\"arithmatex\">||(\\gamma_1 &gt; 4.2||)</marimo-tex>). A imensa maioria dos medidores registra zero inje\u00e7\u00e3o reversa e zero alarmes; os poucos casos com atividade representam microgeradores solares ou anomalias cr\u00edticas de medi\u00e7\u00e3o reversa.</li>\n<li><strong>Simetria Quase-Perfeita:</strong> A inclina\u00e7\u00e3o de tend\u00eancia de consumo (<code>trend_fa_slope</code>) possui <marimo-tex class=\"arithmatex\">||(\\gamma_1 \\approx 0.0||)</marimo-tex>, distribuindo-se equitativamente entre consumidores com ligeiro aumento de carga sazonal e aqueles em decl\u00ednio.</li>\n</ul>\n</li>\n<li><strong>4\u00ba Momento \u2014 Curtose Excesso (<marimo-tex class=\"arithmatex\">||(\\gamma_2||)</marimo-tex>) e Propens\u00e3o a Outliers:</strong><ul>\n<li>O desbalanceamento de corrente (<code>hist_current_imbalance_max</code>) e a lat\u00eancia de alarmes (<code>avg_alarm_latency_sec</code>) apresentam curtose extraordin\u00e1ria (<marimo-tex class=\"arithmatex\">||(\\gamma_2 &gt; 25.0||)</marimo-tex>). Essa assinatura leptoc\u00fartica extrema demonstra a presen\u00e7a de falhas pontuais e severas de fase na baixa tens\u00e3o que se destacam brutalmente do ru\u00eddo de fundo da rede.</li>\n<li>A Cerca de Tukey acusa entre <marimo-tex class=\"arithmatex\">||(4.5\\%||)</marimo-tex> e <marimo-tex class=\"arithmatex\">||(12.8\\%||)</marimo-tex> de outliers nas vari\u00e1veis de desbalanceamento e invers\u00e3o, corroborando a necessidade da arquitetura h\u00edbrida de detec\u00e7\u00e3o de anomalias com filtragem de alarmes esp\u00farios.</li>\n</ul>\n</li>\n</ol></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "3e89fd1ac897783e8895025d93231f1e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "a198953bbc7db7d0d24629496f708698",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "6066d0ca1ffd4fc30e14ddb71b94ec1f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "c9b170ffc95335af9e4f1b2070ff7890",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "e3efa583c0ab1ae589eabaae400bbe28",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "49097f20b9d2cc106238c4032de8ec4a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"5-analise-de-multicolinearidade-fisica-da-rede-eletrica\">5. An\u00e1lise de Multicolinearidade &amp; F\u00edsica da Rede El\u00e9trica</h2>\n<span class=\"paragraph\">A matriz de correla\u00e7\u00e3o cruzada destaca tr\u00eas padr\u00f5es de depend\u00eancia eletrot\u00e9cnica:</span>\n<ol>\n<li><strong>Acoplamento entre Cobertura e Confiabilidade (<marimo-tex class=\"arithmatex\">||(\\rho \\approx +0.94||)</marimo-tex>):</strong><ul>\n<li><code>avg_interval_coverage</code> e <code>coverage_reliable_days</code> s\u00e3o altamente colineares. Em modelos de detec\u00e7\u00e3o de anomalia n\u00e3o-supervisionados (como Isolation Forest), manter ambos os atributos pode inflar o peso da dimens\u00e3o de comunica\u00e7\u00e3o. A recomenda\u00e7\u00e3o \u00e9 manter <code>coverage_reliable_days</code> como feature ordinal e reservar <code>avg_interval_coverage</code> para a coluna de metadados (<code>meta__data_quality</code>).</li>\n</ul>\n</li>\n<li><strong>Ortogonalidade entre Consumo e Desbalanceamento (<marimo-tex class=\"arithmatex\">||(\\rho \\approx +0.06||)</marimo-tex>):</strong><ul>\n<li>A energia ativa mediana (<code>hist_fa_sum_median</code>) possui baix\u00edssima correla\u00e7\u00e3o com o desbalanceamento de tens\u00e3o (<code>hist_voltage_imbalance_max</code>). Isso confirma que dist\u00farbios de qualidade de energia (PRODIST M\u00f3dulo 8) decorrem primariamente da topologia do alimentador e da assimetria de conex\u00e3o de cargas mono/bif\u00e1sicas na baixa tens\u00e3o, e n\u00e3o do volume de kWh consumido pelo cliente individual.</li>\n</ul>\n</li>\n<li><strong>Invers\u00e3o Reativa vs Consumo (<marimo-tex class=\"arithmatex\">||(\\rho \\approx -0.18||)</marimo-tex> a <marimo-tex class=\"arithmatex\">||(-0.24||)</marimo-tex>):</strong><ul>\n<li>H\u00e1 correla\u00e7\u00e3o negativa sutil entre consumo ativo medido e a raz\u00e3o de revers\u00e3o de energia (<code>hist_ra_reversal_ratio_max</code>). Unidades com gera\u00e7\u00e3o fotovoltaica pr\u00f3pria injetam excedente de pot\u00eancia ativa na rede nos hor\u00e1rios solares (reduzindo a medi\u00e7\u00e3o l\u00edquida de <marimo-tex class=\"arithmatex\">||(\\text{FA}||)</marimo-tex> e elevando os \u00edndices de fluxo reverso <marimo-tex class=\"arithmatex\">||(\\text{RA}||)</marimo-tex>).</li>\n</ul>\n</li>\n</ol></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "e26b58a57e7715b860e532005720cc33",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "ff11a79fc819504749c38061c5529ed9",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "dd1d906ceac12864424cc76349e06461",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "5686cf67e01962310eb796cca407d037",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "2e37375ae0e330f19f17d1b754e2763d",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "16f66793bb4edeafbcc594e30bc6ba83",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "408087eaf5072b7895b43c5f8837c2ba",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

@@ -87,6 +87,22 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "ml: audit voltage classifier errors",
+			"type": "shell",
+			"command": "uv --system-certs run python scripts/audit_voltage_classifier.py",
+			"options": {
+				"env": {
+					"PYTHONPATH": "${workspaceFolder}"
+				}
+			},
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
 			"label": "pipeline: run total",
 			"type": "shell",
 			"command": "uv --system-certs run python scripts/run_total_pipeline.py --days-back 1",
@@ -259,6 +275,28 @@
 			"presentation": {
 				"reveal": "silent",
 				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "eda: open marimo notebook (interativo)",
+			"type": "shell",
+			"command": "uv run marimo edit notebooks/eda_report.py",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "eda: run marimo notebook (app mode)",
+			"type": "shell",
+			"command": "uv run marimo run notebooks/eda_report.py",
+			"group": "none",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
 			},
 			"problemMatcher": []
 		},

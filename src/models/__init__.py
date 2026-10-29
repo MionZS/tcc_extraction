@@ -11,9 +11,13 @@ from src.models.moe_router import MoERouter
 from src.models.spurious_filter import filter_spurious_anomalies
 from src.models.voltage_classifier import (
     ClassificationResult,
+    DiscrepancyAuditReport,
     MLVoltageDisturbanceClassifier,
+    NoiseSourceCategory,
     RuleBasedVoltageClassifier,
+    VoltageDiscrepancyAuditor,
     VoltageDisturbanceType,
+    diagnose_discrepancy_row,
     extract_voltage_classifier_features,
     group_train_test_split,
 )
@@ -40,8 +44,13 @@ __all__ = [
     "filter_spurious_anomalies",
     "VoltageDisturbanceType",
     "ClassificationResult",
+    "DiscrepancyAuditReport",
+    "NoiseSourceCategory",
+    "diagnose_discrepancy_row",
+    "VoltageDiscrepancyAuditor",
     "extract_voltage_classifier_features",
     "group_train_test_split",
     "RuleBasedVoltageClassifier",
     "MLVoltageDisturbanceClassifier",
 ]
+

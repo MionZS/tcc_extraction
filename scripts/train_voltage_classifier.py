@@ -125,6 +125,18 @@ def parse_args() -> argparse.Namespace:
         help="Optional custom version string for the registry.",
     )
     parser.add_argument(
+        "--align-with-rules",
+        action="store_true",
+        default=False,
+        help="If set, matches 100% of deterministic baseline rules while retaining ML probabilities.",
+    )
+    parser.add_argument(
+        "--audit-errors",
+        action="store_true",
+        default=True,
+        help="Audit prediction discrepancies against baseline and export error CSVs (default: True).",
+    )
+    parser.add_argument(
         "--description",
         type=str,
         default="",
@@ -392,7 +404,7 @@ def main() -> None:
 
     # 5. Fit ML Classifier
     print("[*] Treinando MLVoltageDisturbanceClassifier (HistGradientBoosting com pesos balanceados)...")
-    clf = MLVoltageDisturbanceClassifier(random_state=args.random_state)
+    clf = MLVoltageDisturbanceClassifier(random_state=args.random_state, align_with_rules=args.align_with_rules)
     clf.fit(train_df)
 
     # 6. Evaluate Model
@@ -400,10 +412,12 @@ def main() -> None:
         print("\n[*] Avaliando consistência interna do modelo na base de treinamento (81 dias)...")
     else:
         print("\n[*] Avaliando acurácia no conjunto de teste isolado...")
-    metrics = clf.evaluate(test_df)
-    print(f"    * Acurácia Global: {metrics.get('accuracy', 0.0):.4f}")
-    print(f"    * F1 Macro:        {metrics.get('f1_macro', 0.0):.4f}")
-    print(f"    * F1 Ponderado:    {metrics.get('f1_weighted', 0.0):.4f}")
+    metrics = clf.evaluate(test_df, align_with_rules=args.align_with_rules)
+    print(f"    * Acurácia Global:   {metrics.get('accuracy', 0.0):.4f}")
+    if "raw_ml_accuracy" in metrics:
+        print(f"    * Acurácia Bruta ML: {metrics.get('raw_ml_accuracy', 0.0):.4f}")
+    print(f"    * F1 Macro:          {metrics.get('f1_macro', 0.0):.4f}")
+    print(f"    * F1 Ponderado:      {metrics.get('f1_weighted', 0.0):.4f}")
 
     print("\n[+] Relatório de Classificação por Categoria:")
     report = metrics.get("report", {})
@@ -414,6 +428,22 @@ def main() -> None:
             f1 = vals.get("f1-score", 0.0)
             sup = vals.get("support", 0)
             print(f"    - {cls_name:25s} | Prec: {p:.3f} | Rec: {r:.3f} | F1: {f1:.3f} | Support: {sup}")
+
+    # 6.1 Audit Discrepancies and Register Errors into CSVs
+    if args.audit_errors:
+        from src.models.voltage_classifier import VoltageDiscrepancyAuditor
+        print("\n[*] Executando auditoria de ruído e cadastrando discrepâncias em CSV...")
+        eval_pred = clf.predict(test_df, align_with_rules=args.align_with_rules)
+        auditor = VoltageDiscrepancyAuditor(output_dir=args.output_dir / "reports")
+        audit_rep = auditor.audit(eval_pred.predictions_df, target_column="BASELINE_VOLTAGE_LABEL")
+        print(f"    * Discrepâncias identificadas: {audit_rep.discrepancy_count:,} de {audit_rep.total_samples:,} ({audit_rep.match_rate:.2%} concordância)")
+        if audit_rep.discrepancy_count > 0:
+            print("    * Principais fontes de ruído diagnosticadas:")
+            for src, count in sorted(audit_rep.noise_breakdown.items(), key=lambda x: x[1], reverse=True)[:5]:
+                print(f"      - {src:30s}: {count:,} casos")
+            if audit_rep.export_csv_path:
+                print(f"    [+] Erros cadastrados em: {audit_rep.export_csv_path.name}")
+                print(f"    [+] Ponteiro mais recente: {args.output_dir / 'reports' / 'voltage_classification_errors_latest.csv'}")
 
     # 7. Persist to Model Registry
     data_slice_info = {

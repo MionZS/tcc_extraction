@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import joblib
 import polars as pl
 from rich.console import Console
 from rich.panel import Panel
@@ -488,6 +489,19 @@ class RichPipelineTUI:
         # ── Opção 2 ou parte da Cadeia: Modelo Global Âncora ─────────────
         if mode_choice in ("2", "7"):
             console.print("\n[bold yellow][*] Treinando Modelo Global Âncora (Comitê Composto) no conjunto de TREINO...[/bold yellow]")
+
+            # 1. Vincular Dependência do Nível 1: Classificador de Tensão (Baseline Determinístico Oficial)
+            from src.models.registry import ModelRegistry
+            registry = ModelRegistry(self.base_dir / "models" / "registry")
+            v_baseline = registry.get_latest_baseline("voltage_disturbance_classifier", prefer_deterministic=True)
+            if v_baseline is not None:
+                _, v_meta, _ = v_baseline
+                console.print(
+                    f"[bold green]✔ Vinculando Nível 1 (Classificador de Tensão PRODIST M8):[/bold green] "
+                    f"Versão [bold white]{v_meta.get('version_id')}[/bold white] "
+                    f"(Tag: [bold yellow]{v_meta.get('tag')}[/bold yellow] | Determinístico)"
+                )
+
             X_train = split_res.train_df.select(feature_cols).to_numpy()
             detector = CompositeAnomalyDetector(contamination=contam, random_state=self.random_state)
             detector.fit(X_train)
@@ -511,6 +525,51 @@ class RichPipelineTUI:
                 border_style="green",
             )
             console.print(res_panel)
+
+            # Registro do Modelo no Model Registry com governança
+            tag = Prompt.ask("Tag no Model Registry [candidate/production/baseline]", choices=["candidate", "production", "baseline"], default="candidate")
+            desc = Prompt.ask("Descrição / Anotação do Modelo Global Âncora", default=f"Modelo Global Âncora Composto (Contaminação {contam:.1%})")
+
+            v_id = registry.register_model(
+                model_name="composite_global_anchor",
+                model_obj=detector,
+                metrics={
+                    "anomalies_detected": n_anom,
+                    "anomaly_rate": round(n_anom / max(1, split_res.test_df.height), 4),
+                    "mean_consensus_score": round(float(preds["consensus_score"].mean()), 4),
+                    "test_samples": split_res.test_df.height,
+                    "train_samples": split_res.train_df.height,
+                },
+                data_slice={
+                    "train_samples": split_res.train_df.height,
+                    "test_samples": split_res.test_df.height,
+                    "contamination": contam,
+                },
+                hyperparameters={
+                    "contamination": contam,
+                    "weights": detector.weights,
+                    "random_state": self.random_state,
+                },
+                feature_names=feature_cols,
+                tag=tag,
+                description=desc,
+            )
+
+            # Salva versão permanente com ID único
+            versioned_file = models_dir / f"composite_anomaly_detector_{v_id}.joblib"
+            joblib.dump(detector, versioned_file)
+
+            console.print(
+                Panel(
+                    f"[bold green]✔ Modelo Global Âncora Registrado com Sucesso![/bold green]\n\n"
+                    f"• Versão:        [bold white]{v_id}[/bold white]\n"
+                    f"• Tag:           [bold yellow]{tag}[/bold yellow]\n"
+                    f"• Anomalias:     [bold red]{n_anom:,} ({n_anom/max(1, split_res.test_df.height):.1%})[/bold red]\n"
+                    f"• Imutabilidade: [bold green]🔒 Travado contra Sobrescrita (Audit Trail Seguro com ID Único)[/bold green]",
+                    title="Governança de Modelos - Nível 2",
+                    border_style="green",
+                )
+            )
 
             eval_df = split_res.test_df.with_columns([
                 pl.Series("consensus_score", preds["consensus_score"]),
@@ -813,23 +872,151 @@ class RichPipelineTUI:
         else:
             console.print(f"[*] Treino: [bold green]{train_df.height:,}[/bold green] amostras | Teste: [bold yellow]{test_df.height:,}[/bold yellow] amostras (sem vazamento de UC).")
 
+        # Alignment Mode
+        console.print("\n[bold cyan]⚙️ 5. Modo de Operação do Classificador:[/bold cyan]")
+        console.print("  [1] 🎯 Alinhado 100% ao Determinístico (Garante concordância estrita com a norma + soft probabilities) [Padrão]")
+        console.print("  [2] 🌳 Puro de Machine Learning (Mapeia o ruído natural da árvore sem alinhamento forçado)")
+        align_choice = Prompt.ask("Escolha o modo", choices=["1", "2"], default="1")
+        align_with_rules = (align_choice == "1")
+
         # Train model
         console.print("[*] Treinando HistGradientBoosting com pesos balanceados...")
-        clf = MLVoltageDisturbanceClassifier(random_state=self.random_state)
+        clf = MLVoltageDisturbanceClassifier(random_state=self.random_state, align_with_rules=align_with_rules)
         clf.fit(train_df)
 
         # Evaluate Model
-        metrics = clf.evaluate(test_df)
+        metrics = clf.evaluate(test_df, align_with_rules=align_with_rules)
         panel_title = "Consistência Interna do Modelo Padrão (Base de Treino - 81 Dias)" if test_ratio <= 0.0 else "Performance no Conjunto de Teste (Disjoint UC)"
+        raw_info = f"\n• Acurácia Bruta ML:             [bold cyan]{metrics.get('raw_ml_accuracy', 0.0):.2%}[/bold cyan]" if "raw_ml_accuracy" in metrics else ""
         res_panel = Panel(
             f"[bold green]✔ Classificador de Tensão Treinado com Sucesso![/bold green]\n\n"
-            f"• Acurácia Global:              [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white]\n"
+            f"• Acurácia Global (Entregue):    [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white]{raw_info}\n"
             f"• F1-Score Macro:              [bold yellow]{metrics.get('f1_macro', 0.0):.4f}[/bold yellow]\n"
-            f"• F1-Score Ponderado:          [bold cyan]{metrics.get('f1_weighted', 0.0):.4f}[/bold cyan]",
+            f"• F1-Score Ponderado:          [bold cyan]{metrics.get('f1_weighted', 0.0):.4f}[/bold cyan]\n"
+            f"• Modo de Operação:            [bold green]{'Alinhado 100% à Norma PRODIST M8' if align_with_rules else 'Puro ML (Árvore HistGradientBoosting)'}[/bold green]",
             title=panel_title,
             border_style="green",
         )
         console.print(res_panel)
+
+        # Auditar Discrepâncias e Cadastrar Erros em CSV
+        from src.models.voltage_classifier import NoiseSourceCategory, VoltageDiscrepancyAuditor
+        console.print("\n[*] Executando auditoria de ruído e cadastrando discrepâncias em CSV...")
+        eval_pred = clf.predict(test_df, align_with_rules=align_with_rules)
+        auditor = VoltageDiscrepancyAuditor(output_dir=self.base_dir / "reports")
+        audit_rep = auditor.audit(eval_pred.predictions_df, target_column="BASELINE_VOLTAGE_LABEL")
+
+        if align_with_rules:
+            if audit_rep.discrepancy_count > 0:
+                audit_msg = (
+                    f"[bold green]✔ Alinhamento Normativo 100% Concluído (Garantia Regulatória):[/bold green]\n\n"
+                    f"• A árvore pura de Machine Learning divergiu da norma em [bold yellow]{audit_rep.discrepancy_count:,}[/bold yellow] amostras ({audit_rep.match_rate:.2%} de concordância bruta da árvore).\n"
+                    f"• [bold green]100% dessas divergências foram corrigidas automaticamente[/bold green] pela camada determinística PRODIST M8.\n"
+                    f"• Erros finais entregues: [bold white]0[/bold white] (Conformidade regulatória total na saída).\n"
+                    f"• Relatório de divergências brutas cadastrado em:\n"
+                    f"  [cyan]{audit_rep.export_csv_path}[/cyan]\n"
+                    f"• Diagnóstico técnico detalhado gerado em:\n"
+                    f"  [cyan]{audit_rep.export_report_path}[/cyan]"
+                )
+                console.print(Panel(audit_msg, title="Auditoria de Alinhamento & Correções Determinísticas", border_style="green"))
+            else:
+                console.print(
+                    Panel(
+                        "[bold green]✔ 100% de Concordância Perfeita![/bold green]\n"
+                        "A árvore de ML convergiu 100% com as regras determinísticas sem nenhuma divergência bruta.",
+                        title="Concordância Perfeita",
+                        border_style="green",
+                    )
+                )
+        else:
+            if audit_rep.discrepancy_count > 0:
+                audit_msg = (
+                    f"[bold yellow]⚠️ Modo Puro de Machine Learning: {audit_rep.discrepancy_count:,} divergências da norma mantidas na entrega.[/bold yellow]\n\n"
+                    f"• O modelo operou estritamente sobre as probabilidades da árvore sem intervenção determinística forçada.\n"
+                    f"• Acurácia Bruta Entregue: [bold white]{audit_rep.match_rate:.2%}[/bold white] | F1-Score Macro: [bold yellow]{metrics.get('f1_macro', 0.0):.4f}[/bold yellow]\n"
+                    f"• Todas as divergências foram cadastradas em CSV para revisão manual:\n"
+                    f"  [cyan]{audit_rep.export_csv_path}[/cyan]\n"
+                    f"• Relatório diagnóstico detalhado gerado em:\n"
+                    f"  [cyan]{audit_rep.export_report_path}[/cyan]"
+                )
+                console.print(Panel(audit_msg, title="Auditoria de Ruído & Cadastro de Erros (Puro ML)", border_style="yellow"))
+            else:
+                console.print(
+                    Panel(
+                        "[bold green]✔ 100% de Concordância no Modo Puro![/bold green]\n"
+                        "Nenhuma discrepância identificada em relação ao baseline normativo determinístico.",
+                        title="Concordância Perfeita",
+                        border_style="green",
+                    )
+                )
+
+        # Tabela Comparativa de Discrepâncias: Árvore ML vs Determinístico
+        disc_table = Table(title="Análise de Discrepância: Modelo Puro (ML) vs. Norma Determinística PRODIST M8", border_style="cyan")
+        disc_table.add_column("Perturbação", style="bold yellow")
+        disc_table.add_column("Norma (Regra)", justify="right", style="bold white")
+        disc_table.add_column("Acertos Árvore ML", justify="right", style="green")
+        disc_table.add_column("Erros Árvore ML", justify="right", style="bold red")
+        disc_table.add_column("Recall Árvore ML", justify="right", style="cyan")
+        if align_with_rules:
+            disc_table.add_column("Corrigidas p/ Norma", justify="right", style="bold magenta")
+            disc_table.add_column("Entrega Final", justify="right", style="bold green")
+        else:
+            disc_table.add_column("Entrega Final (Puro)", justify="right", style="bold yellow")
+
+        class_discs = metrics.get("class_discrepancies", {})
+        for c_name in metrics.get("classes", []):
+            cd = class_discs.get(c_name, {})
+            support = cd.get("support", 0)
+            raw_corr = cd.get("raw_correct", 0)
+            raw_err = cd.get("raw_errors", 0)
+            raw_rec = f"{cd.get('raw_recall', 0.0):.1%}"
+            if align_with_rules:
+                corr_rules = cd.get("corrected_by_rules", 0)
+                deliv_rec = f"{cd.get('delivered_recall', 0.0):.1%}"
+                disc_table.add_row(
+                    c_name,
+                    f"{support:,}",
+                    f"{raw_corr:,}",
+                    f"[bold red]{raw_err:,}[/bold red]" if raw_err > 0 else "[green]0[/green]",
+                    raw_rec,
+                    f"[bold magenta]+{corr_rules:,}[/bold magenta]" if corr_rules > 0 else "[dim]0[/dim]",
+                    f"[bold green]{deliv_rec}[/bold green]",
+                )
+            else:
+                disc_table.add_row(
+                    c_name,
+                    f"{support:,}",
+                    f"{raw_corr:,}",
+                    f"[bold red]{raw_err:,}[/bold red]" if raw_err > 0 else "[green]0[/green]",
+                    raw_rec,
+                    f"[bold yellow]{raw_rec}[/bold yellow]",
+                )
+        console.print(disc_table)
+
+        # Diagnóstico de Fontes de Ruído (Causa-Raiz das Discrepâncias)
+        if audit_rep.discrepancy_count > 0 and audit_rep.noise_breakdown:
+            noise_table = Table(title="Diagnóstico de Causa-Raiz das Discrepâncias da Árvore", border_style="yellow")
+            noise_table.add_column("Origem do Ruído", style="bold yellow")
+            noise_table.add_column("Ocorrências", justify="right", style="cyan")
+            noise_table.add_column("Proporção", justify="right", style="magenta")
+            noise_table.add_column("Diagnóstico Físico / Engenharia", style="white")
+
+            explanations_map = {
+                NoiseSourceCategory.BORDERLINE_SUBTENSAO.value: "Tensão mínima na zona limítrofe de 0.90 p.u. (0.885 a 0.915 p.u. / ~114.25V).",
+                NoiseSourceCategory.BORDERLINE_SOBRETENSAO.value: "Tensão máxima na zona limítrofe de 1.05 p.u. (1.035 a 1.065 p.u. / ~133.37V).",
+                NoiseSourceCategory.BORDERLINE_DESBALANCEAMENTO.value: "Desbalanceamento PVUR em torno do limiar regulatório de 3.0%.",
+                NoiseSourceCategory.ZERO_VOLTAGE_CUTOFF.value: "Fase em patamar limítrofe do corte físico de interrupção (<= 5.0V).",
+                NoiseSourceCategory.PRECEDENCE_CONFLICT.value: "Múltiplas perturbações simultâneas na onda onde a ordem de prioridade atuou.",
+                NoiseSourceCategory.CLASS_WEIGHT_BIAS.value: "Superestimação de classe minoritária induzida pelo balanceamento de pesos.",
+                NoiseSourceCategory.PROBABILITY_UNCERTAINTY.value: "Região de alta entropia onde a probabilidade máxima da classe é < 60%.",
+                NoiseSourceCategory.TELEMETRY_OUTAGE_AMBIGUITY.value: "Ambiguidade entre perda de comunicação e queda física corroborada.",
+                NoiseSourceCategory.UNCLASSIFIED_DIVERGENCE.value: "Divergência não categorizada; candidata para auditoria manual.",
+            }
+            for k, v in sorted(audit_rep.noise_breakdown.items(), key=lambda x: x[1], reverse=True):
+                pct = v / max(1, audit_rep.discrepancy_count)
+                expl = explanations_map.get(k, "Requer inspeção manual.")
+                noise_table.add_row(k, f"{v:,}", f"{pct:.1%}", expl)
+            console.print(noise_table)
 
         # Detailed Report Table
         rep_table = Table(title="Relatório Detalhado por Classe de Perturbação", border_style="green")
@@ -902,22 +1089,28 @@ class RichPipelineTUI:
         console.print(
             Panel(
                 f"[bold green]✔ Modelo registrado com sucesso no Model Registry![/bold green]\n\n"
-                f"• Versão:      [bold white]{version_id}[/bold white]\n"
-                f"• Tag:         [bold yellow]{tag}[/bold yellow]\n"
-                f"• Período:     [bold cyan]{eff_start.strftime('%d/%m/%Y')} → {eff_end.strftime('%d/%m/%Y')} ({n_days} dias identificados)[/bold cyan]\n"
-                f"• Alimentador: [bold magenta]{feeder_name or 'TODOS'}[/bold magenta]\n"
-                f"• Acurácia:    [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white] | F1 Macro: [bold green]{metrics.get('f1_macro', 0.0):.4f}[/bold green]",
+                f"• Versão:        [bold white]{version_id}[/bold white]\n"
+                f"• Tag:           [bold yellow]{tag}[/bold yellow]\n"
+                f"• Período:       [bold cyan]{eff_start.strftime('%d/%m/%Y')} → {eff_end.strftime('%d/%m/%Y')} ({n_days} dias identificados)[/bold cyan]\n"
+                f"• Alimentador:   [bold magenta]{feeder_name or 'TODOS'}[/bold magenta]\n"
+                f"• Acurácia:      [bold white]{metrics.get('accuracy', 0.0):.2%}[/bold white] | F1 Macro: [bold green]{metrics.get('f1_macro', 0.0):.4f}[/bold green]\n"
+                f"• Imutabilidade: [bold green]🔒 Travado contra Sobrescrita (Audit Trail Seguro com ID Único)[/bold green]",
                 title="Governança de Modelos",
                 border_style="green",
             )
         )
 
-        # Save latest pointer for backwards compatibility
+        # Save versioned artifact permanently and update latest pointer for backwards compatibility
         models_dir = self.base_dir / "models"
         reports_dir = self.base_dir / "reports" / "figures"
         models_dir.mkdir(parents=True, exist_ok=True)
         reports_dir.mkdir(parents=True, exist_ok=True)
 
+        # 1. Versioned file (permanently preserved, unique version ID)
+        versioned_file = models_dir / f"voltage_disturbance_classifier_{version_id}.joblib"
+        clf.save(versioned_file)
+
+        # 2. Latest pointer (backwards compatible)
         model_file = models_dir / "voltage_disturbance_classifier.joblib"
         clf.save(model_file)
 

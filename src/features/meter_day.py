@@ -122,9 +122,13 @@ def build_meter_day_features(
         )
 
         # Merge metadata context if available (check by NIO, then by UC)
-        meta_sub = metadata_by_nio.get(nio_key) or metadata_by_nio.get(nio)
+        meta_sub = metadata_by_nio.get(nio_key)
+        if meta_sub is None:
+            meta_sub = metadata_by_nio.get(nio)
         if meta_sub is None and metadata_by_uc:
-            meta_sub = metadata_by_uc.get((uc_val,)) or metadata_by_uc.get(uc_val)
+            meta_sub = metadata_by_uc.get((uc_val,))
+            if meta_sub is None:
+                meta_sub = metadata_by_uc.get(uc_val)
         if meta_sub is not None and meta_sub.height > 0:
             for col in ("PHASE_TYPE", "CONSUMER_CLASS", "METER_TYPE", "INSTALLED_KVA"):
                 if col in meta_sub.columns:

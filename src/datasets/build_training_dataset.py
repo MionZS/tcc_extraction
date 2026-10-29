@@ -42,7 +42,7 @@ def build_training_dataset(
     feature_set = kwargs.get("feature_set", "all").lower()
 
     exprs: list[pl.Expr] = [
-        pl.col("UC").cast(pl.String).alias("id__uc_id"),
+        pl.col("UC").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("id__uc_id"),
         pl.col("CUTOFF_DATE").cast(pl.Date).alias("meta__cutoff_date"),
         pl.col("WINDOW_DAYS").cast(pl.Int16).alias("meta__window_days"),
         pl.lit(split_policy).cast(pl.String).alias("meta__split"),
@@ -116,7 +116,9 @@ def build_training_dataset(
     if uc_context_df is not None and not uc_context_df.is_empty():
         ctx_cols = {c.upper(): c for c in uc_context_df.columns}
         if "UC" in ctx_cols:
-            context_select: list[pl.Expr] = [pl.col(ctx_cols["UC"]).cast(pl.String).alias("id__uc_id")]
+            context_select: list[pl.Expr] = [
+                pl.col(ctx_cols["UC"]).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("id__uc_id")
+            ]
             for fld in ("TENSAO_BASE", "DEMANDA", "CONSUMO_ESTM", "CLASSE", "FASE_CIRCUITO"):
                 if fld in ctx_cols:
                     context_select.append(pl.col(ctx_cols[fld]).alias(f"x__{fld.lower()}"))
@@ -128,7 +130,9 @@ def build_training_dataset(
     if hierarchy_df is not None and not hierarchy_df.is_empty():
         hier_cols = {c.upper(): c for c in hierarchy_df.columns}
         if "UC" in hier_cols:
-            hier_select: list[pl.Expr] = [pl.col(hier_cols["UC"]).cast(pl.String).alias("id__uc_id")]
+            hier_select: list[pl.Expr] = [
+                pl.col(hier_cols["UC"]).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("id__uc_id")
+            ]
             # Numeric features for ML
             for fld in ("POT_INST_KVA", "TENSAO_ALIMENTADOR", "TENSAO_SE"):
                 if fld in hier_cols:

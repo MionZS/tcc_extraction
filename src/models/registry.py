@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +30,7 @@ class ModelMetadata:
     model_name: str
     algorithm: str
     created_at: str
+    run_id: str = ""
     data_slice: dict[str, Any] = field(default_factory=dict)
     hyperparameters: dict[str, Any] = field(default_factory=dict)
     feature_names: list[str] = field(default_factory=list)
@@ -45,6 +47,7 @@ class ModelMetadata:
             model_name=data["model_name"],
             algorithm=data.get("algorithm", "Unknown"),
             created_at=data.get("created_at", ""),
+            run_id=data.get("run_id", ""),
             data_slice=data.get("data_slice", {}),
             hyperparameters=data.get("hyperparameters", {}),
             feature_names=data.get("feature_names", []),
@@ -90,8 +93,14 @@ class ModelRegistry:
         tag: str = "candidate",
         description: str = "",
         custom_version: str | None = None,
+        allow_overwrite: bool = False,
     ) -> str:
         """Register and persist a trained model with full provenance and metrics.
+
+        Guarantee:
+            Each registered model is assigned a unique run_id (UUID short hash).
+            Overwriting existing versions is strictly prohibited (raises FileExistsError)
+            unless explicitly overridden with allow_overwrite=True.
 
         Args:
             model_name: Identifier of model class (e.g. 'voltage_disturbance_classifier').
@@ -102,15 +111,32 @@ class ModelRegistry:
             feature_names: List of input feature column names.
             tag: Stage alias ('candidate', 'production', 'baseline', 'archived').
             description: Free-text note about the run.
-            custom_version: Optional explicit version string (defaults to timestamp-based).
+            custom_version: Optional explicit version string (defaults to timestamp + unique UUID).
+            allow_overwrite: Whether to overwrite existing version (defaults to False for audit integrity).
 
         Returns:
             The generated version_id string.
         """
         now = datetime.now()
-        version_id = custom_version or f"v_{now.strftime('%Y%m%d_%H%M%S_%f')}"
+        run_id = uuid.uuid4().hex[:8]
 
-        model_dir = self.registry_dir / model_name / version_id
+        if custom_version:
+            candidate_version = custom_version.strip()
+        else:
+            candidate_version = f"v_{now.strftime('%Y%m%d_%H%M%S')}_{run_id}"
+
+        model_dir = self.registry_dir / model_name / candidate_version
+
+        # Enforce no-overwrite guarantee
+        if model_dir.exists() and not allow_overwrite:
+            if (model_dir / "metadata.json").exists() or (model_dir / "model.joblib").exists():
+                raise FileExistsError(
+                    f"A versão '{candidate_version}' já está registrada para o modelo '{model_name}'. "
+                    "Sobrescrita é bloqueada para garantir a imutabilidade de governança e auditoria. "
+                    f"Sugestão: utilize uma versão distinta ou adicione o identificador único sugerido: '{candidate_version}_{run_id}'."
+                )
+
+        version_id = candidate_version
         model_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Save serialized model
@@ -124,6 +150,7 @@ class ModelRegistry:
             model_name=model_name,
             algorithm=algorithm_name,
             created_at=now.isoformat(),
+            run_id=run_id,
             data_slice=data_slice or {},
             hyperparameters=hyperparameters or {},
             feature_names=feature_names or [],
@@ -138,13 +165,36 @@ class ModelRegistry:
         with open(model_dir / "metrics.json", "w", encoding="utf-8") as f:
             json.dump(metrics, f, indent=2, ensure_ascii=False)
 
-        # 4. Update index
+        # 4. Update index with overwrite protection & automatic baseline governance
         index = self._read_index()
-        # Remove any existing entry with same version_id
-        index = [item for item in index if not (item.get("model_name") == model_name and item.get("version_id") == version_id)]
+
+        # If promoting a new 'baseline', demote previous 'baseline' to 'ex-baseline'
+        if tag == "baseline":
+            for item in index:
+                if item.get("model_name") == model_name and item.get("tag") == "baseline":
+                    item["tag"] = "ex-baseline"
+                    # Also update metadata on disk for that version
+                    old_meta_path = self.registry_dir / model_name / item["version_id"] / "metadata.json"
+                    if old_meta_path.exists():
+                        try:
+                            with open(old_meta_path, "r", encoding="utf-8") as f_old:
+                                old_meta = json.load(f_old)
+                            old_meta["tag"] = "ex-baseline"
+                            with open(old_meta_path, "w", encoding="utf-8") as f_old:
+                                json.dump(old_meta, f_old, indent=2, ensure_ascii=False)
+                        except Exception:
+                            pass
+
+        if allow_overwrite:
+            index = [item for item in index if not (item.get("model_name") == model_name and item.get("version_id") == version_id)]
+        else:
+            existing_match = [item for item in index if item.get("model_name") == model_name and item.get("version_id") == version_id]
+            if existing_match:
+                raise FileExistsError(f"Registro já existente no índice para {model_name}:{version_id}.")
 
         entry = {
             "version_id": version_id,
+            "run_id": run_id,
             "model_name": model_name,
             "algorithm": algorithm_name,
             "created_at": now.isoformat(),
@@ -209,6 +259,39 @@ class ModelRegistry:
 
         return model_obj, meta, metrics
 
+    def get_latest_baseline(
+        self, model_name: str, prefer_deterministic: bool = True
+    ) -> tuple[Any, dict[str, Any], dict[str, Any]] | None:
+        """Finds and loads the most current baseline model for model_name.
+
+        Priority order:
+        1. Active 'baseline' (if prefer_deterministic, prioritizes deterministic / PRODIST aligned models)
+        2. Latest 'production'
+        3. Latest 'candidate' or 'ex-baseline'
+        """
+        models = self.list_models(model_name)
+        if not models:
+            return None
+
+        # Filter baselines first
+        candidates = [m for m in models if m.get("tag") == "baseline"]
+        if not candidates:
+            candidates = [m for m in models if m.get("tag") == "production"]
+        if not candidates:
+            candidates = [m for m in models if m.get("tag") in ("ex-baseline", "candidate")]
+        if not candidates:
+            candidates = models
+
+        chosen = candidates[0]
+        if prefer_deterministic and len(candidates) > 1:
+            for c in candidates:
+                desc = (c.get("description") or "").lower()
+                if "det" in desc or "alinhado" in desc or "norma" in desc or "prodist" in desc:
+                    chosen = c
+                    break
+
+        return self.load_model(model_name, version_id=chosen["version_id"])
+
     def compare_models(self, model_name: str, version_a: str, version_b: str) -> dict[str, Any]:
         """Generate a comparison dictionary between two model versions."""
         _, meta_a, metrics_a = self.load_model(model_name, version_a)
@@ -254,6 +337,7 @@ class ModelRegistry:
 
         table = Table(title="🏛️ Repositório de Modelos Treinados (Model Registry)", border_style="cyan")
         table.add_column("Versão", style="bold yellow")
+        table.add_column("Run ID (Único)", style="bold cyan")
         table.add_column("Modelo", style="dim")
         table.add_column("Tag", style="bold")
         table.add_column("Período dos Dados", style="cyan")
@@ -265,9 +349,17 @@ class ModelRegistry:
 
         for m in models:
             v_id = m.get("version_id", "")
+            r_id = m.get("run_id") or (v_id.split("_")[-1][:8] if "_" in v_id else "-")
             m_name = m.get("model_name", "")
             tag = m.get("tag", "candidate")
-            tag_styled = f"[green]{tag}[/]" if tag == "production" else f"[blue]{tag}[/]"
+            if tag == "production":
+                tag_styled = f"[bold green]{tag}[/]"
+            elif tag == "baseline":
+                tag_styled = f"[bold yellow]{tag}[/]"
+            elif tag == "ex-baseline":
+                tag_styled = f"[dim cyan]{tag}[/]"
+            else:
+                tag_styled = f"[blue]{tag}[/]"
 
             s_date = m.get("start_date") or "-"
             e_date = m.get("end_date") or "-"
@@ -286,6 +378,6 @@ class ModelRegistry:
 
             dt_created = m.get("created_at", "")[:19].replace("T", " ")
 
-            table.add_row(v_id, m_name, tag_styled, period_str, feeder_str, samples_str, acc_str, f1_str, dt_created)
+            table.add_row(v_id, r_id, m_name, tag_styled, period_str, feeder_str, samples_str, acc_str, f1_str, dt_created)
 
         console.print(table)

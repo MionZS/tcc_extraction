@@ -6,7 +6,7 @@ Este é o pipeline completo de extração, normalização, engenharia de atribut
 
 ---
 
-## 3. Como Executar (Reprodutibilidade)
+## 2. Como Executar (Reprodutibilidade)
 
 ### Uso rápido (TUI via `uv`)
 
@@ -52,10 +52,18 @@ uv run python -m src.main --start-date 2026-06-01 --end-date 2026-06-10
 run_feeder.cmd
 # ou: uv run python scripts/run_feeder_pipeline.py --days-back 1 --train-model
 
-# Treino direto (3 arquiteturas)
+# Treino direto (Classificador de Tensão PRODIST & Modelos Comportamentais)
+uv run python scripts/train_voltage_classifier.py
+uv run python scripts/train_anomaly_model.py --mode voltage
 uv run python scripts/train_anomaly_model.py --mode composite
 uv run python scripts/train_anomaly_model.py --mode hierarchical --feeder Fonte_Nova
+uv run python scripts/train_anomaly_model.py --mode specialized
 uv run python scripts/train_anomaly_model.py --mode baseline --contamination 0.05
+
+# Relatório de Análise Exploratória (EDA interativo com Marimo)
+uv run marimo edit notebooks/eda_report.py
+# ou modo dashboard:
+uv run marimo run notebooks/eda_report.py
 
 # Auditoria de saúde + testes (incluindo teste E2E)
 uv run pytest tests/test_full_pipeline_e2e.py -v
@@ -66,7 +74,7 @@ uv run pytest tests -q
 
 ---
 
-## 2. Escolhas de Design (Arquitetura)
+## 3. Escolhas de Design (Arquitetura)
 
 ### Arquitetura de dados (camadas semânticas)
 
@@ -187,7 +195,7 @@ src/
 scripts/ (run_araucaria_full, train_voltage_classifier, run_feeder_pipeline, train_anomaly_model, daily_automation, ...)
 vault/ (araucaria_sample_pipeline.py - pipeline legada 200 NIOs CSV arquivada)
 queries/ (cis_*, geo_ucs, geo_feeder_direct, mdm_coluna, meter_*, label_sources/, weather_timegrid)
-tests/ (21 arquivos — splitter, leakage, cadence, composite, MoE, weather, automação…)
+tests/ (32 arquivos — splitter, leakage, cadence, composite, MoE, weather, automação, voltage_classifier, continuity…)
 docs/ (ver §2)
 ```
 

@@ -121,23 +121,54 @@ class DatasetSplitter:
                 train_df=df, val_df=df, test_df=df, split_summary={"status": "empty_input"}
             )
 
-        # Check for feeder column availability
-        actual_feeder_col = feeder_col if feeder_col in df.columns else (
-            "ALIMENTADOR" if "ALIMENTADOR" in df.columns else None
+        # Check for feeder column availability and populate from hierarchy if missing or mostly null
+        working_df = df
+        actual_feeder_col = feeder_col if feeder_col in working_df.columns else (
+            "ALIMENTADOR" if "ALIMENTADOR" in working_df.columns else None
         )
 
-        # Join hierarchy if actual_feeder_col is not present but hierarchy is provided
-        working_df = df
-        if not actual_feeder_col and hierarchy_df is not None:
-            # Detect UC key in both frames (support legacy "UC" and new "id__uc_id")
-            feat_uc_col = next((c for c in ("UC", "id__uc_id") if c in df.columns), None)
-            hier_uc_col = next((c for c in ("UC", "id__uc_id") if c in hierarchy_df.columns), None)
-            if feat_uc_col and hier_uc_col and "ALIMENTADOR" in hierarchy_df.columns:
-                h_sub = hierarchy_df.select([hier_uc_col, "ALIMENTADOR"]).unique(subset=[hier_uc_col])
-                if hier_uc_col != feat_uc_col:
-                    h_sub = h_sub.rename({hier_uc_col: feat_uc_col})
-                working_df = df.join(h_sub, left_on=feat_uc_col, right_on=feat_uc_col, how="left")
-                actual_feeder_col = "ALIMENTADOR"
+        needs_feeder_enrichment = False
+        if actual_feeder_col:
+            valid_cnt = working_df.filter(
+                pl.col(actual_feeder_col).is_not_null() & (pl.col(actual_feeder_col).cast(pl.String).str.strip_chars() != "")
+            ).height
+            if valid_cnt < working_df.height * 0.5:
+                needs_feeder_enrichment = True
+        else:
+            needs_feeder_enrichment = True
+
+        if needs_feeder_enrichment and hierarchy_df is not None and not hierarchy_df.is_empty():
+            feat_uc_col = next((c for c in ("id__uc_id", "UC", "uc_id") if c in working_df.columns), None)
+            hier_uc_col = next((c for c in ("UC", "id__uc_id", "uc_id") if c in hierarchy_df.columns), None)
+            hier_f_col = next((c for c in ("ALIMENTADOR", "meta__feeder", "feeder") if c in hierarchy_df.columns), None)
+
+            if feat_uc_col and hier_uc_col and hier_f_col:
+                h_sub = (
+                    hierarchy_df.select([hier_uc_col, hier_f_col])
+                    .drop_nulls()
+                    .with_columns([
+                        pl.col(hier_uc_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_JOIN_UC"),
+                        pl.col(hier_f_col).cast(pl.String).str.strip_chars().alias("_ENRICHED_FEEDER"),
+                    ])
+                    .filter(pl.col("_JOIN_UC") != "")
+                    .unique(subset=["_JOIN_UC"])
+                )
+
+                working_df = (
+                    working_df.with_columns(
+                        pl.col(feat_uc_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_JOIN_UC")
+                    )
+                    .join(h_sub, on="_JOIN_UC", how="left")
+                    .drop("_JOIN_UC")
+                )
+
+                if actual_feeder_col and actual_feeder_col in working_df.columns:
+                    working_df = working_df.with_columns(
+                        pl.coalesce([pl.col(actual_feeder_col), pl.col("_ENRICHED_FEEDER")]).alias("meta__feeder")
+                    ).drop("_ENRICHED_FEEDER")
+                else:
+                    working_df = working_df.rename({"_ENRICHED_FEEDER": "meta__feeder"})
+                actual_feeder_col = "meta__feeder"
 
         feeders = (
             working_df.get_column(actual_feeder_col).drop_nulls().unique().to_list()
@@ -199,6 +230,26 @@ class DatasetSplitter:
             train_dfs.append(tr)
             val_dfs.append(va)
             test_dfs.append(te)
+
+        # CRITICAL RECOVERY: Ensure 100% of rows from working_df are retained across splits
+        assigned_train_df = pl.concat(train_dfs) if train_dfs else pl.DataFrame(schema=working_df.schema)
+        assigned_val_df = pl.concat(val_dfs) if val_dfs else pl.DataFrame(schema=working_df.schema)
+        assigned_test_df = pl.concat(test_dfs) if test_dfs else pl.DataFrame(schema=working_df.schema)
+
+        total_assigned = assigned_train_df.height + assigned_val_df.height + assigned_test_df.height
+        if total_assigned < working_df.height:
+            uc_key = next((c for c in ("id__uc_id", "UC") if c in working_df.columns), None)
+            if uc_key:
+                assigned_keys = set(assigned_train_df[uc_key].to_list()) | set(assigned_val_df[uc_key].to_list()) | set(assigned_test_df[uc_key].to_list())
+                unassigned_df = working_df.filter(~pl.col(uc_key).is_in(assigned_keys))
+            else:
+                unassigned_df = working_df.slice(total_assigned)
+
+            if unassigned_df.height > 0:
+                un_tr, un_va, un_te = self._temporal_or_random_split(unassigned_df, date_col)
+                train_dfs.append(un_tr)
+                val_dfs.append(un_va)
+                test_dfs.append(un_te)
 
         res_train = pl.concat(train_dfs) if train_dfs else pl.DataFrame(schema=df.schema)
         res_val = pl.concat(val_dfs) if val_dfs else pl.DataFrame(schema=df.schema)
