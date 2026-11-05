@@ -57,8 +57,10 @@ from src.datasets.normalize import (
 )
 from src.datasets.partitioning import (
     ensure_partition_dirs,
+    events_partition_path,
     measurements_partition_path,
 )
+from src.datasets.retroactive_cleaner import RetroactiveDataCleaner
 from src.datasets.writers import (
     write_context_table,
     write_events_table,
@@ -766,77 +768,113 @@ def run_pipeline(
 
     engine_orca.dispose()
 
-    # Consolidate daily features and training dataset for latest day in range
-    interval_dir = measurements_partition_path("ami_interval", report_day, base_dir=output_dir)
-    instant_dir = measurements_partition_path("ami_instantaneous", report_day, base_dir=output_dir)
-    register_dir = measurements_partition_path("ami_registers", report_day, base_dir=output_dir)
-    interval_parquet = interval_dir / "data.parquet"
-    instant_parquet = instant_dir / "data.parquet"
-    register_parquet = register_dir / "data.parquet"
+    # ── Step 6: Saneamento Retroativo, Reconciliação NIO→UC & Consolidação Multi-Janela ──
+    _log("[*] Iniciando Saneamento Retroativo e Consolidação Multi-Janela sobre o Data Lake...")
+    training_df = pl.DataFrame()
+    try:
+        cleaner = RetroactiveDataCleaner(base_dir=output_dir)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            console=console,
+        ) as clean_prog:
+            clean_task = clean_prog.add_task("[cyan]Consolidando partições diárias...[/cyan]", total=None)
 
-    def _read_layer(parquet_p: Path) -> pl.DataFrame:
-        if parquet_p.exists() and parquet_p.stat().st_size > 0:
-            return pl.read_parquet(parquet_p)
-        csv_p = parquet_p.with_suffix(".csv")
-        if csv_p.exists() and csv_p.stat().st_size > 0:
-            return pl.read_csv(csv_p, separator=";")
-        return pl.DataFrame()
+            def _on_clean_step(msg: str, idx: int, total: int) -> None:
+                clean_prog.update(clean_task, description=f"[cyan]{msg}[/cyan]", total=total, completed=idx)
 
-    interval_df = _read_layer(interval_parquet)
-    instant_df = _read_layer(instant_parquet)
-    register_df = _read_layer(register_parquet)
+            clean_rep = cleaner.run(
+                stride_mode="monthly",
+                write_csv=write_csv,
+                progress_callback=_on_clean_step,
+            )
 
-    meter_to_uc: dict[str, str] = {}
-    if not meter_history.is_empty():
-        for r in meter_history.select(["NIO", "UC"]).iter_rows():
-            if r[0] and r[1]:
-                meter_to_uc[str(r[0])] = str(r[1])
+        dataset_path = clean_rep.dataset_path
+        training_df = (
+            pl.read_parquet(dataset_path)
+            if dataset_path.exists() and dataset_path.suffix == ".parquet"
+            else pl.read_csv(dataset_path.with_suffix(".csv"), separator=";")
+        )
+        _log(
+            f"[+] Dataset multi-janela saneado consolidado: {dataset_path} "
+            f"({clean_rep.total_uc_windows:,} janelas | {len(clean_rep.cutoff_dates)} cutoffs desacoplados)"
+        )
+        _log(
+            f"    • Elegíveis p/ Treino Limpo: {clean_rep.clean_train_eligible_rows:,} | "
+            f"Quarentena RF Mesh: {clean_rep.telecom_quarantine_rows:,}"
+        )
+        _log(
+            f"    • Reconciliação Topológica (Alimentador): {clean_rep.reconciled_feeder_ratio:.2%} | "
+            f"MAD > 0: {clean_rep.nonzero_mad_ratio:.2%} | Slope ≠ 0: {clean_rep.nonzero_slope_ratio:.2%}"
+        )
+    except Exception as clean_exc:
+        _log(f"[yellow]⚠ Fallback para consolidação pontual ({clean_exc})...[/yellow]")
+        interval_dir = measurements_partition_path("ami_interval", report_day, base_dir=output_dir)
+        instant_dir = measurements_partition_path("ami_instantaneous", report_day, base_dir=output_dir)
+        register_dir = measurements_partition_path("ami_registers", report_day, base_dir=output_dir)
 
-    # Daily features
-    daily_features = build_meter_day_features(
-        interval_df,
-        instant_df,
-        register_df,
-        metadata_df=uc_context,
-        report_day=report_day,
-        meter_to_uc_map=meter_to_uc,
-    )
-    write_features(daily_features, "v1", report_day, base_dir=output_dir, write_csv=write_csv)
+        def _read_layer(parquet_p: Path) -> pl.DataFrame:
+            if parquet_p.exists() and parquet_p.stat().st_size > 0:
+                return pl.read_parquet(parquet_p)
+            csv_p = parquet_p.with_suffix(".csv")
+            if csv_p.exists() and csv_p.stat().st_size > 0:
+                return pl.read_csv(csv_p, separator=";")
+            return pl.DataFrame()
 
-    # Load 30-day historical window alarms from refined events layer
-    alarms_list: list[pl.DataFrame] = []
-    events_base = output_dir / "events" / "alarm_events"
-    if events_base.exists():
+        interval_df = _read_layer(interval_dir / "data.parquet")
+        instant_df = _read_layer(instant_dir / "data.parquet")
+        register_df = _read_layer(register_dir / "data.parquet")
+
+        meter_to_uc: dict[str, str] = {}
+        if not meter_history.is_empty():
+            for r in meter_history.select(["NIO", "UC"]).iter_rows():
+                if r[0] and r[1]:
+                    raw_k = str(r[0]).strip()
+                    clean_v = str(r[1]).strip().lstrip("0") or str(r[1]).strip()
+                    meter_to_uc[raw_k] = clean_v
+                    stripped_k = raw_k.lstrip("0")
+                    if stripped_k:
+                        meter_to_uc[stripped_k] = clean_v
+
+        daily_features = build_meter_day_features(
+            interval_df,
+            instant_df,
+            register_df,
+            metadata_df=uc_context,
+            report_day=report_day,
+            meter_to_uc_map=meter_to_uc,
+        )
+        write_features(daily_features, "v1", report_day, base_dir=output_dir, write_csv=write_csv)
+
+        alarms_list: list[pl.DataFrame] = []
         for d_offset in range(31):
             check_d = report_day - timedelta(days=d_offset)
-            d_tok = _date_token(check_d)
-            part_p = events_base / f"report_day={d_tok}" / "data.parquet"
+            part_p = events_partition_path("alarm_events", check_d, base_dir=output_dir) / "data.parquet"
             if part_p.exists():
                 alarms_list.append(pl.read_parquet(part_p))
-    window_alarms_df = pl.concat(alarms_list, how="vertical_relaxed") if alarms_list else pl.DataFrame()
+        window_alarms_df = pl.concat(alarms_list, how="vertical_relaxed") if alarms_list else pl.DataFrame()
 
-    # Window features (incorporating alarms)
-    window_features = build_uc_window_features(
-        daily_features,
-        meter_history_df=meter_history,
-        alarm_events_df=window_alarms_df,
-        cutoff_date=report_day,
-        window_days=30,
-        feature_set_version="v1",
-    )
-    write_window_features(window_features, "v1", report_day, base_dir=output_dir, write_csv=write_csv)
+        window_features = build_uc_window_features(
+            daily_features,
+            meter_history_df=meter_history,
+            alarm_events_df=window_alarms_df,
+            cutoff_date=report_day,
+            window_days=30,
+            feature_set_version="v1",
+        )
+        write_window_features(window_features, "v1", report_day, base_dir=output_dir, write_csv=write_csv)
 
-    # Training Dataset with meta__feeder
-    training_df = build_training_dataset(
-        window_features,
-        uc_context_df=uc_context,
-        hierarchy_df=hierarchy,
-        split_policy="train",
-    )
-
-    dataset_path = write_training_dataset(training_df, "v1", base_dir=output_dir, write_csv=write_csv)
-    _log(f"[+] Dataset de treinamento consolidado: {dataset_path}")
-    _log(f"    Total de amostras: {training_df.height:,}")
+        training_df = build_training_dataset(
+            window_features,
+            uc_context_df=uc_context,
+            hierarchy_df=hierarchy,
+            split_policy="train",
+        )
+        dataset_path = write_training_dataset(training_df, "v1", base_dir=output_dir, write_csv=write_csv)
+        _log(f"[+] Dataset de treinamento consolidado (fallback): {dataset_path} ({training_df.height:,} amostras)")
 
     if "meta__feeder" in training_df.columns:
         f_dist = training_df.group_by("meta__feeder").agg(pl.len().alias("n_ucs")).sort("n_ucs", descending=True)

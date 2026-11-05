@@ -13,6 +13,7 @@ Supports:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 import numpy as np
 import polars as pl
@@ -20,6 +21,10 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.preprocessing import StandardScaler
 
 from src.features.circuit_profile import compute_circuit_profile
+
+# Período Canônico Padrão do TCC Copel Araucária
+CANONICAL_TRAIN_START = date(2026, 8, 1)
+CANONICAL_TRAIN_END = date(2026, 10, 31)
 
 
 @dataclass
@@ -31,19 +36,69 @@ class DatasetSplitResult:
 
 
 class DatasetSplitter:
-    """Intelligent Dataset Splitter for Feeder-Level and UC-Level ML Modeling."""
+    """Intelligent Dataset Splitter for Feeder-Level and UC-Level ML Modeling.
+
+    Enforces the canonical 3-month training window: Agosto, Setembro e Outubro/2026.
+    Subsequent months (Novembro/2026 onwards) are strictly reserved for Validation and Test
+    without data leakage.
+    """
 
     def __init__(
         self,
         val_ratio: float = 0.15,
         test_ratio: float = 0.20,
         min_cluster_feeders: int = 3,
+        canonical_train_start: date = CANONICAL_TRAIN_START,
+        canonical_train_end: date = CANONICAL_TRAIN_END,
         random_state: int = 42,
     ) -> None:
         self.val_ratio = val_ratio
         self.test_ratio = test_ratio
         self.min_cluster_feeders = min_cluster_feeders
+        self.canonical_train_start = canonical_train_start
+        self.canonical_train_end = canonical_train_end
         self.random_state = random_state
+
+    def _extract_date_series(self, df: pl.DataFrame, date_col: str | None = None) -> pl.Series | None:
+        """Extracts a normalized pl.Date series from df using candidate column names."""
+        candidates = [date_col] if date_col else []
+        candidates.extend(["meta__cutoff_date", "CUTOFF_DATE", "REPORT_DAY", "DATE", "report_day"])
+
+        for c in candidates:
+            if not c or c not in df.columns:
+                continue
+            col = df.get_column(c)
+            if col.dtype == pl.Date:
+                return col
+            if col.dtype == pl.Datetime:
+                return col.dt.date()
+            if col.dtype == pl.String:
+                try_iso = col.str.to_date("%Y-%m-%d", strict=False)
+                if try_iso.drop_nulls().len() > 0:
+                    return try_iso
+                try_num = col.str.to_date("%Y%m%d", strict=False)
+                if try_num.drop_nulls().len() > 0:
+                    return try_num
+            if col.dtype.is_numeric():
+                try_num = col.cast(pl.String).str.to_date("%Y%m%d", strict=False)
+                if try_num.drop_nulls().len() > 0:
+                    return try_num
+
+        # Check year/month/day columns
+        if "meta__report_year" in df.columns and "meta__report_month" in df.columns and "meta__report_day" in df.columns:
+            try:
+                date_str = (
+                    df["meta__report_year"].cast(pl.String)
+                    + "-"
+                    + df["meta__report_month"].cast(pl.String).str.zfill(2)
+                    + "-"
+                    + df["meta__report_day"].cast(pl.String).str.zfill(2)
+                )
+                return date_str.str.to_date("%Y-%m-%d", strict=False)
+            except Exception:
+                pass
+
+        return None
 
     def group_feeders_by_similarity(
         self,
@@ -182,7 +237,111 @@ class DatasetSplitter:
 
         feeder_assignments: dict[str, str] = {}
 
-        if len(feeders) >= self.min_cluster_feeders and hierarchy_df is not None:
+        # ── 1. CANONICAL TEMPORAL OUT-OF-TIME (OOT) SPLIT ────────────────────────
+        # Treino Canônico Oficial: Agosto, Setembro e Outubro/2026 (01/08 a 31/10/2026)
+        # Validação & Teste: Meses seguintes (> 31/10/2026, ex: Novembro em diante)
+        date_series = self._extract_date_series(working_df, date_col)
+        has_subsequent_dates = False
+        if date_series is not None and date_series.drop_nulls().len() > 0:
+            max_d = date_series.drop_nulls().max()
+            if max_d is not None and max_d > self.canonical_train_end:
+                has_subsequent_dates = True
+
+        if has_subsequent_dates and date_series is not None:
+            valid_dates_mask = date_series.is_not_null()
+            train_mask = valid_dates_mask & (date_series >= self.canonical_train_start) & (date_series <= self.canonical_train_end)
+            future_mask = valid_dates_mask & (date_series > self.canonical_train_end)
+
+            res_train = working_df.filter(train_mask)
+            future_df = working_df.filter(future_mask)
+
+            n_fut = future_df.height
+            if n_fut > 0:
+                fut_dates = self._extract_date_series(future_df, date_col)
+                sorted_fut = future_df.sort(fut_dates) if fut_dates is not None else future_df
+                val_fraction = self.val_ratio / (self.val_ratio + self.test_ratio)
+                val_n = max(1, int(round(n_fut * val_fraction))) if n_fut > 1 else 1
+                res_val = sorted_fut.slice(0, val_n)
+                res_test = sorted_fut.slice(val_n) if n_fut > 1 else sorted_fut
+            else:
+                res_val = pl.DataFrame(schema=working_df.schema)
+                res_test = pl.DataFrame(schema=working_df.schema)
+
+            total_rows = working_df.height
+            summary = {
+                "total_rows": total_rows,
+                "train_rows": res_train.height,
+                "train_ratio": round(res_train.height / total_rows, 4) if total_rows > 0 else 0.0,
+                "val_rows": res_val.height,
+                "val_ratio": round(res_val.height / total_rows, 4) if total_rows > 0 else 0.0,
+                "test_rows": res_test.height,
+                "test_ratio": round(res_test.height / total_rows, 4) if total_rows > 0 else 0.0,
+                "feeder_assignments": {"all_feeders": "train_in_aug_oct"},
+                "strategy": "canonical_3months_oot",
+                "train_period": f"{self.canonical_train_start.strftime('%d/%m/%Y')} a {self.canonical_train_end.strftime('%d/%m/%Y')} (Agosto, Setembro e Outubro/2026)",
+                "subsequent_period": f"Posterior a {self.canonical_train_end.strftime('%d/%m/%Y')} (Novembro/2026 em diante)",
+                "has_subsequent_data": True,
+            }
+
+            return DatasetSplitResult(
+                train_df=res_train,
+                val_df=res_val,
+                test_df=res_test,
+                split_summary=summary,
+            )
+
+        # ── 1B. INTRA-CANONICAL MULTI-WINDOW OOT SPLIT (Before November Arrives) ─
+        # When >= 3 decoupled cutoffs exist inside [01/08/2026, 31/10/2026] (e.g. Aug, Sep, Oct)
+        # and November is not yet extracted, keep early cutoffs (e.g. Aug + Sep) in Train across
+        # ALL feeders and reserve the latest cutoff(s) (e.g. Oct) strictly Out-of-Time for Val/Test.
+        if date_series is not None:
+            in_canon = date_series.drop_nulls().filter(
+                (date_series.drop_nulls() >= self.canonical_train_start)
+                & (date_series.drop_nulls() <= self.canonical_train_end)
+            )
+            unique_canon_dates = sorted(in_canon.unique().to_list())
+            if len(unique_canon_dates) >= 3:
+                holdout_cutoff = unique_canon_dates[-1]
+                valid_dates_mask = date_series.is_not_null()
+                train_mask = (
+                    valid_dates_mask
+                    & (date_series >= self.canonical_train_start)
+                    & (date_series < holdout_cutoff)
+                )
+                holdout_mask = valid_dates_mask & (date_series >= holdout_cutoff)
+
+                res_train = working_df.filter(train_mask)
+                holdout_df = working_df.filter(holdout_mask)
+                n_hold = holdout_df.height
+                val_fraction = self.val_ratio / (self.val_ratio + self.test_ratio)
+                val_n = max(1, int(round(n_hold * val_fraction))) if n_hold > 1 else 1
+                res_val = holdout_df.slice(0, val_n)
+                res_test = holdout_df.slice(val_n) if n_hold > 1 else holdout_df
+
+                total_rows = working_df.height
+                summary = {
+                    "total_rows": total_rows,
+                    "train_rows": res_train.height,
+                    "train_ratio": round(res_train.height / total_rows, 4) if total_rows > 0 else 0.0,
+                    "val_rows": res_val.height,
+                    "val_ratio": round(res_val.height / total_rows, 4) if total_rows > 0 else 0.0,
+                    "test_rows": res_test.height,
+                    "test_ratio": round(res_test.height / total_rows, 4) if total_rows > 0 else 0.0,
+                    "feeder_assignments": {"all_feeders": "multi_window_oot"},
+                    "strategy": "intra_canonical_multi_window_oot",
+                    "train_period": f"{unique_canon_dates[0].strftime('%d/%m/%Y')} a {unique_canon_dates[-2].strftime('%d/%m/%Y')} ({len(unique_canon_dates) - 1} janelas desacopladas)",
+                    "subsequent_period": f"Janela OOT {holdout_cutoff.strftime('%d/%m/%Y')} (até chegada de Novembro/2026)",
+                    "has_subsequent_data": False,
+                }
+                return DatasetSplitResult(
+                    train_df=res_train,
+                    val_df=res_val,
+                    test_df=res_test,
+                    split_summary=summary,
+                )
+
+        # ── 2. SPLIT POR SIMILARIDADE DE ALIMENTADORES (Fallback) ────────────────
+        if actual_feeder_col and actual_feeder_col in working_df.columns and len(feeders) >= 2:
             # Group feeders by similarity
             grouped_clusters = self.group_feeders_by_similarity(working_df, hierarchy_df)
 
@@ -265,6 +424,10 @@ class DatasetSplitter:
             "test_rows": res_test.height,
             "test_ratio": round(res_test.height / total_rows, 4) if total_rows > 0 else 0.0,
             "feeder_assignments": feeder_assignments,
+            "strategy": "canonical_feeder_clustering",
+            "train_period": f"{self.canonical_train_start.strftime('%d/%m/%Y')} a {self.canonical_train_end.strftime('%d/%m/%Y')} (Agosto, Setembro e Outubro/2026)",
+            "subsequent_period": "Aguardando extração de Novembro/2026 para Validação/Teste 100% OOT",
+            "has_subsequent_data": False,
         }
 
         return DatasetSplitResult(

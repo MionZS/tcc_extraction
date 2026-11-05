@@ -74,3 +74,32 @@ def test_dataset_splitter_feeder_grouping() -> None:
     test_ucs = set(res.test_df.get_column("UC").to_list())
     train_ucs = set(res.train_df.get_column("UC").to_list())
     assert len(test_ucs.intersection(train_ucs)) == 0
+
+
+def test_dataset_splitter_canonical_oot() -> None:
+    """Verifies that August-October is strictly allocated to Train, and November onwards to Val/Test."""
+    df = pl.DataFrame({
+        "UC": [f"UC_{i}" for i in range(120)],
+        "meta__cutoff_date": [
+            "2026-08-15" if i < 30 else
+            "2026-09-15" if i < 60 else
+            "2026-10-15" if i < 90 else
+            "2026-11-05"
+            for i in range(120)
+        ],
+        "x__feature": [float(i) for i in range(120)],
+    })
+    splitter = DatasetSplitter(val_ratio=0.15, test_ratio=0.20)
+    res = splitter.split(df)
+
+    assert res.split_summary["strategy"] == "canonical_3months_oot"
+    assert res.train_df.height == 90
+    assert res.val_df.height + res.test_df.height == 30
+
+    train_dates = res.train_df["meta__cutoff_date"].to_list()
+    assert all(d <= "2026-10-31" for d in train_dates)
+
+    val_dates = res.val_df["meta__cutoff_date"].to_list()
+    test_dates = res.test_df["meta__cutoff_date"].to_list()
+    assert all(d > "2026-10-31" for d in val_dates)
+    assert all(d > "2026-10-31" for d in test_dates)

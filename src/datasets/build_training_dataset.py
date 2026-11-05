@@ -110,7 +110,51 @@ def build_training_dataset(
         if col_name in df.columns:
             exprs.append(pl.col(col_name).alias(f"x__{col_name.lower()}"))
 
+    # Preserve optional curated metadata and normalized ratios if produced by retroactive cleaner
+    for extra_meta in ("IS_CLEAN_FOR_TRAIN", "TELECOM_STATUS", "RELIABLE_DAY_RATIO"):
+        if extra_meta in df.columns:
+            exprs.append(pl.col(extra_meta).alias(f"meta__{extra_meta.lower()}"))
+        elif f"meta__{extra_meta.lower()}" in df.columns:
+            exprs.append(pl.col(f"meta__{extra_meta.lower()}"))
+
+    for extra_feat in ("FA_CV_WINDOW", "ZERO_CONSUMPTION_FLAG"):
+        if extra_feat in df.columns:
+            exprs.append(pl.col(extra_feat).alias(f"x__{extra_feat.lower()}"))
+        elif f"x__{extra_feat.lower()}" in df.columns:
+            exprs.append(pl.col(f"x__{extra_feat.lower()}"))
+
     base_model_df = df.select(exprs)
+
+    # ── Reconcile NIO -> UC if id__uc_id contains unmapped NIO identifiers ─
+    if hierarchy_df is not None and not hierarchy_df.is_empty():
+        h_cols = {c.upper(): c for c in hierarchy_df.columns}
+        if "UC" in h_cols and "NIO" in h_cols:
+            known_ucs = set(
+                hierarchy_df.get_column(h_cols["UC"])
+                .drop_nulls()
+                .cast(pl.String)
+                .str.strip_chars()
+                .str.replace(r"^0+", "")
+                .to_list()
+            )
+            sample_ids = set(base_model_df.get_column("id__uc_id").drop_nulls().to_list())
+            direct_overlap = len(sample_ids & known_ucs)
+            if sample_ids and direct_overlap < len(sample_ids) * 0.5:
+                nio_bridge = (
+                    hierarchy_df.select([
+                        pl.col(h_cols["NIO"]).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_BRIDGE_NIO"),
+                        pl.col(h_cols["UC"]).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_BRIDGE_UC"),
+                    ])
+                    .drop_nulls()
+                    .filter((pl.col("_BRIDGE_NIO") != "") & (pl.col("_BRIDGE_UC") != ""))
+                    .unique(subset=["_BRIDGE_NIO"], keep="last")
+                )
+                base_model_df = (
+                    base_model_df.join(nio_bridge, left_on="id__uc_id", right_on="_BRIDGE_NIO", how="left")
+                    .with_columns(pl.coalesce([pl.col("_BRIDGE_UC"), pl.col("id__uc_id")]).alias("id__uc_id"))
+                    .drop("_BRIDGE_UC")
+                    .unique(subset=["id__uc_id", "meta__cutoff_date"], keep="last")
+                )
 
     # ── Join Context Features (if provided) ───────────────────────────────
     if uc_context_df is not None and not uc_context_df.is_empty():

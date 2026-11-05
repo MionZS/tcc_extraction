@@ -59,6 +59,11 @@ def compute_circuit_profile(
             "CIRCUIT_CONSUMPTION_ENTROPY": pl.Float64,
         })
 
+    # Drop any leftover _right columns to prevent Polars duplicate errors
+    right_cols = [c for c in features_df.columns if c.endswith("_right")]
+    if right_cols:
+        features_df = features_df.drop(right_cols)
+
     # Auto-detect the feeder column if needed
     if feeder_col not in features_df.columns:
         for candidate in ("meta__feeder", "ALIMENTADOR"):
@@ -70,30 +75,38 @@ def compute_circuit_profile(
     feat_uc_col = _resolve_uc_col(features_df)
     hier_uc_col = _resolve_uc_col(hierarchy_df)
 
-    # If the feeder is already in features_df, we may not need the hierarchy join
-    if feeder_col in features_df.columns and feat_uc_col is None:
-        merged = features_df
-    elif feat_uc_col is None or hier_uc_col is None:
-        return pl.DataFrame()
-    else:
-        # Build hierarchy subset with UC + optional metadata columns
+    # Check if feeder column already exists with non-null values in features_df
+    has_valid_feeder = (
+        feeder_col in features_df.columns
+        and features_df.get_column(feeder_col).drop_nulls().len() > 0
+    )
+
+    if has_valid_feeder:
+        # Feeder is already present! We do NOT join ALIMENTADOR again.
+        # Only join missing metadata columns if needed
+        missing_meta = [
+            c for c in ["POSTO_OPERACIONAL", "CLASSE_PRINCIPAL", "POT_INST_KVA"]
+            if c in hierarchy_df.columns and c not in features_df.columns
+        ]
+        if missing_meta and feat_uc_col and hier_uc_col:
+            hier_sub = hierarchy_df.select([hier_uc_col] + missing_meta).unique(subset=[hier_uc_col])
+            if hier_uc_col != feat_uc_col:
+                hier_sub = hier_sub.rename({hier_uc_col: feat_uc_col})
+            merged = features_df.join(hier_sub, on=feat_uc_col, how="left")
+        else:
+            merged = features_df
+    elif feat_uc_col and hier_uc_col:
+        # Feeder needs to be joined from hierarchy_df
         cols_to_keep = [hier_uc_col]
         for c in ["ALIMENTADOR", "POSTO_OPERACIONAL", "CLASSE_PRINCIPAL", "POT_INST_KVA"]:
-            if c in hierarchy_df.columns:
+            if c in hierarchy_df.columns and c not in features_df.columns:
                 cols_to_keep.append(c)
-
         hier_sub = hierarchy_df.select(cols_to_keep).unique(subset=[hier_uc_col])
-
-        # Rename hierarchy UC col to match features UC col if they differ
         if hier_uc_col != feat_uc_col:
             hier_sub = hier_sub.rename({hier_uc_col: feat_uc_col})
-
-        merged = features_df.join(
-            hier_sub,
-            left_on=feat_uc_col,
-            right_on=feat_uc_col,
-            how="inner",
-        )
+        merged = features_df.join(hier_sub, on=feat_uc_col, how="inner")
+    else:
+        return pl.DataFrame()
 
     if merged.is_empty() or feeder_col not in merged.columns:
         # Try auto-detecting feeder col in merged result

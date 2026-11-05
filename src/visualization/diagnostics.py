@@ -134,9 +134,14 @@ def generate_diagnostic_plots(
             ax.set_title(f"{title_prefix} - Taxa de Anomalias por Alimentador (%)", fontsize=12, fontweight="bold")
             ax.set_xlabel("Proporção de UCs Anômalas (%)", fontsize=10)
 
+            max_rate = float(np.max(rates)) if len(rates) > 0 else 1.0
+            x_offset = max(max_rate * 0.02, 0.02)
+            ax.set_xlim(0, max(max_rate * 1.25, 0.2))
+
             for bar in bars:
                 width = bar.get_width()
-                ax.text(width + 0.5, bar.get_y() + bar.get_height() / 2, f"{width:.1f}%", va="center", fontsize=9)
+                fmt = f"{width:.2f}%" if width < 1.0 else f"{width:.1f}%"
+                ax.text(width + x_offset, bar.get_y() + bar.get_height() / 2, fmt, va="center", fontsize=9)
 
             plt.tight_layout()
             p3 = out_path / "feeder_anomaly_rates.png"

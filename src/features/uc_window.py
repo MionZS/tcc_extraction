@@ -53,18 +53,55 @@ def build_uc_window_features(
     if window_daily.is_empty():
         return pl.DataFrame(schema=UC_WINDOW_FEATURES_SCHEMA)
 
+    # Reconcile UC if daily_features had unmapped NIOs in UC column
+    if (
+        meter_history_df is not None
+        and not meter_history_df.is_empty()
+        and "NIO" in meter_history_df.columns
+        and "UC" in meter_history_df.columns
+        and "NIO" in window_daily.columns
+    ):
+        nio_uc_bridge = (
+            meter_history_df.select([
+                pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_NORM_NIO"),
+                pl.col("UC").cast(pl.String).str.strip_chars().alias("_MAPPED_UC"),
+            ])
+            .drop_nulls()
+            .filter(pl.col("_NORM_NIO") != "")
+            .unique(subset=["_NORM_NIO"], keep="last")
+        )
+        window_daily = (
+            window_daily.with_columns([
+                pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_NORM_NIO"),
+                pl.col("UC").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_NORM_UC"),
+            ])
+            .join(nio_uc_bridge, on="_NORM_NIO", how="left")
+            .with_columns(
+                pl.when((pl.col("_NORM_UC") == pl.col("_NORM_NIO")) & pl.col("_MAPPED_UC").is_not_null())
+                .then(pl.col("_MAPPED_UC"))
+                .otherwise(pl.col("UC"))
+                .alias("UC")
+            )
+            .drop(["_NORM_NIO", "_NORM_UC", "_MAPPED_UC"])
+        )
+
     # Fast O(N) partitioning across frames instead of O(N*M) repeated filters
     daily_by_uc = window_daily.partition_by("UC", as_dict=True)
-    history_by_uc = (
-        meter_history_df.partition_by("UC", as_dict=True)
-        if meter_history_df is not None and not meter_history_df.is_empty() and "UC" in meter_history_df.columns
-        else {}
-    )
-    alarms_by_nio = (
-        alarm_events_df.partition_by("NIO", as_dict=True)
-        if alarm_events_df is not None and not alarm_events_df.is_empty() and "NIO" in alarm_events_df.columns
-        else {}
-    )
+    history_by_uc: dict[str, pl.DataFrame] = {}
+    if meter_history_df is not None and not meter_history_df.is_empty() and "UC" in meter_history_df.columns:
+        for hk, hdf in meter_history_df.partition_by("UC", as_dict=True).items():
+            raw_hk = str(hk[0] if isinstance(hk, tuple) else hk).strip()
+            norm_hk = raw_hk.lstrip("0") or raw_hk
+            history_by_uc[raw_hk] = hdf
+            history_by_uc[norm_hk] = hdf
+
+    alarms_by_nio: dict[str, pl.DataFrame] = {}
+    if alarm_events_df is not None and not alarm_events_df.is_empty() and "NIO" in alarm_events_df.columns:
+        for ak, adf in alarm_events_df.partition_by("NIO", as_dict=True).items():
+            raw_ak = str(ak[0] if isinstance(ak, tuple) else ak).strip()
+            norm_ak = raw_ak.lstrip("0") or raw_ak
+            alarms_by_nio[raw_ak] = adf
+            alarms_by_nio[norm_ak] = adf
 
     rows: list[dict[str, Any]] = []
 
@@ -132,7 +169,11 @@ def build_uc_window_features(
         meter_changed_30d = False
         meter_changed_90d = False
 
-        uc_meters = history_by_uc.get(uc_key)
+        uc_str = str(uc).strip()
+        uc_norm = uc_str.lstrip("0") or uc_str
+        uc_meters = history_by_uc.get(uc_str)
+        if uc_meters is None:
+            uc_meters = history_by_uc.get(uc_norm)
         if uc_meters is not None and uc_meters.height > 0 and "DATA_INSTALACAO" in uc_meters.columns:
             # Only consider installations on or before cutoff_date
             install_dates = [
@@ -150,12 +191,22 @@ def build_uc_window_features(
         avg_alarm_latency = 0.0
 
         if alarms_by_nio:
-            all_nios = uc_daily["NIO"].drop_nulls().unique().to_list() if "NIO" in uc_daily.columns else []
+            all_nios = set(uc_daily["NIO"].drop_nulls().unique().to_list()) if "NIO" in uc_daily.columns else set()
+            if uc_meters is not None and "NIO" in uc_meters.columns:
+                all_nios.update(uc_meters["NIO"].drop_nulls().unique().to_list())
             matching_dfs = []
+            seen_norm_nios: set[str] = set()
             for nio_val in all_nios:
-                for k in ((nio_val,), nio_val):
-                    if k in alarms_by_nio:
-                        matching_dfs.append(alarms_by_nio[k])
+                raw_n = str(nio_val).strip()
+                norm_n = raw_n.lstrip("0") or raw_n
+                if norm_n in seen_norm_nios:
+                    continue
+                adf = alarms_by_nio.get(raw_n)
+                if adf is None:
+                    adf = alarms_by_nio.get(norm_n)
+                if adf is not None:
+                    seen_norm_nios.add(norm_n)
+                    matching_dfs.append(adf)
             if matching_dfs:
                 combined_alarms = pl.concat(matching_dfs, how="vertical_relaxed")
                 uc_alarms = combined_alarms.filter(

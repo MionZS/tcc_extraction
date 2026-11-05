@@ -96,6 +96,18 @@ def build_meter_day_features(
             m_df = metadata_df.select(["NIO", "UC"]).drop_nulls().unique()
             meter_to_uc_map = dict(zip(m_df["NIO"].to_list(), m_df["UC"].to_list()))
 
+    # Build canonical zero-stripped lookup so 10-digit CIS NIOs ('0043309810') match 8-digit MDM NIOs ('43309810')
+    normalized_meter_to_uc: dict[str, str] = {}
+    if meter_to_uc_map:
+        for k_nio, v_uc in meter_to_uc_map.items():
+            if k_nio is None or v_uc is None:
+                continue
+            raw_k = str(k_nio).strip()
+            stripped_k = raw_k.lstrip("0") or raw_k
+            clean_uc = str(v_uc).strip()
+            normalized_meter_to_uc[raw_k] = clean_uc
+            normalized_meter_to_uc[stripped_k] = clean_uc
+
     # Union of all known NIO keys across available frames
     all_nio_keys = set(interval_by_nio.keys()) | set(instant_by_nio.keys()) | set(register_by_nio.keys())
     if not all_nio_keys and metadata_by_nio:
@@ -106,10 +118,16 @@ def build_meter_day_features(
 
     for nio_key in sorted(all_nio_keys, key=lambda k: k[0] if isinstance(k, tuple) else k):
         nio = nio_key[0] if isinstance(nio_key, tuple) else nio_key
+        nio_str = str(nio).strip()
+        nio_stripped = nio_str.lstrip("0") or nio_str
         nio_interval = interval_by_nio.get(nio_key, empty_df)
         nio_instant = instant_by_nio.get(nio_key, empty_df)
         nio_register = register_by_nio.get(nio_key, empty_df)
-        uc_val = meter_to_uc_map.get(nio, nio) if meter_to_uc_map else nio
+        uc_val = (
+            normalized_meter_to_uc.get(nio_str)
+            or normalized_meter_to_uc.get(nio_stripped)
+            or nio_str
+        ) if normalized_meter_to_uc else nio_str
 
         row = _compute_nio_features(
             nio=nio,
@@ -226,9 +244,21 @@ def _compute_nio_features(
     row["CURRENT_IMBALANCE_MAX"] = round(c_imb, 4) if c_imb is not None else None
 
     # ── Robust statistics (median, IQR, p05, p95) ───────────────────────
-    for prefix, source in [("FA_INTERVAL", interval_df), ("U_L1", interval_df)]:
-        if prefix in source.columns:
-            vals = source[prefix].drop_nulls()
+    u_l1_source = interval_df
+    u_l1_col = "U_L1"
+    if "U_L1" not in interval_df.columns:
+        if "U_L1_AVG" in interval_df.columns:
+            u_l1_col = "U_L1_AVG"
+        elif instantaneous_df is not None and "U_L1" in instantaneous_df.columns:
+            u_l1_source = instantaneous_df
+            u_l1_col = "U_L1"
+
+    for prefix, col_name, source in [
+        ("FA_INTERVAL", "FA_INTERVAL", interval_df),
+        ("U_L1", u_l1_col, u_l1_source),
+    ]:
+        if col_name in source.columns:
+            vals = source[col_name].drop_nulls()
             if vals.len() > 0:
                 row[f"{prefix}_MEDIAN"] = round(float(vals.median()), 4)
                 q25 = float(vals.quantile(0.25))

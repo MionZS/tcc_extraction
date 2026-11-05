@@ -196,26 +196,65 @@ class CompositeAnomalyDetector:
         # 5. Physics / PRODIST rules
         rule_flags = np.zeros(len(X), dtype=bool)
         if raw_dataframe is not None:
-            # Rule A: Critical voltage sag / swell (< 180V or > 255V for nominal 220V)
-            # Only test absolute voltage levels (mean, median, p05, p95), excluding IQR, ramp, imbalance, std, delta
-            v_cols = [
+            # Exclude metadata and static nominal ratings (e.g. TENSAO_BASE=127V, TENSAO_ALIMENTADOR=13.8kV, TENSAO_SE=69kV)
+            # These are ratings/cadastre, NOT telemetry measurements.
+            rating_cols = {
+                "TENSAO_BASE", "X__TENSAO_BASE",
+                "TENSAO_ALIMENTADOR", "X__TENSAO_ALIMENTADOR",
+                "TENSAO_SE", "X__TENSAO_SE",
+                "TENSAO_SEC", "X__TENSAO_SEC",
+                "NOMINAL_VOLTAGE", "X__NOMINAL_VOLTAGE",
+            }
+
+            # Rule A: Critical voltage level violation (< 0.70 pu or > 1.25 pu)
+            # Only test actual measurement series (e.g. U_L1_AVG_MEAN, VOLTAGE_MEAN, U_L1_MEDIAN, etc.)
+            v_meas_cols = [
                 c for c in raw_dataframe.columns
-                if ("VOLTAGE" in c.upper() or "U_L1" in c.upper() or "TENSAO" in c.upper())
-                and not any(x in c.upper() for x in ("IQR", "RAMP", "IMBALANCE", "DELTA", "STD", "AUTOCORR"))
+                if c.upper() not in rating_cols
+                and ("VOLTAGE" in c.upper() or "U_L1" in c.upper() or "TENSAO" in c.upper())
+                and not any(x in c.upper() for x in ("IQR", "RAMP", "IMBALANCE", "DELTA", "STD", "AUTOCORR", "RATIO", "COUNT"))
             ]
-            for vc in v_cols:
+
+            # Determine nominal base voltage if available (defaults: 220V or 127V)
+            v_base_arr = np.full(len(X), 220.0, dtype=float)
+            for b_col in ("x__tensao_base", "TENSAO_BASE"):
+                if b_col in raw_dataframe.columns and raw_dataframe[b_col].dtype.is_numeric():
+                    b_vals = raw_dataframe[b_col].fill_null(220.0).to_numpy()
+                    valid_b = (b_vals > 50.0) & (b_vals < 500.0)
+                    v_base_arr[valid_b] = b_vals[valid_b]
+                    break
+
+            for vc in v_meas_cols:
                 if raw_dataframe[vc].dtype.is_numeric():
                     valid_mask = raw_dataframe[vc].is_not_null().to_numpy()
                     v_arr = raw_dataframe[vc].to_numpy()
-                    out_of_bounds = (v_arr < 180.0) | (v_arr > 255.0)
-                    rule_flags |= (valid_mask & out_of_bounds)
+                    # Only apply per-unit sag/swell check if values resemble actual line volts (> 50V)
+                    plausible_meas = (v_arr > 50.0) & valid_mask
+                    if np.any(plausible_meas):
+                        v_pu = np.where(plausible_meas, v_arr / np.maximum(v_base_arr, 50.0), 1.0)
+                        crit_sag_swell = plausible_meas & ((v_pu < 0.70) | (v_pu > 1.25))
+                        rule_flags |= crit_sag_swell
 
-            # Rule B: Severe active reversal without justification
-            rev_cols = [c for c in raw_dataframe.columns if "REVERSAL" in c.upper()]
+            # Rule B: Extreme voltage imbalance (> 20% imbalance)
+            v_imb_cols = [c for c in raw_dataframe.columns if "VOLTAGE_IMBALANCE" in c.upper() or "IMBALANCE_MAX" in c.upper()]
+            for vic in v_imb_cols:
+                if raw_dataframe[vic].dtype.is_numeric():
+                    imb_arr = raw_dataframe[vic].fill_null(0.0).to_numpy()
+                    # Imbalance ratios > 0.20 indicate severe unbalance / open phase
+                    rule_flags |= (imb_arr > 0.20)
+
+            # Rule C: Severe unmetered active energy reversal without GD/solar profile
+            # Only test ratio/fraction columns (0.0 to 1.0), never integer day counts (HIST_RA_REVERSAL_DAYS)
+            rev_cols = [
+                c for c in raw_dataframe.columns
+                if "REVERSAL" in c.upper()
+                and any(k in c.upper() for k in ("RATIO", "PROP", "PERCENT"))
+                and not any(k in c.upper() for k in ("DAY", "COUNT", "DELTA"))
+            ]
             for rc in rev_cols:
                 if raw_dataframe[rc].dtype.is_numeric():
                     r_arr = raw_dataframe[rc].fill_null(0.0).to_numpy()
-                    rule_flags |= (r_arr > 0.8)
+                    rule_flags |= (r_arr > 0.85)
 
         # Weighted consensus
         consensus = (
@@ -228,9 +267,9 @@ class CompositeAnomalyDetector:
         # Physics rule bonus: physical violation elevates the consensus score
         consensus = np.clip(consensus + np.where(rule_flags, 0.20, 0.0), 0.0, 1.0)
 
-        # Thresholding at (1.0 - contamination) percentile
+        # Thresholding at (1.0 - contamination) percentile strictly preserves requested contamination rate
         threshold = float(np.percentile(consensus, 100 * (1.0 - self.contamination)))
-        is_anomaly = (consensus >= threshold) | rule_flags
+        is_anomaly = consensus >= threshold
 
         return {
             "consensus_score": np.round(consensus, 4),

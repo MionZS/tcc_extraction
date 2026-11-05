@@ -71,43 +71,80 @@ def compute_neighborhood_features(
             "IS_ISOLATED_DEVIATION": pl.Boolean,
         })
 
+    # Drop any leftover _right columns to prevent Polars duplicate errors
+    right_cols = [c for c in uc_features_df.columns if c.endswith("_right")]
+    if right_cols:
+        uc_features_df = uc_features_df.drop(right_cols)
+
     feat_uc_col = _resolve_uc_col(uc_features_df) or uc_col
     hier_uc_col = _resolve_uc_col(hierarchy_df) or uc_col
 
     if feat_uc_col not in uc_features_df.columns or hier_uc_col not in hierarchy_df.columns:
         return pl.DataFrame()
 
-    if trafo_col not in hierarchy_df.columns:
+    if trafo_col not in hierarchy_df.columns and trafo_col not in uc_features_df.columns:
         return pl.DataFrame()
 
-    # Join hierarchy to get trafo assignment
-    trafo_mapping = hierarchy_df.select([hier_uc_col, trafo_col]).drop_nulls().unique(subset=[hier_uc_col])
-    if hier_uc_col != feat_uc_col:
-        trafo_mapping = trafo_mapping.rename({hier_uc_col: feat_uc_col})
-
-    merged = uc_features_df.join(trafo_mapping, left_on=feat_uc_col, right_on=feat_uc_col, how="inner")
+    # Join hierarchy to get trafo assignment if not already present
+    alt_trafo_col = "meta__posto" if "meta__posto" in uc_features_df.columns else None
+    if trafo_col in uc_features_df.columns and uc_features_df.get_column(trafo_col).drop_nulls().len() > 0:
+        merged = uc_features_df
+    elif alt_trafo_col and uc_features_df.get_column(alt_trafo_col).drop_nulls().len() > 0:
+        merged = uc_features_df.with_columns(pl.col(alt_trafo_col).alias(trafo_col)).filter(pl.col(trafo_col).is_not_null())
+    else:
+        trafo_mapping = (
+            hierarchy_df.select([
+                pl.col(hier_uc_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_NORM_UC"),
+                pl.col(trafo_col),
+            ])
+            .drop_nulls()
+            .filter(pl.col("_NORM_UC") != "")
+            .unique(subset=["_NORM_UC"])
+        )
+        merged = (
+            uc_features_df.with_columns(
+                pl.col(feat_uc_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_NORM_UC")
+            )
+            .join(trafo_mapping, on="_NORM_UC", how="inner")
+            .drop("_NORM_UC")
+        )
 
     if merged.is_empty():
         return pl.DataFrame()
+
+    cutoff_col = next((c for c in ("meta__cutoff_date", "CUTOFF_DATE", "REPORT_DAY") if c in merged.columns), None)
 
     # Probe voltage and consumption columns (with bare and x__ prefix fallback)
     def _col(*names: str) -> str | None:
         for n in names:
             if n in merged.columns:
                 return n
-            xn = f"x__{n}"
+            xn = f"x__{n.lower()}"
             if xn in merged.columns:
                 return xn
+            xnu = f"x__{n}"
+            if xnu in merged.columns:
+                return xnu
         return None
 
-    v_col = _col("HIST_VOLTAGE_IMBALANCE_MAX", "U_L1_AVG_MEAN", "VOLTAGE_MEAN", "U_L1_MEDIAN")
+    v_col = _col("U_L1_AVG_MEAN", "VOLTAGE_MEAN", "U_L1_MEDIAN", "HIST_VOLTAGE_IMBALANCE_MAX")
     c_col = _col("HIST_FA_SUM_MEDIAN", "FA_INTERVAL_SUM_MEDIAN", "FA_INTERVAL_SUM")
 
-    trafos_dict = merged.partition_by(trafo_col, as_dict=True)
+    is_imbalance = bool(v_col and "IMBALANCE" in v_col.upper())
+    default_v = 0.0 if is_imbalance else 220.0
+    default_std = 0.05 if is_imbalance else 1.0
+
+    part_cols = [trafo_col, cutoff_col] if cutoff_col else [trafo_col]
+    trafos_dict = merged.partition_by(part_cols, as_dict=True)
     rows: list[dict[str, Any]] = []
 
     for trafo_key, t_df in trafos_dict.items():
-        t_id = trafo_key[0] if isinstance(trafo_key, tuple) else trafo_key
+        if isinstance(trafo_key, tuple):
+            t_id = trafo_key[0]
+            c_dt = trafo_key[1] if len(trafo_key) > 1 else None
+        else:
+            t_id = trafo_key
+            c_dt = None
         peer_count = t_df.height
 
         v_vals = t_df.get_column(v_col).to_numpy() if v_col and v_col in t_df.columns else np.array([])
@@ -115,36 +152,40 @@ def compute_neighborhood_features(
 
         for idx, row in enumerate(t_df.iter_rows(named=True)):
             uc_val = str(row[feat_uc_col])
-            uc_v = float(row.get(v_col, 220.0) or 220.0)
-            uc_c = float(row.get(c_col, 1.0) or 1.0)
+            raw_v = row.get(v_col)
+            uc_v = float(raw_v) if raw_v is not None and not (isinstance(raw_v, float) and np.isnan(raw_v)) else default_v
+
+            raw_c = row.get(c_col)
+            uc_c = float(raw_c) if raw_c is not None and not (isinstance(raw_c, float) and np.isnan(raw_c)) else 0.0
 
             # Exclude self to get true peer statistics
             if len(v_vals) > 1:
                 peer_v = np.delete(v_vals, idx)
                 peer_v_valid = peer_v[~np.isnan(peer_v)]
-                t_v_mean = float(np.mean(peer_v_valid)) if len(peer_v_valid) > 0 else 220.0
-                t_v_std = float(np.std(peer_v_valid)) if len(peer_v_valid) > 1 else 1.0
+                t_v_mean = float(np.mean(peer_v_valid)) if len(peer_v_valid) > 0 else default_v
+                t_v_std = float(np.std(peer_v_valid)) if len(peer_v_valid) > 1 else default_std
             else:
                 t_v_mean = uc_v
-                t_v_std = 1.0
+                t_v_std = default_std
 
             if len(c_vals) > 1:
                 peer_c = np.delete(c_vals, idx)
                 peer_c_valid = peer_c[~np.isnan(peer_c)]
                 t_c_median = float(np.median(peer_c_valid)) if len(peer_c_valid) > 0 else 1.0
             else:
-                t_c_median = uc_c
+                t_c_median = max(uc_c, 1.0)
 
             delta_v = uc_v - t_v_mean
             zscore_v = delta_v / (t_v_std + 1e-6)
             c_ratio = uc_c / (t_c_median + 1e-6)
 
-            # An isolated deviation occurs when this UC deviates from peers
-            # either by standard deviation (> 2.0) or by absolute voltage delta (> 15V)
+            # An isolated deviation occurs when this UC deviates significantly from transformer peers
+            # (z-score > 2.5 or large absolute difference: > 15V for voltage, > 0.08 for imbalance ratio)
             # within a transformer group of at least 3 peers
-            is_isolated = bool(peer_count >= 3 and (abs(zscore_v) > 2.0 or abs(delta_v) > 15.0))
+            crit_delta = 0.08 if is_imbalance else 15.0
+            is_isolated = bool(peer_count >= 3 and (abs(zscore_v) > 2.5 or abs(delta_v) > crit_delta))
 
-            rows.append({
+            row_out: dict[str, Any] = {
                 "UC": uc_val,
                 "id__uc_id": uc_val,
                 "TRAFO_ID": str(t_id),
@@ -153,6 +194,9 @@ def compute_neighborhood_features(
                 "VOLTAGE_ZSCORE_IN_TRAFO": round(zscore_v, 3),
                 "CONSUMPTION_RATIO_TO_PEER_MEDIAN": round(c_ratio, 3),
                 "IS_ISOLATED_DEVIATION": is_isolated,
-            })
+            }
+            if cutoff_col and c_dt is not None:
+                row_out[cutoff_col] = c_dt
+            rows.append(row_out)
 
     return pl.DataFrame(rows, infer_schema_length=None, strict=False)

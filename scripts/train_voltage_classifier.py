@@ -49,14 +49,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--start-date",
         type=date.fromisoformat,
-        default=None,
-        help="Filter telemetry starting from this date (AAAA-MM-DD).",
+        default=date(2026, 8, 1),
+        help="Filter telemetry starting from this date (AAAA-MM-DD, default: 2026-08-01 - Início Canônico Araucária).",
     )
     parser.add_argument(
         "--end-date",
         type=date.fromisoformat,
-        default=None,
-        help="Filter telemetry up to this date (AAAA-MM-DD).",
+        default=date(2026, 10, 31),
+        help="Filter telemetry up to this date (AAAA-MM-DD, default: 2026-10-31 - Fim Canônico Treino Araucária).",
     )
     parser.add_argument(
         "--feeder",

@@ -19,15 +19,25 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import polars as pl
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.prompt import FloatPrompt, IntPrompt, Prompt
 from rich.table import Table
 from rich.text import Text
 
 from src.automation.daily_runner import DailyAutomationRunner
 from src.datasets.dataset_splitter import DatasetSplitter
+from src.datasets.retroactive_cleaner import RetroactiveCleanReport, RetroactiveDataCleaner
 from src.models.composite import CompositeAnomalyDetector
 from src.models.hierarchical_trainer import HierarchicalModelOrchestrator
 from src.models.voltage_classifier import (
@@ -77,8 +87,10 @@ class RichPipelineTUI:
         self.default_geo_id = 6352460
         self.output_format = "both"
         self.default_voltage_max_samples = 0  # 0 = sem limite (usa 100% dos dados)
-        self.default_voltage_slice = "1"     # 1 = todo o período disponível no Data Lake
+        self.default_voltage_slice = "1"     # 1 = Período Canônico Padrão do TCC (Agosto, Setembro e Outubro/2026)
         self.default_voltage_feeder_choice = "1"  # 1 = todos os alimentadores
+        self.canonical_train_start = date(2026, 8, 1)
+        self.canonical_train_end = date(2026, 10, 31)
 
     @property
     def input_file(self) -> Path:
@@ -120,16 +132,104 @@ class RichPipelineTUI:
         )
         console.print(Panel(header_text, border_style="blue", padding=(0, 1)))
 
+    def run_retroactive_cleaning(
+        self,
+        *,
+        stride_mode: str = "monthly",
+        min_day_coverage: float = 0.70,
+        force_recompute_days: bool = False,
+        write_csv: bool = True,
+    ) -> RetroactiveCleanReport | None:
+        """Executes offline retroactive data sanitation & multi-window consolidation."""
+        console.print("\n[bold cyan]🧹 EXECUTANDO SANEAMENTO RETROATIVO & RECONSTRUÇÃO MULTI-JANELA[/bold cyan]")
+        console.print(
+            "  [dim]• Reconciliação determinística NIO (8/10 dígitos) ↔ UC ↔ Alimentador\n"
+            "  • Filtragem física de canal desenergizado (<50V) e regime de espera (<1.0A)\n"
+            "  • Quarentena de perda de pacotes RF Mesh & Janelas desacopladas sem sobreposição[/dim]\n"
+        )
+        try:
+            cleaner = RetroactiveDataCleaner(
+                base_dir=self.base_dir,
+                min_day_coverage=min_day_coverage,
+            )
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task_id = progress.add_task("[cyan]Escaneando partições do Data Lake...[/cyan]", total=None)
+
+                def _cb(msg: str, idx: int, total: int) -> None:
+                    progress.update(task_id, description=f"[cyan]{msg}[/cyan]", total=total, completed=idx)
+
+                rep = cleaner.run(
+                    stride_mode=stride_mode,
+                    force_recompute_days=force_recompute_days,
+                    write_csv=write_csv,
+                    progress_callback=_cb,
+                )
+
+            cutoffs_str = ", ".join(d.isoformat() for d in rep.cutoff_dates)
+            audit_tbl = Table(title="Relatório de Saneamento Retroativo & Qualidade de Features", border_style="green")
+            audit_tbl.add_column("Indicador de Curadoria", style="bold yellow")
+            audit_tbl.add_column("Resultado Auditado", justify="right", style="cyan")
+
+            audit_tbl.add_row("Dias de Telemetria Descobertos", f"{rep.days_discovered:,}")
+            audit_tbl.add_row(
+                "Partições Diárias (Recalculadas / Cache Íntegro)",
+                f"{rep.days_recomputed:,} / {rep.days_reused_cache:,}",
+            )
+            audit_tbl.add_row("Modo de Janela Desacoplada", f"{rep.stride_mode} ({rep.window_days}d)")
+            audit_tbl.add_row("Cutoffs Consolidados", cutoffs_str or "-")
+            audit_tbl.add_row("Total de Janelas (UC × Cutoff)", f"{rep.total_uc_windows:,}")
+            audit_tbl.add_row(
+                "Janelas Íntegras p/ Treino (IS_CLEAN_FOR_TRAIN)",
+                f"[bold green]{rep.clean_train_eligible_rows:,}[/bold green] ({rep.clean_train_eligible_rows / max(1, rep.total_uc_windows):.1%})",
+            )
+            audit_tbl.add_row(
+                "Janelas em Quarentena RF Mesh (Isoladas do Fit)",
+                f"[bold yellow]{rep.telecom_quarantine_rows:,}[/bold yellow] ({rep.telecom_quarantine_rows / max(1, rep.total_uc_windows):.1%})",
+            )
+            audit_tbl.add_row("Reconciliação Topológica (Alimentador Vinculado)", f"{rep.reconciled_feeder_ratio:.2%}")
+            audit_tbl.add_row("Reconciliação Cadastral CIS (Tensão/Classe)", f"{rep.reconciled_context_ratio:.2%}")
+            audit_tbl.add_row("Dispersão Real intra-janela (MAD > 0)", f"{rep.nonzero_mad_ratio:.2%}")
+            audit_tbl.add_row("Tendência Real intra-janela (Slope ≠ 0)", f"{rep.nonzero_slope_ratio:.2%}")
+            console.print(audit_tbl)
+
+            console.print(
+                Panel(
+                    f"[bold green]✔ Dataset Saneado Consolidado com Sucesso![/bold green]\n"
+                    f"• Matriz ML: [underline]{rep.dataset_path}[/underline]\n"
+                    f"• Auditoria Quarentena RF Mesh: [underline]{rep.quarantine_path or '-'}[/underline]",
+                    title="Curadoria Retroativa Finalizada",
+                    border_style="green",
+                )
+            )
+            return rep
+        except Exception as exc:
+            console.print(
+                Panel(
+                    f"[bold red]Falha durante o saneamento retroativo:[/bold red]\n{exc}",
+                    title="Erro na Curadoria Offline",
+                    border_style="red",
+                )
+            )
+            return None
+
     def generate_dataset(self) -> None:
-        """Triggers dataset generation — full Araucária, single feeder, or historical period."""
+        """Triggers dataset generation — full Araucária, single feeder, historical period, or offline cleaning."""
         console.print("\n[bold cyan]📥 OPÇÃO 1: GERAR DATASET & EXECUTAR PIPELINE DE EXTRAÇÃO[/bold cyan]\n")
 
-        console.print("Escopo de Extração:")
+        console.print("Escopo de Extração & Curadoria:")
         console.print("  [bold yellow][1][/bold yellow] 🌍 Araucária Completa (dia único via days_back)")
         console.print("  [bold yellow][2][/bold yellow] 🔌 Alimentador específico (teste rápido ou re-extração pontual)")
         console.print("  [bold yellow][3][/bold yellow] 📅 Extração de Período Histórico (01/08/2026 até a data mais recente — preenchimento de lacunas)")
         console.print("  [bold yellow][4][/bold yellow] ⚡ Sincronização Inteligente (Auto-Backfill da data mais recente + preenchimento de gaps)")
-        scope_choice = Prompt.ask("Escopo", choices=["1", "2", "3", "4"], default="4")
+        console.print("  [bold yellow][5][/bold yellow] 🧹 Saneamento Retroativo & Reconstrução Multi-Janela (100% Offline sobre Data Lake Local) [bold green][Correção NIO↔UC & Ruído][/bold green]")
+        scope_choice = Prompt.ask("Escopo", choices=["1", "2", "3", "4", "5"], default="5")
 
         console.print("\nFormato de Armazenamento:")
         console.print("  [bold yellow][1][/bold yellow] Ambos (Parquet + CSV) [bold green][Padrão Recomendado][/bold green]")
@@ -137,6 +237,27 @@ class RichPipelineTUI:
         console.print("  [bold yellow][3][/bold yellow] Apenas Parquet (.parquet)")
         fmt_choice = Prompt.ask("Formato", choices=["1", "2", "3"], default="1")
         output_format = {"1": "both", "2": "csv", "3": "parquet"}[fmt_choice]
+
+        if scope_choice == "5":
+            console.print("\nEstratégia de Janelas Temporais Desacopladas (0% de sobreposição entre janelas):")
+            console.print("  [bold yellow][1][/bold yellow] Mensal (30 dias) — 1 janela consolidada no fechamento de cada mês (Ago, Set, Out...) [bold green][Padrão Recomendado][/bold green]")
+            console.print("  [bold yellow][2][/bold yellow] Quinzenal (15 dias) — 2 janelas independentes por mês (dias 1–15 e 16–fim)")
+            st_ch = Prompt.ask("Estratégia de Janela", choices=["1", "2"], default="1")
+            stride_mode = "monthly" if st_ch == "1" else "biweekly"
+            min_cov = FloatPrompt.ask("Cobertura diária mínima p/ dia confiável [0.30 - 0.95]", default=0.70)
+            min_cov = float(np.clip(min_cov, 0.30, 0.95))
+            force_rec = Prompt.ask(
+                "Forçar recálculo de partições diárias íntegras já salvas? (partições antigas com NIO=UC já são corrigidas automaticamente)",
+                choices=["s", "n"],
+                default="n",
+            ) == "s"
+            self.run_retroactive_cleaning(
+                stride_mode=stride_mode,
+                min_day_coverage=min_cov,
+                force_recompute_days=force_rec,
+                write_csv=(output_format in ("both", "csv")),
+            )
+            return
 
         if scope_choice == "4":
             refresh_cis = Prompt.ask("Re-extrair cadastro CIS do Oracle (para carregar medidores retirados/histórico)?", choices=["s", "n"], default="s") == "s"
@@ -365,6 +486,96 @@ class RichPipelineTUI:
             file_type=f_type,
         )
 
+    def _render_anomaly_summary(self, scores_df: pl.DataFrame, title: str = "Resumo de Anomalias") -> None:
+        """Renders an interactive Rich breakdown of detected anomalies, RF quarantine, and per-feeder rates."""
+        if scores_df.is_empty():
+            return
+        anom_col = "FINAL_IS_ANOMALY" if "FINAL_IS_ANOMALY" in scores_df.columns else "is_anomaly"
+        tot = scores_df.height
+        n_anom = int(scores_df.get_column(anom_col).sum())
+
+        has_cat = "ANOMALY_CATEGORY" in scores_df.columns
+        n_quar = (
+            int(scores_df.filter(pl.col("ANOMALY_CATEGORY") == "TELECOM_QUARANTINE").height)
+            if has_cat
+            else 0
+        )
+        clean_tot = max(1, tot - n_quar)
+        rate_clean = (n_anom / clean_tot * 100.0) if tot > 0 else 0.0
+        rate_all = (n_anom / tot * 100.0) if tot > 0 else 0.0
+
+        quar_line = (
+            f"• Janelas Íntegras Avaliadas: [bold green]{tot - n_quar:,}[/bold green] | "
+            f"Quarentena RF Mesh: [bold yellow]{n_quar:,}[/bold yellow]\n"
+            if n_quar > 0
+            else ""
+        )
+        summary_panel = Panel(
+            f"[bold green]✔ Avaliação Concluída com Sucesso![/bold green]\n\n"
+            f"• Total de Janelas (UC × Cutoff): [bold white]{tot:,}[/bold white]\n"
+            f"{quar_line}"
+            f"• Anomalias Genuínas Confirmadas: [bold red]{n_anom:,}[/bold red] "
+            f"([bold magenta]{rate_clean:.2f}% das íntegras[/bold magenta] | [dim]{rate_all:.2f}% do total[/dim])\n",
+            title=title,
+            border_style="green",
+        )
+        console.print(summary_panel)
+
+        if has_cat:
+            cat_tbl = Table(title=f"Decomposição Diagnóstica Operacional ({title})", border_style="yellow")
+            cat_tbl.add_column("Categoria Diagnóstica", style="bold white")
+            cat_tbl.add_column("Janelas", justify="right", style="cyan")
+            cat_tbl.add_column("Proporção", justify="right", style="magenta")
+            cat_grp = (
+                scores_df.group_by("ANOMALY_CATEGORY")
+                .agg(pl.len().alias("cnt"))
+                .sort("cnt", descending=True)
+            )
+            for row in cat_grp.iter_rows(named=True):
+                cat_tbl.add_row(
+                    str(row["ANOMALY_CATEGORY"]),
+                    f"{row['cnt']:,}",
+                    f"{row['cnt'] / max(1, tot):.2%}",
+                )
+            console.print(cat_tbl)
+
+        f_col = "ALIMENTADOR" if "ALIMENTADOR" in scores_df.columns else ("meta__feeder" if "meta__feeder" in scores_df.columns else None)
+        if f_col and f_col in scores_df.columns:
+            f_table = Table(title=f"Taxa de Anomalias por Alimentador ({title})", border_style="cyan")
+            f_table.add_column("Alimentador", style="bold yellow")
+            f_table.add_column("Total Janelas", justify="right", style="cyan")
+            f_table.add_column("Íntegras", justify="right", style="green")
+            f_table.add_column("Anomalias", justify="right", style="red")
+            f_table.add_column("Taxa s/ Íntegras (%)", justify="right", style="magenta")
+
+            clean_expr = (
+                (pl.col("ANOMALY_CATEGORY") != "TELECOM_QUARANTINE").sum().alias("clean_cnt")
+                if has_cat
+                else pl.len().alias("clean_cnt")
+            )
+            f_grp = (
+                scores_df.filter(pl.col(f_col).is_not_null())
+                .group_by(f_col)
+                .agg([
+                    pl.len().alias("total"),
+                    clean_expr,
+                    pl.col(anom_col).sum().alias("anom"),
+                ])
+                .with_columns(
+                    (pl.col("anom") / pl.when(pl.col("clean_cnt") > 0).then(pl.col("clean_cnt")).otherwise(1) * 100.0).alias("rate")
+                )
+                .sort("total", descending=True)
+            )
+            for r in f_grp.head(20).iter_rows(named=True):
+                f_table.add_row(
+                    str(r[f_col]),
+                    f"{r['total']:,}",
+                    f"{r['clean_cnt']:,}",
+                    f"{r['anom']:,}",
+                    f"{r['rate']:.2f}%",
+                )
+            console.print(f_table)
+
     def train_models(self) -> None:
         """Trains models using strict Train/Val/Test isolation."""
         console.print("\n[bold cyan]🤖 OPÇÃO 2: TREINAR & VALIDAR MODELOS DE IA[/bold cyan]\n")
@@ -440,55 +651,149 @@ class RichPipelineTUI:
             console.print("[bold red]Dataset de treinamento está vazio. Verifique a extração na Opção 1.[/bold red]")
             return
 
-        # Filtro Temporal para os modelos de anomalia
-        console.print("\nFiltro Temporal de Dados para Treinamento:")
-        console.print("  [1] Todo o histórico disponível no dataset")
-        console.print("  [2] Período Customizado (Data Inicial e Data Final)")
-        period_choice = Prompt.ask("Filtro Temporal", choices=["1", "2"], default="1")
+        # ── Pre-Flight Integrity Check (Detecção de Dataset Legado / Janela Degenerada 1 Dia / NIO≠UC) ──
+        feeder_null_ratio = (
+            float(df.get_column("meta__feeder").is_null().mean() or 0.0)
+            if "meta__feeder" in df.columns
+            else 1.0
+        )
+        zero_mad_ratio = (
+            float((df.get_column("x__hist_fa_sum_mad").fill_null(0.0) == 0.0).mean() or 0.0)
+            if "x__hist_fa_sum_mad" in df.columns
+            else 0.0
+        )
+        n_cutoffs = (
+            int(df.get_column("meta__cutoff_date").n_unique())
+            if "meta__cutoff_date" in df.columns
+            else 1
+        )
+        if feeder_null_ratio > 0.50 or zero_mad_ratio > 0.95:
+            console.print(
+                Panel(
+                    f"[bold yellow]⚠️ ALERTA DE INTEGRIDADE DO DATASET DETECTADO NO PRÉ-VOO:[/bold yellow]\n\n"
+                    f"• Alimentador nulo (`meta__feeder`): [bold red]{feeder_null_ratio:.1%}[/bold red] (falha de vínculo NIO 8 dígitos vs UC)\n"
+                    f"• Dispersão zero (`MAD == 0.0`):     [bold red]{zero_mad_ratio:.1%}[/bold red] (janela degenerada de {n_cutoffs} cutoff único)\n\n"
+                    f"[dim]Treinar diretamente sobre este arquivo causa colapso de especialistas (taxas artificiais de 50%/100%) "
+                    f"e modelagem de ruído RF Mesh.[/dim]",
+                    title="Diagnóstico Pré-Treinamento",
+                    border_style="yellow",
+                )
+            )
+            run_clean_now = Prompt.ask(
+                "Deseja executar o Saneamento Retroativo & Reconstrução Multi-Janela agora (100% offline)?",
+                choices=["s", "n"],
+                default="s",
+            ) == "s"
+            if run_clean_now:
+                clean_rep = self.run_retroactive_cleaning(
+                    stride_mode="monthly",
+                    write_csv=(self.output_format in ("both", "csv")),
+                )
+                if clean_rep is not None:
+                    df = self.read_table(self.input_file)
 
-        if period_choice == "2":
-            s_str = Prompt.ask("Data Inicial (AAAA-MM-DD)", default="2026-08-01")
-            e_str = Prompt.ask("Data Final (AAAA-MM-DD)", default=date.today().isoformat())
+        # Filtro Temporal para os modelos de anomalia
+        console.print("\n[bold yellow]📅 Filtro Temporal de Dados para Treinamento:[/bold yellow]")
+        console.print(
+            "  [1] 🏆 Período Canônico Padrão do TCC (Agosto, Setembro e Outubro/2026 — 01/08 a 31/10) [Padrão Recomendado]\n"
+            "      • Treinamento: 01/08/2026 a 31/10/2026 (3 meses fechados de Araucária)\n"
+            "      • Validação & Teste: Meses seguintes (Novembro/2026 em diante, sem vazamento temporal)"
+        )
+        console.print("  [2] 🌍 Todo o histórico disponível no dataset")
+        console.print("  [3] 📅 Intervalo Personalizado (Data Inicial e Data Final)")
+        period_choice = Prompt.ask("Filtro Temporal", choices=["1", "2", "3"], default="1")
+
+        splitter = DatasetSplitter(
+            val_ratio=0.15,
+            test_ratio=0.20,
+            canonical_train_start=self.canonical_train_start,
+            canonical_train_end=self.canonical_train_end,
+            random_state=self.random_state,
+        )
+
+        if period_choice == "1":
+            d_series = splitter._extract_date_series(df)
+            if d_series is not None:
+                # Retém datas a partir do início canônico (01/08/2026), preservando meses posteriores para validação/teste
+                valid_mask = d_series.is_not_null() & (d_series >= self.canonical_train_start)
+                df = df.filter(valid_mask)
+            console.print(
+                f"[*] Período Canônico Padrão selecionado ({self.canonical_train_start.strftime('%d/%m/%Y')} a {self.canonical_train_end.strftime('%d/%m/%Y')}): "
+                f"{df.height:,} amostras no escopo (Treino Aug-Oct + Val/Test posterior)."
+            )
+        elif period_choice == "3":
+            s_str = Prompt.ask("Data Inicial (AAAA-MM-DD)", default=self.canonical_train_start.isoformat())
+            e_str = Prompt.ask("Data Final (AAAA-MM-DD)", default=self.canonical_train_end.isoformat())
             try:
                 s_dt = date.fromisoformat(s_str)
                 e_dt = date.fromisoformat(e_str)
-                if "meta__report_year" in df.columns and "meta__report_month" in df.columns and "meta__report_day" in df.columns:
-                    start_val = s_dt.year * 10000 + s_dt.month * 100 + s_dt.day
-                    end_val = e_dt.year * 10000 + e_dt.month * 100 + e_dt.day
-                    df = df.filter(
-                        (pl.col("meta__report_year") * 10000 + pl.col("meta__report_month") * 100 + pl.col("meta__report_day") >= start_val) &
-                        (pl.col("meta__report_year") * 10000 + pl.col("meta__report_month") * 100 + pl.col("meta__report_day") <= end_val)
-                    )
-                elif "REPORT_DAY" in df.columns:
-                    df = df.filter(
-                        (pl.col("REPORT_DAY").cast(pl.Date, strict=False) >= s_dt) &
-                        (pl.col("REPORT_DAY").cast(pl.Date, strict=False) <= e_dt)
-                    )
+                d_series = splitter._extract_date_series(df)
+                if d_series is not None:
+                    valid_mask = d_series.is_not_null() & (d_series >= s_dt) & (d_series <= e_dt)
+                    df = df.filter(valid_mask)
                 console.print(f"[*] Dataset filtrado para o período {s_str} → {e_str}: {df.height:,} amostras.")
             except Exception as e:
                 console.print(f"[bold yellow]Aviso: Não foi possível filtrar datas ({e}). Usando dataset completo.[/bold yellow]")
 
         # Apply Dataset Splitter for zero-leakage isolation
-        console.print("\n[bold green][*] Aplicando DatasetSplitter (Divisão inteligente por similaridade de alimentadores)...[/bold green]")
-        splitter = DatasetSplitter(val_ratio=0.15, test_ratio=0.20, random_state=self.random_state)
+        console.print("\n[bold green][*] Aplicando DatasetSplitter (Divisão inteligente por similaridade de alimentadores & OOT temporal)...[/bold green]")
         split_res = splitter.split(df, hierarchy_df=hdf)
         summary = split_res.split_summary
 
+        strat = summary.get("strategy", "")
         split_table = Table(title="Divisão do Dataset (Sem Vazamento de Dados)", border_style="green")
         split_table.add_column("Conjunto", style="bold yellow")
         split_table.add_column("Amostras", justify="right", style="cyan")
         split_table.add_column("Proporção", justify="right", style="magenta")
+        split_table.add_column("Papel Metodológico / Recorte Temporal", style="dim white")
 
-        split_table.add_row("Treino (Train)", f"{summary['train_rows']:,}", f"{summary['train_ratio']:.1%}")
-        split_table.add_row("Validação (Val)", f"{summary['val_rows']:,}", f"{summary['val_ratio']:.1%}")
-        split_table.add_row("Teste (Test)", f"{summary['test_rows']:,}", f"{summary['test_ratio']:.1%}")
+        if strat == "canonical_3months_oot":
+            t_desc = f"{summary.get('train_period', 'Agosto a Outubro/2026')} [Treinamento Canônico]"
+            v_desc = f"{summary.get('subsequent_period', 'Novembro/2026 em diante')} [Validação Cega OOT]"
+            te_desc = f"{summary.get('subsequent_period', 'Novembro/2026 em diante')} [Teste Cego OOT]"
+        elif strat == "intra_canonical_multi_window_oot":
+            t_desc = f"{summary.get('train_period', 'Agosto a Setembro/2026')} [Treino Multi-Janela em Todos os Alimentadores]"
+            v_desc = f"{summary.get('subsequent_period', 'Outubro/2026')} [Validação Cega OOT pré-Novembro]"
+            te_desc = f"{summary.get('subsequent_period', 'Outubro/2026')} [Teste Cego OOT pré-Novembro]"
+        else:
+            t_desc = f"{summary.get('train_period', 'Agosto a Outubro/2026')} [Treinamento]"
+            v_desc = "Cluster / OOT Validação (Aguardando Novembro/2026 para teste puro)"
+            te_desc = "Cluster / OOT Teste (Aguardando Novembro/2026 para teste puro)"
+
+        split_table.add_row("Treino (Train)", f"{summary['train_rows']:,}", f"{summary['train_ratio']:.1%}", t_desc)
+        split_table.add_row("Validação (Val)", f"{summary['val_rows']:,}", f"{summary['val_ratio']:.1%}", v_desc)
+        split_table.add_row("Teste (Test)", f"{summary['test_rows']:,}", f"{summary['test_ratio']:.1%}", te_desc)
         console.print(split_table)
 
         feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
 
+        # Subconjunto estritamente íntegro p/ ajuste de densidade (fit), isolando Quarentena RF Mesh
+        has_clean_col = "meta__is_clean_for_train" in split_res.train_df.columns
+        clean_train_df = (
+            split_res.train_df.filter(pl.col("meta__is_clean_for_train").fill_null(True))
+            if has_clean_col
+            else split_res.train_df
+        )
+        if clean_train_df.height < 30:
+            clean_train_df = split_res.train_df
+        elif has_clean_col and clean_train_df.height < split_res.train_df.height:
+            n_q_train = split_res.train_df.height - clean_train_df.height
+            console.print(
+                f"[dim][*] Filtro de Qualidade RF Mesh no Fit: ajustando estimadores sobre "
+                f"{clean_train_df.height:,} janelas íntegras ({n_q_train:,} janelas intermitentes isoladas em Quarentena Telecom).[/dim]"
+            )
+
+        clean_test_df = (
+            split_res.test_df.filter(pl.col("meta__is_clean_for_train").fill_null(True))
+            if "meta__is_clean_for_train" in split_res.test_df.columns
+            else split_res.test_df
+        )
+        if clean_test_df.is_empty():
+            clean_test_df = split_res.test_df
+
         # ── Opção 2 ou parte da Cadeia: Modelo Global Âncora ─────────────
         if mode_choice in ("2", "7"):
-            console.print("\n[bold yellow][*] Treinando Modelo Global Âncora (Comitê Composto) no conjunto de TREINO...[/bold yellow]")
+            console.print("\n[bold yellow][*] Treinando Modelo Global Âncora (Comitê Composto) no conjunto de TREINO ÍNTEGRO...[/bold yellow]")
 
             # 1. Vincular Dependência do Nível 1: Classificador de Tensão (Baseline Determinístico Oficial)
             from src.models.registry import ModelRegistry
@@ -502,13 +807,13 @@ class RichPipelineTUI:
                     f"(Tag: [bold yellow]{v_meta.get('tag')}[/bold yellow] | Determinístico)"
                 )
 
-            X_train = split_res.train_df.select(feature_cols).to_numpy()
+            X_train = clean_train_df.select(feature_cols).to_numpy()
             detector = CompositeAnomalyDetector(contamination=contam, random_state=self.random_state)
             detector.fit(X_train)
 
-            console.print("[bold yellow][*] Avaliando performance estritamente no conjunto de TESTE...[/bold yellow]")
-            X_test = split_res.test_df.select(feature_cols).to_numpy()
-            preds = detector.predict_composite(X_test, raw_dataframe=split_res.test_df)
+            console.print("[bold yellow][*] Avaliando performance estritamente no conjunto de TESTE ÍNTEGRO...[/bold yellow]")
+            X_test = clean_test_df.select(feature_cols).to_numpy()
+            preds = detector.predict_composite(X_test, raw_dataframe=clean_test_df)
 
             models_dir = self.base_dir / "models"
             models_dir.mkdir(parents=True, exist_ok=True)
@@ -517,8 +822,9 @@ class RichPipelineTUI:
             n_anom = int(preds["is_anomaly"].sum())
             res_panel = Panel(
                 f"[bold green]✔ Treinamento do Modelo Global Âncora Concluído![/bold green]\n\n"
-                f"• Total de Amostras no Teste: [bold white]{split_res.test_df.height:,}[/bold white]\n"
-                f"• Anomalias Identificadas:    [bold red]{n_anom:,} ({n_anom/max(1, split_res.test_df.height):.1%})[/bold red]\n"
+                f"• Janelas Íntegras no Treino: [bold white]{clean_train_df.height:,}[/bold white]\n"
+                f"• Janelas Íntegras no Teste:  [bold white]{clean_test_df.height:,}[/bold white]\n"
+                f"• Anomalias Identificadas:    [bold red]{n_anom:,} ({n_anom/max(1, clean_test_df.height):.1%})[/bold red]\n"
                 f"• Score Médio de Consenso:    [bold yellow]{preds['consensus_score'].mean():.4f}[/bold yellow]\n"
                 f"• Artefato Salvo em:          [dim]{models_dir / 'composite_anomaly_detector.joblib'}[/dim]",
                 title="Resultado do Teste - Modelo Global Âncora",
@@ -535,14 +841,14 @@ class RichPipelineTUI:
                 model_obj=detector,
                 metrics={
                     "anomalies_detected": n_anom,
-                    "anomaly_rate": round(n_anom / max(1, split_res.test_df.height), 4),
+                    "anomaly_rate": round(n_anom / max(1, clean_test_df.height), 4),
                     "mean_consensus_score": round(float(preds["consensus_score"].mean()), 4),
-                    "test_samples": split_res.test_df.height,
-                    "train_samples": split_res.train_df.height,
+                    "test_samples": clean_test_df.height,
+                    "train_samples": clean_train_df.height,
                 },
                 data_slice={
-                    "train_samples": split_res.train_df.height,
-                    "test_samples": split_res.test_df.height,
+                    "train_samples": clean_train_df.height,
+                    "test_samples": clean_test_df.height,
                     "contamination": contam,
                 },
                 hyperparameters={
@@ -564,14 +870,14 @@ class RichPipelineTUI:
                     f"[bold green]✔ Modelo Global Âncora Registrado com Sucesso![/bold green]\n\n"
                     f"• Versão:        [bold white]{v_id}[/bold white]\n"
                     f"• Tag:           [bold yellow]{tag}[/bold yellow]\n"
-                    f"• Anomalias:     [bold red]{n_anom:,} ({n_anom/max(1, split_res.test_df.height):.1%})[/bold red]\n"
+                    f"• Anomalias:     [bold red]{n_anom:,} ({n_anom/max(1, clean_test_df.height):.1%})[/bold red]\n"
                     f"• Imutabilidade: [bold green]🔒 Travado contra Sobrescrita (Audit Trail Seguro com ID Único)[/bold green]",
                     title="Governança de Modelos - Nível 2",
                     border_style="green",
                 )
             )
 
-            eval_df = split_res.test_df.with_columns([
+            eval_df = clean_test_df.with_columns([
                 pl.Series("consensus_score", preds["consensus_score"]),
                 pl.Series("is_anomaly", preds["is_anomaly"]),
                 pl.Series("iso_score", preds["iso_score"]),
@@ -579,7 +885,7 @@ class RichPipelineTUI:
                 pl.Series("ecod_score", preds["ecod_score"]),
                 pl.Series("pca_score", preds["pca_score"]),
             ])
-            plots = generate_diagnostic_plots(eval_df, output_dir=self.base_dir / "output" / "reports" / "figures", title_prefix="Modelo Global Âncora")
+            plots = generate_diagnostic_plots(eval_df, output_dir=self.base_dir / "reports" / "figures", title_prefix="Modelo Global Âncora")
             if plots:
                 console.print("\n[bold cyan]📊 Gráficos Diagnósticos Gerados com Sucesso:[/bold cyan]")
                 for p_name, p_path in plots.items():
@@ -604,6 +910,13 @@ class RichPipelineTUI:
             )
             scores_df = orchestrator.train_and_score(split_res.train_df, hierarchy_df=hdf, target_feeder=target_f)
             console.print("[bold green]✔ Especialistas por Alimentador Treinados com Sucesso![/bold green]")
+            self._render_anomaly_summary(scores_df, title="Especialistas Locais")
+
+            plots = generate_diagnostic_plots(scores_df, output_dir=self.base_dir / "reports" / "figures", title_prefix="Especialistas Locais")
+            if plots:
+                console.print("\n[bold cyan]📊 Gráficos Diagnósticos Gerados com Sucesso:[/bold cyan]")
+                for p_name, p_path in plots.items():
+                    console.print(f"  • {p_name}: [underline]{p_path}[/underline]")
 
         # ── Opção 4: Mistura Hierárquica MoE ─────────────────────────────
         elif mode_choice == "4":
@@ -615,8 +928,9 @@ class RichPipelineTUI:
             )
             scores_df = orchestrator.train_and_score(split_res.train_df, hierarchy_df=hdf)
             console.print("[bold green]✔ Treinamento Hierárquico MoE Concluído![/bold green]")
+            self._render_anomaly_summary(scores_df, title="Hierárquico MoE")
 
-            plots = generate_diagnostic_plots(scores_df, output_dir=self.base_dir / "output" / "reports" / "figures", title_prefix="Hierárquico MoE")
+            plots = generate_diagnostic_plots(scores_df, output_dir=self.base_dir / "reports" / "figures", title_prefix="Hierárquico MoE")
             if plots:
                 console.print("\n[bold cyan]📊 Gráficos Diagnósticos Gerados com Sucesso:[/bold cyan]")
                 for p_name, p_path in plots.items():
@@ -667,8 +981,8 @@ class RichPipelineTUI:
             from sklearn.pipeline import make_pipeline
             from sklearn.preprocessing import RobustScaler
 
-            console.print("\n[bold yellow][*] Treinando Modelo Baseline (Isolation Forest + KMeans)...[/bold yellow]")
-            X_train = split_res.train_df.select(feature_cols).to_numpy()
+            console.print("\n[bold yellow][*] Treinando Modelo Baseline (Isolation Forest + KMeans) sobre janelas íntegras...[/bold yellow]")
+            X_train = clean_train_df.select(feature_cols).to_numpy()
             iso_pipe = make_pipeline(SimpleImputer(strategy="median"), RobustScaler(), IsolationForest(n_estimators=200, contamination=contam, random_state=self.random_state))
             iso_pipe.fit(X_train)
 
@@ -723,28 +1037,39 @@ class RichPipelineTUI:
         # 1. Select Data Slice (Temporal filter)
         console.print("[bold yellow]📅 1. Seleção do Recorte Temporal (Data Slice):[/bold yellow]")
         console.print(f"  [dim]Período detectado no Data Lake: {lake_summary}[/dim]")
-        console.print(f"  [1] Todo o período disponível no Data Lake ({min_avail.strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')}) [Padrão]")
+        console.print(
+            f"  [1] 🏆 Período Canônico Padrão do TCC ({self.canonical_train_start.strftime('%d/%m/%Y')} a {self.canonical_train_end.strftime('%d/%m/%Y')} — Agosto, Setembro e Outubro) [Padrão Recomendado]"
+        )
+        console.print(f"  [2] 🌍 Todo o período disponível no Data Lake ({min_avail.strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
         d30 = max_avail - timedelta(days=30)
         d7 = max_avail - timedelta(days=7)
-        console.print(f"  [2] Últimos 30 dias com dados ({max(min_avail, d30).strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
-        console.print(f"  [3] Últimos 7 dias com dados ({max(min_avail, d7).strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
-        console.print("  [4] Intervalo Personalizado (Data Início → Data Fim)")
-        slice_choice = Prompt.ask("Escolha o recorte temporal", choices=["1", "2", "3", "4"], default=self.default_voltage_slice)
+        console.print(f"  [3] Últimos 30 dias com dados ({max(min_avail, d30).strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
+        console.print(f"  [4] Últimos 7 dias com dados ({max(min_avail, d7).strftime('%d/%m/%Y')} a {max_avail.strftime('%d/%m/%Y')})")
+        console.print("  [5] Intervalo Personalizado (Data Início → Data Fim)")
+        slice_choice = Prompt.ask("Escolha o recorte temporal", choices=["1", "2", "3", "4", "5"], default="1")
 
         start_date: date | None = None
         end_date: date | None = None
 
         if slice_choice == "1":
+            # Período canônico do TCC: Agosto, Setembro e Outubro/2026
+            start_date = max(min_avail, self.canonical_train_start)
+            end_date = min(max_avail, self.canonical_train_end)
+            console.print(
+                f"[*] Aplicando recorte canônico: {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')} "
+                f"(Agosto, Setembro e Outubro/2026)."
+            )
+        elif slice_choice == "2":
             # Período completo: None/None lê todas as partições existentes no disco, sem truncar em 'ontem'
             start_date = None
             end_date = None
-        elif slice_choice == "2":
+        elif slice_choice == "3":
             start_date = max(min_avail, d30)
             end_date = max_avail
-        elif slice_choice == "3":
+        elif slice_choice == "4":
             start_date = max(min_avail, d7)
             end_date = max_avail
-        elif slice_choice == "4":
+        elif slice_choice == "5":
             s_str = Prompt.ask("Data Inicial (AAAA-MM-DD)", default=min_avail.isoformat())
             e_str = Prompt.ask("Data Final (AAAA-MM-DD)", default=max_avail.isoformat())
             try:
@@ -1185,23 +1510,51 @@ class RichPipelineTUI:
             console.print("[bold red]Dataset de treinamento não encontrado.[/bold red]")
             return
 
-        df = pl.read_parquet(self.input_file)
-        hdf = pl.read_parquet(self.hierarchy_file) if self.hierarchy_file.exists() else None
+        df = self.read_table(self.input_file)
+        hdf = self.read_table(self.hierarchy_file) if self.hierarchy_file.exists() else None
 
-        splitter = DatasetSplitter(random_state=self.random_state)
+        splitter = DatasetSplitter(
+            canonical_train_start=self.canonical_train_start,
+            canonical_train_end=self.canonical_train_end,
+            random_state=self.random_state,
+        )
         split_res = splitter.split(df, hierarchy_df=hdf)
 
         feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
 
-        # Fit Global
-        X_train = split_res.train_df.select(feature_cols).to_numpy()
-        X_test = split_res.test_df.select(feature_cols).to_numpy()
+        clean_train_df = (
+            split_res.train_df.filter(pl.col("meta__is_clean_for_train").fill_null(True))
+            if "meta__is_clean_for_train" in split_res.train_df.columns
+            else split_res.train_df
+        )
+        if clean_train_df.height < 30:
+            clean_train_df = split_res.train_df
+
+        clean_test_df = (
+            split_res.test_df.filter(pl.col("meta__is_clean_for_train").fill_null(True))
+            if "meta__is_clean_for_train" in split_res.test_df.columns
+            else split_res.test_df
+        )
+        if clean_test_df.is_empty():
+            clean_test_df = split_res.test_df
+
+        # 1. Fit Global Anchor on Clean Train & Evaluate on Clean Test
+        X_train = clean_train_df.select(feature_cols).to_numpy()
+        X_test = clean_test_df.select(feature_cols).to_numpy()
 
         global_det = CompositeAnomalyDetector(contamination=self.contamination, random_state=self.random_state)
         global_det.fit(X_train)
-        preds_global = global_det.predict_composite(X_test, raw_dataframe=split_res.test_df)
+        preds_global = global_det.predict_composite(X_test, raw_dataframe=clean_test_df)
 
-        comp_table = Table(title="Comparação de Desempenho no Conjunto de Teste", border_style="magenta")
+        # 2. Evaluate Hierarchical MoE Specialists on Test Partition
+        orchestrator = HierarchicalModelOrchestrator(
+            output_dir=self.base_dir,
+            contamination=self.contamination,
+            random_state=self.random_state,
+        )
+        moe_test_df = orchestrator.train_and_score(clean_test_df, hierarchy_df=hdf)
+
+        comp_table = Table(title="Comparação de Desempenho no Conjunto de Teste Íntegro", border_style="magenta")
         comp_table.add_column("Abordagem / Modelo", style="bold yellow")
         comp_table.add_column("Score Médio", justify="right", style="cyan")
         comp_table.add_column("Desvio Padrão", justify="right", style="blue")
@@ -1211,12 +1564,21 @@ class RichPipelineTUI:
             "Modelo Global Âncora",
             f"{preds_global['consensus_score'].mean():.4f}",
             f"{preds_global['consensus_score'].std():.4f}",
-            f"{preds_global['is_anomaly'].sum() / max(1, len(X_test)):.1%}",
+            f"{preds_global['is_anomaly'].sum() / max(1, len(X_test)):.2%}",
         )
+        if not moe_test_df.is_empty() and "FINAL_MOE_SCORE" in moe_test_df.columns:
+            moe_sc = moe_test_df.get_column("FINAL_MOE_SCORE").to_numpy()
+            moe_an = moe_test_df.get_column("FINAL_IS_ANOMALY").to_numpy()
+            comp_table.add_row(
+                "Especialistas Hierárquicos MoE ( + Filtro Espúrio)",
+                f"{moe_sc.mean():.4f}",
+                f"{moe_sc.std():.4f}",
+                f"{moe_an.sum() / max(1, len(moe_an)):.2%}",
+            )
         console.print(comp_table)
 
         # Generate diagnostic plots for compare_experts
-        eval_df = split_res.test_df.with_columns([
+        eval_df = clean_test_df.with_columns([
             pl.Series("consensus_score", preds_global["consensus_score"]),
             pl.Series("is_anomaly", preds_global["is_anomaly"]),
             pl.Series("iso_score", preds_global["iso_score"]),
