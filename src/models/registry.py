@@ -292,6 +292,67 @@ class ModelRegistry:
 
         return self.load_model(model_name, version_id=chosen["version_id"])
 
+    def promote_tag(self, model_name: str, version_id: str, new_tag: str = "production") -> None:
+        """Promote a specific model version to a new tag (e.g. 'production' or 'baseline').
+
+        If promoting to 'production' or 'baseline', previous models with that tag are
+        automatically demoted to 'candidate' or 'ex-baseline'.
+        """
+        index = self._read_index()
+        found = False
+
+        for item in index:
+            if item.get("model_name") == model_name:
+                if item.get("version_id") == version_id:
+                    item["tag"] = new_tag
+                    found = True
+                    # Update metadata.json on disk
+                    meta_path = self.registry_dir / model_name / version_id / "metadata.json"
+                    if meta_path.exists():
+                        try:
+                            with open(meta_path, "r", encoding="utf-8") as f_m:
+                                meta_data = json.load(f_m)
+                            meta_data["tag"] = new_tag
+                            with open(meta_path, "w", encoding="utf-8") as f_m:
+                                json.dump(meta_data, f_m, indent=2, ensure_ascii=False)
+                        except Exception:
+                            pass
+                elif item.get("tag") == new_tag:
+                    # Demote previous owner of this unique tag
+                    demoted_tag = "ex-baseline" if new_tag == "baseline" else "candidate"
+                    item["tag"] = demoted_tag
+                    old_meta_path = self.registry_dir / model_name / item["version_id"] / "metadata.json"
+                    if old_meta_path.exists():
+                        try:
+                            with open(old_meta_path, "r", encoding="utf-8") as f_old:
+                                old_meta = json.load(f_old)
+                            old_meta["tag"] = demoted_tag
+                            with open(old_meta_path, "w", encoding="utf-8") as f_old:
+                                json.dump(old_meta, f_old, indent=2, ensure_ascii=False)
+                        except Exception:
+                            pass
+
+        if not found:
+            raise FileNotFoundError(f"Versão '{version_id}' não encontrada para o modelo '{model_name}'.")
+
+        self._write_index(index)
+
+    def get_production_model(self, model_name: str) -> tuple[Any, dict[str, Any], dict[str, Any]] | None:
+        """Loads the current 'production' model for model_name, falling back to 'baseline' or latest."""
+        models = self.list_models(model_name)
+        if not models:
+            return None
+
+        prod_candidates = [m for m in models if m.get("tag") == "production"]
+        if prod_candidates:
+            return self.load_model(model_name, version_id=prod_candidates[0]["version_id"])
+
+        base_candidates = [m for m in models if m.get("tag") == "baseline"]
+        if base_candidates:
+            return self.load_model(model_name, version_id=base_candidates[0]["version_id"])
+
+        return self.load_model(model_name, version_id=models[0]["version_id"])
+
     def compare_models(self, model_name: str, version_a: str, version_b: str) -> dict[str, Any]:
         """Generate a comparison dictionary between two model versions."""
         _, meta_a, metrics_a = self.load_model(model_name, version_a)

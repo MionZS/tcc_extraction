@@ -766,16 +766,25 @@ def build_sanitized_window_features_vectorized(
         .alias("TREND_FA_SLOPE"),
     ])
 
-    # Meter installation age & replacement flags (strict anti-leakage: DATA_INSTALACAO <= cutoff_date)
+    # Meter installation age, replacement flags & historical meter count (anti-leakage: DATA_INSTALACAO <= cutoff_date)
     if not meter_history_df.is_empty() and "UC" in meter_history_df.columns and "DATA_INSTALACAO" in meter_history_df.columns:
+        nio_col_expr = (
+            pl.col("NIO").cast(pl.String).str.strip_chars().str.replace(r"^0+", "")
+            if "NIO" in meter_history_df.columns
+            else pl.col("DATA_INSTALACAO").cast(pl.String)
+        )
         mh_agg = (
             meter_history_df.select([
                 pl.col("UC").cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("UC"),
                 pl.col("DATA_INSTALACAO").cast(pl.Date, strict=False).alias("_DT_INST"),
+                nio_col_expr.alias("_NORM_NIO"),
             ])
             .filter(pl.col("_DT_INST").is_not_null() & (pl.col("_DT_INST") <= cutoff_date))
             .group_by("UC")
-            .agg(pl.col("_DT_INST").max().alias("_LATEST_INST"))
+            .agg([
+                pl.col("_DT_INST").max().alias("_LATEST_INST"),
+                pl.col("_NORM_NIO").drop_nulls().n_unique().clip(lower_bound=1).cast(pl.Int16).alias("N_METERS_HISTORICAL"),
+            ])
             .with_columns(
                 (pl.lit(cutoff_date) - pl.col("_LATEST_INST")).dt.total_days().clip(lower_bound=0).cast(pl.Int32).alias("METER_AGE_DAYS")
             )
@@ -783,7 +792,7 @@ def build_sanitized_window_features_vectorized(
                 (pl.col("METER_AGE_DAYS") <= 30).alias("METER_CHANGED_30D"),
                 (pl.col("METER_AGE_DAYS") <= 90).alias("METER_CHANGED_90D"),
             ])
-            .select(["UC", "METER_AGE_DAYS", "METER_CHANGED_30D", "METER_CHANGED_90D"])
+            .select(["UC", "METER_AGE_DAYS", "METER_CHANGED_30D", "METER_CHANGED_90D", "N_METERS_HISTORICAL"])
         )
         agg_df = agg_df.join(mh_agg, on="UC", how="left")
 
@@ -791,6 +800,7 @@ def build_sanitized_window_features_vectorized(
         pl.col("METER_AGE_DAYS").fill_null(0).cast(pl.Int32) if "METER_AGE_DAYS" in agg_df.columns else pl.lit(0, dtype=pl.Int32).alias("METER_AGE_DAYS"),
         pl.col("METER_CHANGED_30D").fill_null(False).cast(pl.Boolean) if "METER_CHANGED_30D" in agg_df.columns else pl.lit(False, dtype=pl.Boolean).alias("METER_CHANGED_30D"),
         pl.col("METER_CHANGED_90D").fill_null(False).cast(pl.Boolean) if "METER_CHANGED_90D" in agg_df.columns else pl.lit(False, dtype=pl.Boolean).alias("METER_CHANGED_90D"),
+        pl.col("N_METERS_HISTORICAL").fill_null(1).cast(pl.Int16) if "N_METERS_HISTORICAL" in agg_df.columns else pl.lit(1, dtype=pl.Int16).alias("N_METERS_HISTORICAL"),
     ])
 
     # Window alarm events (mapped deterministically via _NORM_NIO -> UC)
@@ -848,7 +858,11 @@ def build_sanitized_window_features_vectorized(
             & (pl.col("AVG_INTERVAL_COVERAGE") >= min_window_coverage)
         ).alias("IS_CLEAN_FOR_TRAIN"),
     ]).with_columns([
-        pl.when(pl.col("IS_CLEAN_FOR_TRAIN"))
+        pl.when(pl.col("METER_CHANGED_30D") & (pl.col("METER_AGE_DAYS") > 0) & (pl.col("N_METERS_HISTORICAL") <= 1))
+        .then(pl.lit("PROFILE_INITIATION_NEW_UC"))
+        .when(pl.col("METER_CHANGED_30D") & (pl.col("METER_AGE_DAYS") > 0) & (pl.col("N_METERS_HISTORICAL") >= 2))
+        .then(pl.lit("METER_REPLACEMENT_TRANSITION"))
+        .when(pl.col("IS_CLEAN_FOR_TRAIN"))
         .then(pl.lit("CLEAN"))
         .when(pl.col("AVG_INTERVAL_COVERAGE") < 0.20)
         .then(pl.lit("QUARANTINE_SILENT_MESH"))
@@ -864,6 +878,7 @@ def build_sanitized_window_features_vectorized(
     ])
 
     ordered_cols = list(UC_WINDOW_FEATURES_SCHEMA.keys()) + [
+        "N_METERS_HISTORICAL",
         "IS_CLEAN_FOR_TRAIN",
         "TELECOM_STATUS",
         "RELIABLE_DAY_RATIO",

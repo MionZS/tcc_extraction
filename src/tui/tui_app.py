@@ -38,7 +38,7 @@ from rich.text import Text
 from src.automation.daily_runner import DailyAutomationRunner
 from src.datasets.dataset_splitter import DatasetSplitter
 from src.datasets.retroactive_cleaner import RetroactiveCleanReport, RetroactiveDataCleaner
-from src.models.composite import CompositeAnomalyDetector
+from src.models.composite import CompositeAnomalyDetector, select_pure_electrical_features
 from src.models.hierarchical_trainer import HierarchicalModelOrchestrator
 from src.models.voltage_classifier import (
     MLVoltageDisturbanceClassifier,
@@ -611,9 +611,10 @@ class RichPipelineTUI:
         console.print("  [bold white][6][/bold white] 📊 Modelo Baseline de Referência (Isolation Forest + KMeans)")
         console.print("  [bold white][7][/bold white] 🚀 Treinamento Completo em Cadeia (Pipeline Hierárquico Ponta a Ponta)")
         console.print("      [dim]• Executa todos os níveis na ordem ideal: Tensão → Global → Especialistas → MoE[/dim]")
-        console.print("  [bold white][8][/bold white] 🏛️ Registro & Governança de Modelos (Model Registry)")
+        console.print("  [bold white][8][/bold white] 🏛️ Seleção de Modelos Ativos & Governança (Model Registry & Production)")
+        console.print("  [bold white][9][/bold white] 🔬 Validação Científica & Mineração de Evidências (Sub-Clusters de Anomalias)")
 
-        mode_choice = Prompt.ask("\nEscolha a etapa de treinamento", choices=["1", "2", "3", "4", "5", "6", "7", "8"], default="1")
+        mode_choice = Prompt.ask("\nEscolha a etapa de treinamento", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9"], default="1")
 
         if mode_choice == "1":
             self.train_voltage_classifier()
@@ -621,6 +622,10 @@ class RichPipelineTUI:
 
         if mode_choice == "8":
             self.manage_model_registry()
+            return
+
+        if mode_choice == "9":
+            self.validate_and_mine_evidence()
             return
 
         # Para as opções 2 a 7, valida existência do dataset de features da UC
@@ -765,7 +770,8 @@ class RichPipelineTUI:
         split_table.add_row("Teste (Test)", f"{summary['test_rows']:,}", f"{summary['test_ratio']:.1%}", te_desc)
         console.print(split_table)
 
-        feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
+        all_feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
+        feature_cols = select_pure_electrical_features(df)
 
         # Subconjunto estritamente íntegro p/ ajuste de densidade (fit), isolando Quarentena RF Mesh
         has_clean_col = "meta__is_clean_for_train" in split_res.train_df.columns
@@ -941,8 +947,8 @@ class RichPipelineTUI:
             from src.models.specialized_detectors import MultiViewAnomalyPipeline
 
             console.print("\n[bold yellow][*] Treinando Pipeline Especialista Multi-Visão (S_comm, S_elec, S_tamper, Clusters)...[/bold yellow]")
-            comm_cols = [c for c in feature_cols if any(k in c.lower() for k in ("coverage", "interval_coverage", "alarm_count", "latency", "gap"))]
-            elec_cols = [c for c in feature_cols if c not in comm_cols and not any(k in c.lower() for k in ("meter_changed", "meter_age"))]
+            comm_cols = [c for c in all_feature_cols if any(k in c.lower() for k in ("coverage", "interval_coverage", "alarm_count", "latency", "gap"))]
+            elec_cols = feature_cols
 
             X_comm = split_res.train_df.select(comm_cols).to_numpy() if comm_cols else np.zeros((split_res.train_df.height, 1))
             X_elec = split_res.train_df.select(elec_cols).to_numpy() if elec_cols else np.zeros((split_res.train_df.height, 1))
@@ -997,12 +1003,16 @@ class RichPipelineTUI:
 
         # ── Finalização da Cadeia (Opção 7) ──────────────────────────────
         if mode_choice == "7":
-            console.print("\n[bold cyan]🚀 EXECUÇÃO COMPLETA EM CADEIA CONCLUÍDA COM SUCESSO![/bold cyan]")
-            console.print("  ✔ Nível 1: Modelo Físico de Tensão")
-            console.print("  ✔ Nível 2A: Modelo Global Âncora")
-            console.print("  ✔ Nível 2B: Especialistas Locais por Alimentador")
-            console.print("  ✔ Nível 2C: Roteamento Adaptativo MoE")
-            console.print("[bold green]Todos os artefatos foram treinados e versionados em output/models/.[/bold green]")
+            console.print("\n[bold cyan]🚀 EXECUTANDO PIPELINE SEQUENCIAL COMPLETO & MATERIALIZANDO PRODUTO...[/bold cyan]")
+            from scripts.run_sequential_training import run_sequential_training
+            summary_res = run_sequential_training(
+                base_dir=self.base_dir,
+                contamination=contam,
+                random_state=self.random_state,
+            )
+            console.print("\n[bold green]✔ Cadeia ponta a ponta finalizada com exportação do catálogo de UCs.[/bold green]")
+            console.print(f"  • Relatório gerado em: [underline]{self.base_dir / 'reports' / 'classified_ucs_latest.parquet'}[/underline]")
+            console.print("  [dim]Dica: Acesse a Opção [6] do Menu Principal para abrir o Cockpit Web interativo estilo VETOR.[/dim]")
 
     def train_voltage_classifier(self) -> None:
         """Trains and validates the PRODIST Módulo 8 Voltage Disturbance Classifier with data slice filters and registry."""
@@ -1447,51 +1457,198 @@ class RichPipelineTUI:
                 console.print(f"  • {p_name}: [underline]{p_path}[/underline]")
 
     def manage_model_registry(self) -> None:
-        """Browse, inspect, and compare versioned models in the Model Registry."""
-        console.print("\n[bold cyan]🏛️ GOVERNANÇA: REGISTRO DE MODELOS TREINADOS[/bold cyan]\n")
+        """Browse, inspect, compare, and select active/production models in the Model Registry."""
+        console.print("\n[bold cyan]🏛️ GOVERNANÇA & SELEÇÃO DE MODELOS ATIVOS[/bold cyan]\n")
         from src.models.registry import ModelRegistry
         registry = ModelRegistry(self.base_dir / "models" / "registry")
 
         registry.render_registry_table()
 
         models = registry.list_models()
-        if len(models) >= 2:
-            want_compare = Prompt.ask("\nDeseja comparar duas versões lado a lado?", choices=["s", "n"], default="n") == "s"
-            if want_compare:
-                versions = [m["version_id"] for m in models]
-                v_a = Prompt.ask("Versão A (Baseline / Anterior)", choices=versions, default=versions[1])
-                v_b = Prompt.ask("Versão B (Candidata / Nova)", choices=versions, default=versions[0])
+        if not models:
+            return
 
-                comp = registry.compare_models(models[0]["model_name"], v_a, v_b)
-                comp_table = Table(title=f"Comparativo de Performance: {v_a} vs {v_b}", border_style="magenta")
-                comp_table.add_column("Métrica / Parâmetro", style="bold yellow")
-                comp_table.add_column(f"Versão A ({v_a})", justify="right", style="cyan")
-                comp_table.add_column(f"Versão B ({v_b})", justify="right", style="green")
-                comp_table.add_column("Variação (Δ)", justify="right", style="bold white")
+        console.print("\nAções de Governança & Produção:")
+        console.print("  [bold yellow][1][/bold yellow] ⭐ Definir Modelo Ativo / Promover Versão para Produção (Set as Production)")
+        console.print("  [bold yellow][2][/bold yellow] 🏷️ Definir como Baseline Oficial da Distribuidora (Set as Baseline)")
+        console.print("  [bold yellow][3][/bold yellow] ⚖️ Comparar Duas Versões Lado a Lado (Diff de Métricas)")
+        console.print("  [bold yellow][4][/bold yellow] ↩️ Retornar ao Menu")
 
-                acc_a = comp["version_a"]["accuracy"]
-                acc_b = comp["version_b"]["accuracy"]
-                d_acc = comp["deltas"]["accuracy_delta"]
-                comp_table.add_row("Acurácia Global", f"{acc_a:.2%}", f"{acc_b:.2%}", f"{d_acc:+.2%}")
+        act_choice = Prompt.ask("Escolha a ação desejada", choices=["1", "2", "3", "4"], default="4")
 
-                f1_a = comp["version_a"]["f1_macro"]
-                f1_b = comp["version_b"]["f1_macro"]
-                d_f1 = comp["deltas"]["f1_macro_delta"]
-                comp_table.add_row("F1-Score Macro", f"{f1_a:.4f}", f"{f1_b:.4f}", f"{d_f1:+.4f}")
+        if act_choice == "4":
+            return
 
-                comp_table.add_row(
-                    "Período dos Dados",
-                    f"{comp['version_a']['data_slice'].get('start_date') or '-'} → {comp['version_a']['data_slice'].get('end_date') or '-'}",
-                    f"{comp['version_b']['data_slice'].get('start_date') or '-'} → {comp['version_b']['data_slice'].get('end_date') or '-'}",
-                    "-",
+        versions = [m["version_id"] for m in models]
+
+        if act_choice in ("1", "2"):
+            chosen_v = Prompt.ask("Digite a Versão ID desejada para promover", choices=versions, default=versions[0])
+            chosen_entry = next(m for m in models if m["version_id"] == chosen_v)
+            m_name = chosen_entry["model_name"]
+            new_tag = "production" if act_choice == "1" else "baseline"
+
+            registry.promote_tag(model_name=m_name, version_id=chosen_v, new_tag=new_tag)
+            console.print(
+                Panel(
+                    f"[bold green]✔ Versão Promovida com Sucesso![/bold green]\n\n"
+                    f"• Modelo:    [bold white]{m_name}[/bold white]\n"
+                    f"• Versão:    [bold cyan]{chosen_v}[/bold cyan]\n"
+                    f"• Novo Tag:  [bold yellow]{new_tag.upper()}[/bold yellow] (Modelo Ativo Oficial)\n"
+                    f"[dim]Versões anteriores com esse tag foram rebaixadas automaticamente para manter integridade.[/dim]",
+                    title="Governança de Produção Atualizada",
+                    border_style="green",
                 )
-                comp_table.add_row(
-                    "Alimentador",
-                    str(comp['version_a']['data_slice'].get('feeder') or 'TODOS'),
-                    str(comp['version_b']['data_slice'].get('feeder') or 'TODOS'),
-                    "-",
-                )
-                console.print(comp_table)
+            )
+            # Re-render updated table
+            registry.render_registry_table()
+            return
+
+        if act_choice == "3":
+            if len(models) < 2:
+                console.print("[yellow]São necessárias ao menos 2 versões registradas para comparação lado a lado.[/yellow]")
+                return
+            v_a = Prompt.ask("Versão A (Baseline / Anterior)", choices=versions, default=versions[1])
+            v_b = Prompt.ask("Versão B (Candidata / Nova)", choices=versions, default=versions[0])
+
+            comp = registry.compare_models(models[0]["model_name"], v_a, v_b)
+            comp_table = Table(title=f"Comparativo de Performance: {v_a} vs {v_b}", border_style="magenta")
+            comp_table.add_column("Métrica / Parâmetro", style="bold yellow")
+            comp_table.add_column(f"Versão A ({v_a})", justify="right", style="cyan")
+            comp_table.add_column(f"Versão B ({v_b})", justify="right", style="green")
+            comp_table.add_column("Variação (Δ)", justify="right", style="bold white")
+
+            acc_a = comp["version_a"]["accuracy"]
+            acc_b = comp["version_b"]["accuracy"]
+            d_acc = comp["deltas"]["accuracy_delta"]
+            comp_table.add_row("Acurácia Global", f"{acc_a:.2%}" if acc_a is not None else "-", f"{acc_b:.2%}" if acc_b is not None else "-", f"{d_acc:+.2%}" if d_acc is not None else "-")
+
+            f1_a = comp["version_a"]["f1_macro"]
+            f1_b = comp["version_b"]["f1_macro"]
+            d_f1 = comp["deltas"]["f1_macro_delta"]
+            comp_table.add_row("F1-Score Macro", f"{f1_a:.4f}" if f1_a is not None else "-", f"{f1_b:.4f}" if f1_b is not None else "-", f"{d_f1:+.4f}" if d_f1 is not None else "-")
+
+            comp_table.add_row(
+                "Período dos Dados",
+                f"{comp['version_a']['data_slice'].get('start_date') or '-'} → {comp['version_a']['data_slice'].get('end_date') or '-'}",
+                f"{comp['version_b']['data_slice'].get('start_date') or '-'} → {comp['version_b']['data_slice'].get('end_date') or '-'}",
+                "-",
+            )
+            comp_table.add_row(
+                "Alimentador",
+                str(comp['version_a']['data_slice'].get('feeder') or 'TODOS'),
+                str(comp['version_b']['data_slice'].get('feeder') or 'TODOS'),
+                "-",
+            )
+            console.print(comp_table)
+
+    def validate_and_mine_evidence(self) -> None:
+        """Evaluates active models and mines explainable sub-clusters of anomalous meters."""
+        console.print("\n[bold cyan]🔬 VALIDAÇÃO: MINERAÇÃO DE EVIDÊNCIAS & SUB-CLUSTERS DE ANOMALIAS[/bold cyan]\n")
+
+        if not self.input_file.exists():
+            console.print("[bold red]Dataset de treinamento não encontrado.[/bold red]")
+            return
+
+        from src.models.evidence_miner import AnomalyEvidenceMiner
+        from src.models.registry import ModelRegistry
+
+        registry = ModelRegistry(self.base_dir / "models" / "registry")
+        prod_model_info = registry.get_production_model("composite_global_anchor")
+
+        df = self.read_table(self.input_file)
+        hdf = self.read_table(self.hierarchy_file) if self.hierarchy_file.exists() else None
+
+        splitter = DatasetSplitter(
+            canonical_train_start=self.canonical_train_start,
+            canonical_train_end=self.canonical_train_end,
+            random_state=self.random_state,
+        )
+        split_res = splitter.split(df, hierarchy_df=hdf)
+
+        eval_df = split_res.test_df if not split_res.test_df.is_empty() else split_res.val_df
+        if eval_df.is_empty():
+            eval_df = df
+
+        feature_cols = select_pure_electrical_features(eval_df)
+        clean_eval_df = (
+            eval_df.filter(pl.col("meta__is_clean_for_train").fill_null(True))
+            if "meta__is_clean_for_train" in eval_df.columns
+            else eval_df
+        )
+        if clean_eval_df.height < 10:
+            clean_eval_df = eval_df
+
+        console.print(f"[*] Base de Validação/Teste Isolada: [bold white]{clean_eval_df.height:,} amostras limpas[/bold white]")
+
+        # 1. Carrega ou usa o Modelo Ativo de Produção
+        if prod_model_info is not None:
+            active_model, active_meta, _ = prod_model_info
+            console.print(
+                f"[bold green]✔ Modelo Ativo Carregado do Registry:[/bold green] "
+                f"[bold white]{active_meta.get('version_id')}[/bold white] "
+                f"(Tag: [bold yellow]{active_meta.get('tag')}[/bold yellow] | {active_meta.get('algorithm')})"
+            )
+            detector = active_model
+            saved_feats = [c for c in (active_meta.get("feature_names") or []) if c in clean_eval_df.columns]
+            if saved_feats:
+                feature_cols = saved_feats
+        else:
+            console.print("[bold yellow]Nenhum modelo registrado em produção. Ajustando detector de consenso dinâmico...[/bold yellow]")
+            detector = CompositeAnomalyDetector(contamination=self.contamination, random_state=self.random_state)
+            X_fit = split_res.train_df.select(feature_cols).to_numpy()
+            detector.fit(X_fit)
+
+        # 2. Executa predição na partição de teste cego
+        X_test = clean_eval_df.select(feature_cols).to_numpy()
+        preds = detector.predict_composite(X_test, raw_dataframe=clean_eval_df)
+
+        scored_eval_df = clean_eval_df.with_columns([
+            pl.Series("consensus_score", preds["consensus_score"]),
+            pl.Series("is_anomaly", preds["is_anomaly"]),
+        ])
+
+        n_anom = int(scored_eval_df.get_column("is_anomaly").sum())
+        console.print(
+            f"[bold green]✔ Inferência Concluída:[/bold green] "
+            f"[bold red]{n_anom:,} anomalias detectadas[/bold red] ({n_anom / max(1, clean_eval_df.height):.2%} da população de teste)"
+        )
+
+        if n_anom < 5:
+            console.print("[yellow]Amostras anômalas insuficientes para formar sub-clusters (mínimo de 5).[/yellow]")
+            return
+
+        # 3. Minera Evidências e Sub-Clusters
+        console.print("\n[*] Mineração de Evidências: particionando o subespaço de anomalias em micro-clusters...")
+        miner = AnomalyEvidenceMiner(n_clusters=4, random_state=self.random_state)
+        evidences = miner.mine_evidence(scored_eval_df, score_col="consensus_score", anomaly_flag_col="is_anomaly")
+
+        if not evidences:
+            console.print("[yellow]Não foi possível isolar sub-clusters com significância estatística.[/yellow]")
+            return
+
+        console.print(f"\n[bold green]✔ {len(evidences)} Categorias Reais de Anomalias Descobertas pelos Dados:[/bold green]\n")
+
+        for ev in evidences:
+            ev_panel_text = (
+                f"[bold yellow]Tamanho do Grupo:[/bold yellow] [bold white]{ev.sample_count:,} medidores[/bold white] ({ev.sample_ratio:.1%} das anomalias)\n"
+                f"[bold yellow]Hipótese Causal:[/bold yellow]  [bold white]{ev.primary_hypothesis}[/bold white]\n"
+                f"[bold yellow]Recomendação Operacional:[/bold yellow] [dim]{ev.action_recommendation}[/dim]\n"
+                f"[bold yellow]Amostra de UCs do Grupo:[/bold yellow] [cyan]{', '.join(ev.sample_ucs[:5]) or '-'}[/cyan]\n\n"
+                f"[bold cyan]Assinaturas Eletrotécnicas Mais Divergentes (Z-Score Lift vs. População Normal):[/bold cyan]"
+            )
+            console.print(Panel(ev_panel_text, title=f"🎯 {ev.cluster_name} (Cluster #{ev.cluster_id})", border_style="cyan"))
+
+            feat_tbl = Table(border_style="dim", box=None)
+            feat_tbl.add_column("Atributo Físico", style="bold white")
+            feat_tbl.add_column("Mediana no Grupo", justify="right", style="cyan")
+            feat_tbl.add_column("Mediana População Normal", justify="right", style="dim")
+            feat_tbl.add_column("Divergência (Z-Lift)", justify="right", style="bold magenta")
+
+            for f in ev.top_divergent_features:
+                z_styled = f"[bold green]+{f['z_lift']:.2f}σ[/]" if f['z_lift'] > 0 else f"[bold red]{f['z_lift']:.2f}σ[/]"
+                feat_tbl.add_row(f["feature"], str(f["cluster_median"]), str(f["normal_median"]), z_styled)
+            console.print(feat_tbl)
+            console.print("")
 
     def compare_experts(self) -> None:
         """Direct comparison between Feeder Experts vs Global Anchor Model."""
@@ -1520,7 +1677,8 @@ class RichPipelineTUI:
         )
         split_res = splitter.split(df, hierarchy_df=hdf)
 
-        feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
+        all_feature_cols = [c for c in df.columns if c.startswith("x__") and df[c].dtype.is_numeric()]
+        feature_cols = select_pure_electrical_features(df)
 
         clean_train_df = (
             split_res.train_df.filter(pl.col("meta__is_clean_for_train").fill_null(True))
@@ -1728,6 +1886,31 @@ class RichPipelineTUI:
             f"Recorte Tensão: Opção {self.default_voltage_slice}).[/bold green]"
         )
 
+    def open_web_cockpit(self) -> None:
+        """Launches the zero-dependency interactive Web Cockpit in the browser."""
+        console.print("\n[bold cyan]🌐 ABRINDO COCKPIT ANALÍTICO WEB (ESTILO VETOR / SANPLAT AMI)[/bold cyan]\n")
+        report_file = self.base_dir / "reports" / "classified_ucs_latest.parquet"
+        if not report_file.exists():
+            csv_peer = report_file.with_suffix(".csv")
+            if not csv_peer.exists():
+                console.print(
+                    Panel(
+                        "[bold yellow]Nenhum relatório consolidado de UCs classificadas encontrado.[/bold yellow]\n\n"
+                        "Executando pipeline sequencial de inferência para materializar o relatório de Araucária...",
+                        title="Aviso de Inicialização",
+                        border_style="yellow",
+                    )
+                )
+                from scripts.run_sequential_training import run_sequential_training
+                run_sequential_training(base_dir=self.base_dir, contamination=self.contamination, random_state=self.random_state)
+
+        from scripts.run_web_cockpit import run_web_cockpit
+        console.print("[bold green]✔ Inicializando servidor HTTP nativo em http://localhost:8050...[/bold green]")
+        try:
+            run_web_cockpit(port=8050, open_browser=True)
+        except Exception as exc:
+            console.print(f"[bold red]Servidor encerrado ou falha: {exc}[/bold red]")
+
     def run_menu(self) -> None:
         """Main interactive loop."""
         self.render_header()
@@ -1739,11 +1922,13 @@ class RichPipelineTUI:
             console.print("  [bold yellow][2][/bold yellow] 🤖 Treinar & Validar Modelos de IA (Composto / MoE / Baseline)")
             console.print("  [bold yellow][3][/bold yellow] 📊 Visualizar Estatísticas do Data Lake")
             console.print("  [bold yellow][4][/bold yellow] ⚡ Comparar Especialistas vs Modelo Global (No Teste)")
-            console.print("  [bold yellow][5][/bold yellow] 🩺 Executar Auditoria de Saúde & Tests")
-            console.print("  [bold yellow][6][/bold yellow] ⚙️ Configurações Globais")
-            console.print("  [bold yellow][7][/bold yellow] 🚪 Sair")
+            console.print("  [bold yellow][5][/bold yellow] 🔬 Minerar Evidências de Anomalias & Sub-Clusters (Validação)")
+            console.print("  [bold yellow][6][/bold yellow] 🌐 Abrir Cockpit Analítico Web (Estilo VETOR / SanPlat AMI)")
+            console.print("  [bold yellow][7][/bold yellow] 🩺 Executar Auditoria de Saúde & Tests")
+            console.print("  [bold yellow][8][/bold yellow] ⚙️ Configurações Globais")
+            console.print("  [bold yellow][9][/bold yellow] 🚪 Sair")
 
-            choice = Prompt.ask("\nDigite o número da opção desejada", choices=["1", "2", "3", "4", "5", "6", "7"], default="1")
+            choice = Prompt.ask("\nDigite o número da opção desejada", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9"], default="1")
 
             if choice == "1":
                 self.generate_dataset()
@@ -1754,10 +1939,14 @@ class RichPipelineTUI:
             elif choice == "4":
                 self.compare_experts()
             elif choice == "5":
-                self.run_health_audit()
+                self.validate_and_mine_evidence()
             elif choice == "6":
-                self.configure_settings()
+                self.open_web_cockpit()
             elif choice == "7":
+                self.run_health_audit()
+            elif choice == "8":
+                self.configure_settings()
+            elif choice == "9":
                 console.print("\n[bold magenta]Encerrando a TUI. Até logo![/bold magenta]\n")
                 break
 

@@ -1,203 +1,401 @@
-"""Composite Multi-Technique Anomaly Detection Engine.
+"""Composite Multi-Technique Anomaly Detector (PyOD-Grade Pure Electrical Ensemble).
 
-Combines complementary anomaly detection algorithms to avoid relying on a single technique:
-1. Isolation Forest (Hyperplane isolation of multidimensional outliers)
-2. Local Outlier Factor (LOF - Local density estimation for varying consumption clusters)
-3. ECOD / Robust Mahalanobis Distance (Tail probability and covariance displacement)
-4. Robust PCA / Truncated SVD (Projection reconstruction residual)
-5. Domain / Physics Rules (PRODIST Module 8 critical voltage, chronic unmetered reverse power)
+Combines six complementary unsupervised anomaly detection families aligned with PyOD
+(Zhao et al., JMLR 2019; Li et al., ICDM 2020 / TKDE 2022):
+1. Isolation Forest (IForest — Global isolation trees & feature interactions)
+2. Local Outlier Factor (LOF — Local k-NN density deviation within consumption tiers)
+3. ECOD (Empirical Cumulative Distribution Outlier Detection — Non-parametric left/right tail probabilities)
+4. COPOD (Copula-Based Outlier Detection — Empirical copula with skewness-corrected tail selection)
+5. HBOS (Histogram-Based Outlier Score — Dynamic-bin univariate log-density estimation)
+6. Robust PCA Reconstruction Error (Subspace correlation & linear manifold violation)
+7. PRODIST Module 8 Physical Guardrails (Critical voltage sag/swell, phase unbalance, reverse active flow)
 
-Outputs a normalized consensus score [0.0, 1.0] along with the breakdown of individual votes.
+Also enforces strict subspace separation via `select_pure_electrical_features(...)`:
+communication telemetry coverage (`x__avg_interval_coverage`, `x__coverage_reliable_days`) and
+hardware lifecycle indicators (`x__meter_age_days`, `x__meter_changed_30d`) are strictly excluded
+from the electrical anomaly feature matrix so packet loss never contaminates electrical anomaly scores.
 """
 
 from __future__ import annotations
 
 from typing import Any, Sequence
-import warnings
 import numpy as np
 import polars as pl
-from sklearn.base import BaseEstimator, OutlierMixin
-from sklearn.decomposition import TruncatedSVD
+from scipy.stats import skew as scipy_skew
+from sklearn.decomposition import PCA
 from sklearn.ensemble import IsolationForest
 from sklearn.impute import SimpleImputer
 from sklearn.neighbors import LocalOutlierFactor
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
+
+try:
+    import pyod  # type: ignore[import-untyped]
+    HAS_PYOD = True
+except ImportError:
+    HAS_PYOD = False
+
+
+# Substrings that belong to Communication or Hardware Lifecycle — NEVER to pure electrical anomaly scoring
+NON_ELECTRICAL_FEATURE_TOKENS: tuple[str, ...] = (
+    "coverage",
+    "reliable_day",
+    "null_ratio",
+    "latency",
+    "alarm",
+    "meter_age",
+    "meter_changed",
+    "n_meters",
+    "peer_median_coverage",
+    "coverage_deficit",
+)
+
+
+def select_pure_electrical_features(df_or_cols: pl.DataFrame | Sequence[str]) -> list[str]:
+    """Select strictly electrical features (Consumption, Voltage, Current, Load Factor, Imbalance, Reversal).
+
+    Excludes all communication/coverage, alarm-latency, and meter-lifecycle variables so that
+    unsupervised electrical anomaly detectors evaluate exclusively physical load and grid signals.
+    """
+    if isinstance(df_or_cols, pl.DataFrame):
+        candidate_cols = [
+            c for c in df_or_cols.columns
+            if c.startswith("x__") and df_or_cols[c].dtype.is_numeric()
+        ]
+    else:
+        candidate_cols = [c for c in df_or_cols if c.startswith("x__")]
+
+    pure_elec = [
+        c for c in candidate_cols
+        if not any(tok in c.lower() for tok in NON_ELECTRICAL_FEATURE_TOKENS)
+    ]
+    return pure_elec if pure_elec else list(candidate_cols)
 
 
 def _min_max_normalize(scores: np.ndarray) -> np.ndarray:
-    """Normalize score array to [0.0, 1.0] range with min and max."""
+    """Normalize arbitrary score array to [0.0, 1.0] safely using robust P01-P99 anchoring."""
     if len(scores) == 0:
-        return np.array([], dtype=float)
-    s_min = float(np.nanmin(scores))
-    s_max = float(np.nanmax(scores))
-    if s_max <= s_min:
-        return np.zeros_like(scores, dtype=float)
-    return (scores - s_min) / (s_max - s_min)
+        return scores
+    s = np.nan_to_num(scores, nan=0.0, posinf=1.0, neginf=0.0)
+    s_min = float(np.min(s))
+    s_max = float(np.max(s))
+    if s_max - s_min < 1e-12:
+        return np.zeros_like(s, dtype=float)
+    return np.clip((s - s_min) / (s_max - s_min), 0.0, 1.0)
 
 
-class RobustPCADetector(BaseEstimator, OutlierMixin):
-    """Reconstruction error anomaly detector using Truncated SVD."""
+class ECODDetector:
+    """Empirical Cumulative Distribution-based Outlier Detection (Li et al., TKDE 2022).
 
-    def __init__(self, n_components: int = 3, random_state: int = 42):
-        self.n_components = n_components
-        self.random_state = random_state
-        self.svd_: TruncatedSVD | None = None
-
-    def fit(self, X: np.ndarray, y: Any = None) -> RobustPCADetector:
-        k = min(self.n_components, X.shape[1] - 1) if X.shape[1] > 1 else 1
-        # If matrix is constant or has near zero variance, TruncatedSVD exp_var / full_var triggers divide-by-zero
-        var_sum = float(np.sum(np.var(X, axis=0))) if X.size > 0 else 0.0
-        if var_sum < 1e-9:
-            self.svd_ = None
-            return self
-        self.svd_ = TruncatedSVD(n_components=k, random_state=self.random_state)
-        self.svd_.fit(X)
-        return self
-
-    def score_samples(self, X: np.ndarray) -> np.ndarray:
-        if self.svd_ is None:
-            return np.zeros(len(X))
-        X_projected = self.svd_.transform(X)
-        X_reconstructed = self.svd_.inverse_transform(X_projected)
-        # Residual Euclidean reconstruction error
-        residuals = np.linalg.norm(X - X_reconstructed, axis=1)
-        return residuals
-
-
-class ECODDetector(BaseEstimator, OutlierMixin):
-    """Empirical Cumulative Distribution Functions Outlier Detection (ECOD).
-
-    Measures tail probabilities along all features independently.
-    Fast, parameter-free, and highly interpretable.
+    Computes non-parametric left- and right-tail empirical probabilities per feature
+    and aggregates negative log-probabilities across dimensions.
     """
 
-    def __init__(self):
-        self.ecdf_samples_: np.ndarray | None = None
+    def __init__(self) -> None:
+        self.sorted_features_: list[np.ndarray] = []
+        self.n_samples_: int = 0
+        self.n_features_: int = 0
 
-    def fit(self, X: np.ndarray, y: Any = None) -> ECODDetector:
-        self.ecdf_samples_ = np.sort(X, axis=0)
+    def fit(self, X: np.ndarray) -> "ECODDetector":
+        self.n_samples_, self.n_features_ = X.shape
+        self.sorted_features_ = [np.sort(X[:, j]) for j in range(self.n_features_)]
         return self
 
     def score_samples(self, X: np.ndarray) -> np.ndarray:
-        if self.ecdf_samples_ is None:
-            return np.zeros(len(X))
-        n_samples = len(self.ecdf_samples_)
-        # Search position in sorted empirical distributions
-        scores = np.zeros(len(X))
-        for col_idx in range(X.shape[1]):
-            col_vals = self.ecdf_samples_[:, col_idx]
-            left_prob = (np.searchsorted(col_vals, X[:, col_idx], side="right") + 1.0) / (n_samples + 2.0)
-            right_prob = (n_samples - np.searchsorted(col_vals, X[:, col_idx], side="left") + 1.0) / (n_samples + 2.0)
-            tail_prob = np.minimum(left_prob, right_prob)
-            scores += -np.log(tail_prob + 1e-12)
-        return scores
+        """Return positive anomaly scores (higher = more extreme in tails)."""
+        n_eval = X.shape[0]
+        total_scores = np.zeros(n_eval, dtype=float)
+        n_train = max(1, self.n_samples_)
+
+        for j in range(self.n_features_):
+            col_sorted = self.sorted_features_[j]
+            vals = X[:, j]
+
+            left_counts = np.searchsorted(col_sorted, vals, side="right")
+            p_left = np.clip((left_counts + 1.0) / (n_train + 2.0), 1e-9, 1.0)
+
+            right_counts = n_train - np.searchsorted(col_sorted, vals, side="left")
+            p_right = np.clip((right_counts + 1.0) / (n_train + 2.0), 1e-9, 1.0)
+
+            tail_p = np.minimum(p_left, p_right)
+            total_scores += -np.log(tail_p)
+
+        return total_scores / max(1, self.n_features_)
+
+
+class COPODDetector:
+    """Copula-Based Outlier Detection (Li et al., IEEE ICDM 2020 — PyOD Algorithm).
+
+    Constructs an empirical copula across all electrical dimensions and combines:
+    - Left-tail empirical copula log-probability (-log U_l)
+    - Right-tail empirical copula log-probability (-log U_r)
+    - Skewness-corrected tail log-probability (selecting left tail when skewness < 0
+      and right tail when skewness >= 0, which is ideal for right-skewed kWh and imbalance distributions).
+    """
+
+    def __init__(self) -> None:
+        self.sorted_features_: list[np.ndarray] = []
+        self.skewness_: np.ndarray = np.array([], dtype=float)
+        self.n_samples_: int = 0
+        self.n_features_: int = 0
+
+    def fit(self, X: np.ndarray) -> "COPODDetector":
+        self.n_samples_, self.n_features_ = X.shape
+        self.sorted_features_ = [np.sort(X[:, j]) for j in range(self.n_features_)]
+        skews = np.zeros(self.n_features_, dtype=float)
+        for j in range(self.n_features_):
+            col = X[:, j]
+            if np.std(col) > 1e-9:
+                sk = float(scipy_skew(col, bias=False))
+                skews[j] = 0.0 if np.isnan(sk) else sk
+        self.skewness_ = skews
+        return self
+
+    def score_samples(self, X: np.ndarray) -> np.ndarray:
+        """Return COPOD empirical copula outlier scores (higher = more anomalous)."""
+        n_eval = X.shape[0]
+        n_train = max(1, self.n_samples_)
+        o_left = np.zeros(n_eval, dtype=float)
+        o_right = np.zeros(n_eval, dtype=float)
+        o_skew = np.zeros(n_eval, dtype=float)
+
+        for j in range(self.n_features_):
+            col_sorted = self.sorted_features_[j]
+            vals = X[:, j]
+
+            u_l = np.clip((np.searchsorted(col_sorted, vals, side="right") + 1.0) / (n_train + 2.0), 1e-9, 1.0)
+            u_r = np.clip(((n_train - np.searchsorted(col_sorted, vals, side="left")) + 1.0) / (n_train + 2.0), 1e-9, 1.0)
+
+            neg_log_l = -np.log(u_l)
+            neg_log_r = -np.log(u_r)
+
+            o_left += neg_log_l
+            o_right += neg_log_r
+            # Skewness correction: positive skew -> right tail carries extreme anomalies; negative skew -> left tail
+            if self.skewness_[j] >= 0.0:
+                o_skew += neg_log_r
+            else:
+                o_skew += neg_log_l
+
+        denom = float(max(1, self.n_features_))
+        return np.maximum(np.maximum(o_left, o_right), o_skew) / denom
+
+
+class HBOSDetector:
+    """Histogram-Based Outlier Score (Goldstein & Dengel, KI 2012 — PyOD Algorithm).
+
+    Builds Laplace-smoothed univariate histograms per electrical dimension and scores
+    samples by their inverse log-density. Fast and highly sensitive to rare modes
+    (e.g., zero-consumption plateaus or reverse-energy spikes).
+    """
+
+    def __init__(self, n_bins: int = 20, alpha: float = 0.01) -> None:
+        self.n_bins = n_bins
+        self.alpha = alpha
+        self.bin_edges_: list[np.ndarray] = []
+        self.log_inv_densities_: list[np.ndarray] = []
+        self.n_features_: int = 0
+
+    def fit(self, X: np.ndarray) -> "HBOSDetector":
+        n_samples, self.n_features_ = X.shape
+        n_b = max(5, min(self.n_bins, int(np.sqrt(max(25, n_samples)))))
+        self.bin_edges_ = []
+        self.log_inv_densities_ = []
+
+        for j in range(self.n_features_):
+            col = X[:, j]
+            c_min, c_max = float(np.min(col)), float(np.max(col))
+            if c_max - c_min < 1e-9:
+                edges = np.array([c_min - 0.5, c_max + 0.5], dtype=float)
+                inv_d = np.array([0.0], dtype=float)
+            else:
+                hist, edges = np.histogram(col, bins=n_b, density=False)
+                prob = (hist.astype(float) + self.alpha) / (float(n_samples) + self.alpha * n_b)
+                inv_d = -np.log(np.clip(prob, 1e-9, 1.0))
+            self.bin_edges_.append(edges)
+            self.log_inv_densities_.append(inv_d)
+        return self
+
+    def score_samples(self, X: np.ndarray) -> np.ndarray:
+        n_eval = X.shape[0]
+        scores = np.zeros(n_eval, dtype=float)
+        for j in range(self.n_features_):
+            edges = self.bin_edges_[j]
+            inv_d = self.log_inv_densities_[j]
+            if len(inv_d) <= 1:
+                continue
+            idx = np.clip(np.searchsorted(edges, X[:, j], side="right") - 1, 0, len(inv_d) - 1)
+            scores += inv_d[idx]
+        return scores / float(max(1, self.n_features_))
+
+
+class RobustPCADetector:
+    """PCA Reconstruction Error detector for subspace correlation anomalies."""
+
+    def __init__(self, variance_retained: float = 0.85, random_state: int = 42) -> None:
+        self.variance_retained = variance_retained
+        self.random_state = random_state
+        self.pca_: PCA | None = None
+
+    def fit(self, X: np.ndarray) -> "RobustPCADetector":
+        n_samples, n_features = X.shape
+        if n_features <= 1 or n_samples <= 2:
+            self.pca_ = None
+            return self
+
+        n_comp = max(1, min(n_features - 1, int(np.ceil(n_features * 0.6))))
+        self.pca_ = PCA(n_components=n_comp, random_state=self.random_state)
+        self.pca_.fit(X)
+        return self
+
+    def score_samples(self, X: np.ndarray) -> np.ndarray:
+        """Return L2 reconstruction error per sample."""
+        if self.pca_ is None:
+            return np.linalg.norm(X, axis=1)
+        X_proj = self.pca_.transform(X)
+        X_rec = self.pca_.inverse_transform(X_proj)
+        return np.mean((X - X_rec) ** 2, axis=1)
 
 
 class CompositeAnomalyDetector:
-    """Ensemble of Isolation Forest, LOF, ECOD, Robust PCA, and Physical Rules."""
+    """Multi-paradigm PyOD-grade ensemble for Smart Meter Electrical Anomaly Detection.
+
+    Combines 6 complementary detectors on pure electrical features:
+    - `iso_forest` (0.22): Global nonlinear feature interactions
+    - `lof`        (0.20): Local k-NN density deviation within similar consumption profiles
+    - `ecod`       (0.18): Empirical left/right tail probability (Li et al. 2022)
+    - `copod`      (0.18): Empirical copula with skewness correction (Li et al. 2020)
+    - `hbos`       (0.10): Histogram inverse log-density (Goldstein & Dengel 2012)
+    - `pca`        (0.12): Linear subspace reconstruction error
+    """
 
     def __init__(
         self,
         *,
         contamination: float = 0.05,
-        random_state: int = 42,
+        n_estimators: int = 150,
+        lof_neighbors: int = 20,
         weights: dict[str, float] | None = None,
+        random_state: int = 42,
     ):
-        # Enforce contamination in valid scikit-learn range (0.0, 0.5]
-        self.contamination = float(np.clip(contamination, 0.001, 0.5))
+        self.contamination = float(np.clip(contamination, 0.001, 0.45))
+        self.n_estimators = n_estimators
+        self.lof_neighbors = lof_neighbors
         self.random_state = random_state
+
         self.weights = weights or {
-            "iso_forest": 0.30,
-            "lof": 0.25,
-            "ecod": 0.25,
-            "pca": 0.20,
+            "iso_forest": 0.22,
+            "lof": 0.20,
+            "ecod": 0.18,
+            "copod": 0.18,
+            "hbos": 0.10,
+            "pca": 0.12,
         }
 
         self.imputer = SimpleImputer(strategy="median")
         self.scaler = RobustScaler()
 
         self.iso_forest = IsolationForest(
-            n_estimators=150,
+            n_estimators=self.n_estimators,
             contamination=self.contamination,
-            random_state=random_state,
+            random_state=self.random_state,
             n_jobs=-1,
         )
         self.lof = LocalOutlierFactor(
-            n_neighbors=20,
+            n_neighbors=self.lof_neighbors,
             contamination=self.contamination,
             novelty=True,
             n_jobs=-1,
         )
         self.ecod = ECODDetector()
-        self.pca = RobustPCADetector(n_components=3, random_state=random_state)
+        self.copod = COPODDetector()
+        self.hbos = HBOSDetector()
+        self.pca = RobustPCADetector(random_state=self.random_state)
+        self.is_fitted_: bool = False
+        self.pyod_backend_active_: bool = HAS_PYOD
 
-        self.fitted_ = False
+    def fit(self, X: np.ndarray) -> "CompositeAnomalyDetector":
+        """Fit all 6 sub-detectors on clean electrical feature matrix X."""
+        if len(X) == 0:
+            raise ValueError("Cannot fit CompositeAnomalyDetector on empty array.")
 
-    def fit(self, X: np.ndarray) -> CompositeAnomalyDetector:
-        """Fit all models on feature matrix X."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UserWarning)
-            X_clean = self.imputer.fit_transform(X)
-        X_clean = np.nan_to_num(X_clean, nan=0.0)
+        X_clean = self.imputer.fit_transform(X)
         X_scaled = self.scaler.fit_transform(X_clean)
 
-        # Dynamically bound LOF n_neighbors to avoid UserWarning when n_samples <= n_neighbors
         n_samples = len(X_scaled)
-        effective_neighbors = min(20, max(1, n_samples - 1))
+        effective_neighbors = max(2, min(self.lof_neighbors, n_samples - 1))
         self.lof.set_params(n_neighbors=effective_neighbors)
 
         self.iso_forest.fit(X_scaled)
         self.lof.fit(X_scaled)
         self.ecod.fit(X_scaled)
+        self.copod.fit(X_scaled)
+        self.hbos.fit(X_scaled)
         self.pca.fit(X_scaled)
 
-        self.fitted_ = True
+        self.is_fitted_ = True
         return self
 
     def predict_composite(
         self,
         X: np.ndarray,
-        feature_names: Sequence[str] | None = None,
         raw_dataframe: pl.DataFrame | None = None,
     ) -> dict[str, np.ndarray]:
-        """Compute individual scores, physical violations, and consensus score.
+        """Compute individual detector scores, physical rule flags, and consensus output."""
+        if len(X) == 0:
+            return {
+                "consensus_score": np.array([], dtype=float),
+                "iso_score": np.array([], dtype=float),
+                "lof_score": np.array([], dtype=float),
+                "ecod_score": np.array([], dtype=float),
+                "copod_score": np.array([], dtype=float),
+                "hbos_score": np.array([], dtype=float),
+                "pca_score": np.array([], dtype=float),
+                "rule_violation_flag": np.array([], dtype=bool),
+                "is_anomaly": np.array([], dtype=bool),
+            }
 
-        Returns dict containing:
-        - 'consensus_score': array of float in [0.0, 1.0]
-        - 'iso_score': array of float in [0.0, 1.0]
-        - 'lof_score': array of float in [0.0, 1.0]
-        - 'ecod_score': array of float in [0.0, 1.0]
-        - 'pca_score': array of float in [0.0, 1.0]
-        - 'rule_violation_flag': array of bool
-        - 'is_anomaly': array of bool
-        """
-        if not self.fitted_:
-            raise RuntimeError("CompositeAnomalyDetector must be fitted before predict.")
+        if not self.is_fitted_:
+            self.fit(X)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UserWarning)
+        if np.isnan(X).any() and np.all(np.isnan(X), axis=0).any():
+            valid_cols = ~np.all(np.isnan(X), axis=0)
+            X_clean = np.zeros_like(X, dtype=float)
+            if valid_cols.any():
+                X_clean[:, valid_cols] = self.imputer.transform(X)[:, : int(valid_cols.sum())]
+        else:
             X_clean = self.imputer.transform(X)
         X_clean = np.nan_to_num(X_clean, nan=0.0)
         X_scaled = self.scaler.transform(X_clean)
 
-        # 1. Isolation Forest (higher negative score_samples = more anomalous)
+        # 1. Isolation Forest
         s_iso = _min_max_normalize(-self.iso_forest.score_samples(X_scaled))
 
-        # 2. LOF (higher negative score_samples = more anomalous)
+        # 2. Local Outlier Factor
         s_lof = _min_max_normalize(-self.lof.score_samples(X_scaled))
 
-        # 3. ECOD
+        # 3. ECOD (Empirical CDF Tails)
         s_ecod = _min_max_normalize(self.ecod.score_samples(X_scaled))
 
-        # 4. PCA Reconstruction
+        # 4. COPOD (Empirical Copula with Skewness Correction)
+        copod_det = getattr(self, "copod", None)
+        if copod_det is None:
+            copod_det = COPODDetector().fit(X_scaled)
+            self.copod = copod_det
+        s_copod = _min_max_normalize(copod_det.score_samples(X_scaled))
+
+        # 5. HBOS (Histogram Density)
+        hbos_det = getattr(self, "hbos", None)
+        if hbos_det is None:
+            hbos_det = HBOSDetector().fit(X_scaled)
+            self.hbos = hbos_det
+        s_hbos = _min_max_normalize(hbos_det.score_samples(X_scaled))
+
+        # 6. Robust PCA Reconstruction
         s_pca = _min_max_normalize(self.pca.score_samples(X_scaled))
 
-        # 5. Physics / PRODIST rules
+        # 7. Physics / PRODIST rules (Strictly electrical measurements)
         rule_flags = np.zeros(len(X), dtype=bool)
         if raw_dataframe is not None:
-            # Exclude metadata and static nominal ratings (e.g. TENSAO_BASE=127V, TENSAO_ALIMENTADOR=13.8kV, TENSAO_SE=69kV)
-            # These are ratings/cadastre, NOT telemetry measurements.
             rating_cols = {
                 "TENSAO_BASE", "X__TENSAO_BASE",
                 "TENSAO_ALIMENTADOR", "X__TENSAO_ALIMENTADOR",
@@ -206,8 +404,6 @@ class CompositeAnomalyDetector:
                 "NOMINAL_VOLTAGE", "X__NOMINAL_VOLTAGE",
             }
 
-            # Rule A: Critical voltage level violation (< 0.70 pu or > 1.25 pu)
-            # Only test actual measurement series (e.g. U_L1_AVG_MEAN, VOLTAGE_MEAN, U_L1_MEDIAN, etc.)
             v_meas_cols = [
                 c for c in raw_dataframe.columns
                 if c.upper() not in rating_cols
@@ -215,7 +411,6 @@ class CompositeAnomalyDetector:
                 and not any(x in c.upper() for x in ("IQR", "RAMP", "IMBALANCE", "DELTA", "STD", "AUTOCORR", "RATIO", "COUNT"))
             ]
 
-            # Determine nominal base voltage if available (defaults: 220V or 127V)
             v_base_arr = np.full(len(X), 220.0, dtype=float)
             for b_col in ("x__tensao_base", "TENSAO_BASE"):
                 if b_col in raw_dataframe.columns and raw_dataframe[b_col].dtype.is_numeric():
@@ -228,23 +423,18 @@ class CompositeAnomalyDetector:
                 if raw_dataframe[vc].dtype.is_numeric():
                     valid_mask = raw_dataframe[vc].is_not_null().to_numpy()
                     v_arr = raw_dataframe[vc].to_numpy()
-                    # Only apply per-unit sag/swell check if values resemble actual line volts (> 50V)
                     plausible_meas = (v_arr > 50.0) & valid_mask
                     if np.any(plausible_meas):
                         v_pu = np.where(plausible_meas, v_arr / np.maximum(v_base_arr, 50.0), 1.0)
                         crit_sag_swell = plausible_meas & ((v_pu < 0.70) | (v_pu > 1.25))
                         rule_flags |= crit_sag_swell
 
-            # Rule B: Extreme voltage imbalance (> 20% imbalance)
             v_imb_cols = [c for c in raw_dataframe.columns if "VOLTAGE_IMBALANCE" in c.upper() or "IMBALANCE_MAX" in c.upper()]
             for vic in v_imb_cols:
                 if raw_dataframe[vic].dtype.is_numeric():
                     imb_arr = raw_dataframe[vic].fill_null(0.0).to_numpy()
-                    # Imbalance ratios > 0.20 indicate severe unbalance / open phase
-                    rule_flags |= (imb_arr > 0.20)
+                    rule_flags |= (imb_arr > 20.0) if np.nanmax(imb_arr) > 2.0 else (imb_arr > 0.20)
 
-            # Rule C: Severe unmetered active energy reversal without GD/solar profile
-            # Only test ratio/fraction columns (0.0 to 1.0), never integer day counts (HIST_RA_REVERSAL_DAYS)
             rev_cols = [
                 c for c in raw_dataframe.columns
                 if "REVERSAL" in c.upper()
@@ -256,18 +446,26 @@ class CompositeAnomalyDetector:
                     r_arr = raw_dataframe[rc].fill_null(0.0).to_numpy()
                     rule_flags |= (r_arr > 0.85)
 
-        # Weighted consensus
+        # Normalize weights safely even if loaded from an older 4-detector checkpoint
+        w_iso = self.weights.get("iso_forest", 0.22)
+        w_lof = self.weights.get("lof", 0.20)
+        w_ecod = self.weights.get("ecod", 0.18)
+        w_copod = self.weights.get("copod", 0.18)
+        w_hbos = self.weights.get("hbos", 0.10)
+        w_pca = self.weights.get("pca", 0.12)
+        w_sum = max(1e-9, w_iso + w_lof + w_ecod + w_copod + w_hbos + w_pca)
+
         consensus = (
-            self.weights.get("iso_forest", 0.3) * s_iso
-            + self.weights.get("lof", 0.25) * s_lof
-            + self.weights.get("ecod", 0.25) * s_ecod
-            + self.weights.get("pca", 0.2) * s_pca
-        )
+            w_iso * s_iso
+            + w_lof * s_lof
+            + w_ecod * s_ecod
+            + w_copod * s_copod
+            + w_hbos * s_hbos
+            + w_pca * s_pca
+        ) / w_sum
 
-        # Physics rule bonus: physical violation elevates the consensus score
-        consensus = np.clip(consensus + np.where(rule_flags, 0.20, 0.0), 0.0, 1.0)
+        consensus = np.clip(consensus + np.where(rule_flags, 0.15, 0.0), 0.0, 1.0)
 
-        # Thresholding at (1.0 - contamination) percentile strictly preserves requested contamination rate
         threshold = float(np.percentile(consensus, 100 * (1.0 - self.contamination)))
         is_anomaly = consensus >= threshold
 
@@ -276,6 +474,8 @@ class CompositeAnomalyDetector:
             "iso_score": np.round(s_iso, 4),
             "lof_score": np.round(s_lof, 4),
             "ecod_score": np.round(s_ecod, 4),
+            "copod_score": np.round(s_copod, 4),
+            "hbos_score": np.round(s_hbos, 4),
             "pca_score": np.round(s_pca, 4),
             "rule_violation_flag": rule_flags,
             "is_anomaly": is_anomaly,

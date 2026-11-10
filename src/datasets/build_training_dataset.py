@@ -111,7 +111,7 @@ def build_training_dataset(
             exprs.append(pl.col(col_name).alias(f"x__{col_name.lower()}"))
 
     # Preserve optional curated metadata and normalized ratios if produced by retroactive cleaner
-    for extra_meta in ("IS_CLEAN_FOR_TRAIN", "TELECOM_STATUS", "RELIABLE_DAY_RATIO"):
+    for extra_meta in ("IS_CLEAN_FOR_TRAIN", "TELECOM_STATUS", "RELIABLE_DAY_RATIO", "N_METERS_HISTORICAL"):
         if extra_meta in df.columns:
             exprs.append(pl.col(extra_meta).alias(f"meta__{extra_meta.lower()}"))
         elif f"meta__{extra_meta.lower()}" in df.columns:
@@ -191,6 +191,31 @@ def build_training_dataset(
 
             hier_subset = hierarchy_df.select(hier_select).unique(subset=["id__uc_id"])
             base_model_df = base_model_df.join(hier_subset, on="id__uc_id", how="left")
+
+    # ── Topological/Spatial Peer Communication Contrast (Posto Operacional / Feeder) ──
+    if "x__avg_interval_coverage" in base_model_df.columns:
+        cov_col = pl.col("x__avg_interval_coverage").fill_null(0.0)
+        if "meta__posto" in base_model_df.columns and "meta__feeder" in base_model_df.columns:
+            peer_posto_med = cov_col.median().over(["meta__cutoff_date", "meta__posto"])
+            peer_posto_cnt = pl.len().over(["meta__cutoff_date", "meta__posto"])
+            peer_feeder_med = cov_col.median().over(["meta__cutoff_date", "meta__feeder"])
+            peer_med_expr = (
+                pl.when(pl.col("meta__posto").is_not_null() & (peer_posto_cnt >= 3))
+                .then(peer_posto_med)
+                .when(pl.col("meta__feeder").is_not_null())
+                .then(peer_feeder_med)
+                .otherwise(cov_col.median().over("meta__cutoff_date"))
+            )
+        elif "meta__feeder" in base_model_df.columns:
+            peer_med_expr = cov_col.median().over(["meta__cutoff_date", "meta__feeder"])
+        else:
+            peer_med_expr = cov_col.median().over("meta__cutoff_date")
+
+        base_model_df = base_model_df.with_columns(
+            peer_med_expr.fill_null(0.95).round(4).alias("meta__peer_median_coverage")
+        ).with_columns(
+            (pl.col("meta__peer_median_coverage") - cov_col).clip(0.0, 1.0).round(4).alias("meta__coverage_deficit_vs_peers")
+        )
 
     # ── Join Labels (if provided) ─────────────────────────────────────────
     if labels_df is not None and not labels_df.is_empty():

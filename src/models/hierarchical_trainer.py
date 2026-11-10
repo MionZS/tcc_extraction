@@ -23,7 +23,7 @@ import polars as pl
 
 from src.features.circuit_profile import compute_circuit_profile
 from src.features.neighborhood import compute_neighborhood_features
-from src.models.composite import CompositeAnomalyDetector
+from src.models.composite import CompositeAnomalyDetector, select_pure_electrical_features
 from src.models.moe_router import MoERouter
 from src.models.spurious_filter import filter_spurious_anomalies
 
@@ -70,10 +70,10 @@ class HierarchicalModelOrchestrator:
         if training_df.is_empty():
             return pl.DataFrame()
 
-        # Extract numeric feature columns
-        feature_cols = [c for c in training_df.columns if c.startswith("x__") and training_df[c].dtype.is_numeric()]
+        # Extract strictly pure electrical feature columns (excluding coverage/alarm/lifecycle)
+        feature_cols = select_pure_electrical_features(training_df)
         if not feature_cols:
-            raise ValueError("No numeric features found with 'x__' prefix.")
+            raise ValueError("No numeric electrical features found with 'x__' prefix.")
 
         # 1. Global Model (fit strictly on clean telemetry windows when Quality Gate is present)
         has_clean_gate = "meta__is_clean_for_train" in training_df.columns
