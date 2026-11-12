@@ -47,6 +47,11 @@ _CACHED_DASHBOARD: dict | None = None
 
 
 _CATEGORY_META: dict[str, dict[str, str]] = {
+    "CANDIDATOS_A_VISTORIA": {
+        "label": "🎯 Candidatos a Vistoria (Campo)",
+        "mechanism": "Anomalias elétricas confirmadas + persistência temporal (dias seguidos)",
+        "color": "#dc2626",
+    },
     "DEGRAU_DESCENDENTE_CONSUMO": {
         "label": "Degrau Descendente / Queda",
         "mechanism": "Slope OLS negativo + CUSUM + ECOD/COPOD cauda esquerda",
@@ -155,6 +160,22 @@ def _build_dashboard_stats(df: pl.DataFrame) -> dict:
                 "avg_score": round(float(row.get("avg_score") or 0.0), 4),
             })
 
+    cand_col = "IS_CANDIDATO_VISTORIA" if "IS_CANDIDATO_VISTORIA" in cols else None
+    cand_cnt = int(work.filter(pl.col(cand_col) == True).height) if cand_col else 0
+    if cand_col and cand_cnt > 0:
+        cand_sub = work.filter(pl.col(cand_col) == True)
+        avg_c_score = float(cand_sub[score_col].mean() or 0.0) if score_col else 0.0
+        categories_out.insert(0, {
+            "category": "CANDIDATOS_A_VISTORIA",
+            "label": "🎯 Candidatos a Vistoria (Campo)",
+            "mechanism": "Anomalias físicas ativas ordenadas por persistência",
+            "color": "#dc2626",
+            "count": cand_cnt,
+            "pct": round((cand_cnt / max(total_unique_ucs, 1)) * 100.0, 2),
+            "anomalies": cand_cnt,
+            "avg_score": round(avg_c_score, 4),
+        })
+
     subtypes_out: list[dict] = []
     if sub_col:
         sub_grp = (
@@ -217,6 +238,7 @@ def _build_dashboard_stats(df: pl.DataFrame) -> dict:
         "total_anomalies": total_anomalies,
         "anomaly_rate_pct": round((total_anomalies / max(total_unique_ucs, 1)) * 100.0, 3),
         "signal_breakdown": {
+            "candidatos_vistoria": cand_cnt,
             "drop_slope_neg_anomalies": drop_signal_cnt,
             "high_mad_dispersion_anomalies": high_disp_cnt,
             "combined_drop_and_spike": both_drop_and_spike_cnt,
@@ -625,6 +647,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .anom-event-list { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; max-height: 150px; overflow-y: auto; }
     .anom-event-item { font-size: 11.5px; padding: 6px 8px; border-radius: 5px; background: #111827; border-left: 3px solid #ef4444; color: #e2e8f0; }
     .anom-event-item.drop { border-left-color: #f59e0b; }
+
+    /* Fast Candidate Navigation & Missingness Telemetry Diagnosis */
+    .nav-uc-bar { display: flex; justify-content: space-between; align-items: center; background: #070b12; border: 1px solid #1e293b; border-radius: 7px; padding: 8px 12px; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+    .nav-uc-btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-weight: 700; transition: all .15s; }
+    .nav-uc-btn:hover:not(:disabled) { background: #0284c7; border-color: #38bdf8; }
+    .nav-uc-select { background: #0b0f17; color: #f8fafc; border: 1px solid #334155; border-radius: 5px; padding: 5px 9px; font-size: 11.5px; max-width: 280px; }
+    .missing-box { background: #070b12; border: 1px solid #1e293b; border-radius: 6px; padding: 8px 10px; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -692,12 +721,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- Presets and Advanced Filter Bar -->
     <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center;">
       <span style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Atalhos de Investigação:</span>
+      <button class="preset-btn" id="btnPresetCandidates" onclick="applyPreset('candidatos_vistoria')" style="border-color: #ef4444; color: #fca5a5; font-weight:700;">🎯 Candidatos a Vistoria (Campo)</button>
+      <button class="preset-btn" id="btnPresetPureFraud" onclick="applyPreset('pure_fraud')">🚨 Fraude / Desbalanço Elétrico</button>
+      <button class="preset-btn" id="btnPresetReverseFlow" onclick="applyPreset('reverse_flow')">☀️ Injeção / GD Clandestina</button>
+      <button class="preset-btn" id="btnPresetClassShift" onclick="applyPreset('class_shift')">🔄 Mudança de Classe Comportamental</button>
       <button class="preset-btn" id="btnPresetNewUc" onclick="applyPreset('new_uc')">🆕 UCs Novas (Idade ≤ 30d)</button>
       <button class="preset-btn" id="btnPresetReplaced" onclick="applyPreset('meter_replaced')">🔧 Troca Recente de Medidor</button>
       <button class="preset-btn" id="btnPresetMultiMeter" onclick="applyPreset('multi_meter')">📚 UCs c/ >1 Medidor Histórico</button>
-      <button class="preset-btn" id="btnPresetClassShift" onclick="applyPreset('class_shift')">🔄 Mudança de Classe Comportamental</button>
-      <button class="preset-btn" id="btnPresetPureFraud" onclick="applyPreset('pure_fraud')">🚨 Fraude / Desbalanço Elétrico</button>
-      <button class="preset-btn" id="btnPresetReverseFlow" onclick="applyPreset('reverse_flow')">☀️ Injeção / GD Clandestina</button>
       <button class="preset-btn" onclick="clearAllFilters()" style="color: var(--danger);">✖ Limpar Filtros</button>
       
       <div style="margin-left: auto;">
@@ -713,6 +743,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
       <select id="categorySelect" class="select-filter" onchange="onFilterChange()">
         <option value="">Todas as Categorias Diagnósticas</option>
+        <option value="CANDIDATOS_A_VISTORIA">🎯 Candidatos a Vistoria de Campo (Prioridade OS)</option>
         <option value="ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT">🚨 Anomalia Elétrica / Fraude PNT (PyOD ML)</option>
         <option value="POSSIVEL_GD_NAO_CADASTRADA">☀️ Possível GD Não Cadastrada / Injeção</option>
         <option value="FALHA_METROLOGICA_MEDIDOR_TRAVADO">⚠️ Falha Metrológica / Medidor Travado</option>
@@ -726,10 +757,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <option value="DEGRAU_DESCENDENTE_CONSUMO">📉 Degrau Descendente</option>
         <option value="MEDIDOR_TRAVADO_OU_CONSUMO_ZERO">⚠️ Medidor Travado / Consumo Zero</option>
         <option value="ANOMALIA_MULTIVARIADA">🚨 Anomalia Multivariada</option>
-        <option value="OPERACAO_REGULAR">✔ Operação Regular</option>
-        <option value="REGULAR">✔ Regular (Legado)</option>
-      </select>
-        <option value="MEDIDOR_TRAVADO_OU_CONSUMO_ZERO">⚠️ Medidor Travado / Consumo Zero (Legado)</option>
         <option value="OPERACAO_REGULAR">✔ Operação Regular</option>
         <option value="REGULAR">✔ Regular (Legado)</option>
       </select>
@@ -833,7 +860,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     let currentCategories = [];
     let allAvailableColumns = [];
     let selectedColumns = [
-      "id__uc_id", "meta__feeder", "ANOMALY_SCORE", "CATEGORIA_DIAGNOSTICA", 
+      "id__uc_id", "meta__feeder", "ANOMALY_SCORE", "CATEGORIA_DIAGNOSTICA", "DIAS_ANOMALIA_SEGUIDOS",
       "x__hist_fa_sum_median", "x__hist_fa_sum_mad", "x__hist_current_imbalance_max", "x__hist_ra_reversal_ratio_max"
     ];
     const DEFAULT_COLUMNS = [...selectedColumns];
@@ -916,7 +943,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       // Auto-include relevant columns if not present
       const ensureCol = (c) => { if (!selectedColumns.includes(c)) selectedColumns.push(c); };
 
-      if (preset === 'new_uc') {
+      if (preset === 'candidatos_vistoria') {
+        document.getElementById('btnPresetCandidates')?.classList.add('active');
+        ensureCol('DIAS_ANOMALIA_SEGUIDOS');
+        ensureCol('IS_CANDIDATO_VISTORIA');
+        ensureCol('CATEGORIA_DIAGNOSTICA');
+        ensureCol('ANOMALY_SCORE');
+        document.getElementById('categorySelect').value = 'CANDIDATOS_A_VISTORIA';
+        clearCustomFilter();
+        return;
+      } else if (preset === 'new_uc') {
         document.getElementById('btnPresetNewUc').classList.add('active');
         ensureCol('x__meter_age_days');
         ensureCol('meta__n_meters_historical');
@@ -1069,6 +1105,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         "ANOMALY_SCORE": "Score Anomalia",
         "FINAL_MOE_SCORE": "Score MoE",
         "CATEGORIA_DIAGNOSTICA": "Diagnóstico Causal",
+        "IS_CANDIDATO_VISTORIA": "Candidato Vistoria?",
+        "DIAS_ANOMALIA_SEGUIDOS": "Dias Seguidos Anomalia",
         "x__hist_fa_sum_median": "Consumo Mediano (kWh)",
         "x__hist_fa_sum_mad": "MAD Dispersão",
         "x__meter_age_days": "Idade Medidor (Dias)",
@@ -1269,6 +1307,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
               </td>
             `;
           }
+          if (col === 'DIAS_ANOMALIA_SEGUIDOS') {
+            const streak = Number(val || 0);
+            if (streak >= 5) {
+              return `<td><span class="badge" style="background:#7f1d1d; color:#fecaca; font-weight:800;" title="${streak} dias consecutivos de anomalia ativa">🔥 ${streak} dias</span></td>`;
+            } else if (streak > 0) {
+              return `<td><span class="badge" style="background:#78350f; color:#fde68a; font-weight:700;" title="${streak} dias consecutivos de anomalia ativa">⚠️ ${streak} dias</span></td>`;
+            }
+            return `<td style="color:var(--text-dim); text-align:center;">-</td>`;
+          }
+          if (col === 'IS_CANDIDATO_VISTORIA') {
+            return `<td><span style="color: ${val ? 'var(--danger)' : 'var(--text-dim)'}; font-weight: bold;">${val ? '🎯 SIM' : 'NÃO'}</span></td>`;
+          }
           if (typeof val === 'number') {
             return `<td>${Number.isInteger(val) ? val : val.toFixed(2)}</td>`;
           }
@@ -1282,7 +1332,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <tr>
             ${rowCells}
             <td>
-              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="openDetail('${uc}')">Inspecionar</button>
+              <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px; font-weight:700;" onclick="openDetail('${uc}')">📈 Gráfico & Raio-X</button>
             </td>
           </tr>
         `;
@@ -1310,7 +1360,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     let activeDashCat = '';
     let activeDrawerUc = '';
     let activeDrawerCutoff = '';
-    let activeChartGranularity = 'daily';
+    let activeChartGranularity = 'hourly';
+    let activeChartDays = 7;
     let lgpdMaskMode = false;
 
     function maskUcText(ucStr) {
@@ -1328,6 +1379,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('drawerUc').innerText = `UC ${maskUcText(activeDrawerUc)}`;
       }
     }
+
+    function navigateDetailUc(delta) {
+      if (!pageRecords || pageRecords.length === 0) return;
+      const idx = pageRecords.findIndex(x => (x.id__uc_id === activeDrawerUc || x.UC === activeDrawerUc));
+      if (idx < 0) {
+        openDetail(pageRecords[0].id__uc_id || pageRecords[0].UC);
+        return;
+      }
+      const newIdx = idx + delta;
+      if (newIdx >= 0 && newIdx < pageRecords.length) {
+        const nextRec = pageRecords[newIdx];
+        openDetail(nextRec.id__uc_id || nextRec.UC);
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      const drawer = document.getElementById('detailDrawer');
+      if (drawer && drawer.classList.contains('open')) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          navigateDetailUc(-1);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          navigateDetailUc(1);
+        } else if (e.key === 'Escape') {
+          closeDrawer();
+        }
+      }
+    });
 
     async function loadDashboard() {
       try {
@@ -1408,16 +1488,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       fetchData();
     }
 
-    async function loadUcChart(uc, cutoff, granularity) {
-      activeChartGranularity = granularity || 'daily';
+    async function loadUcChart(uc, cutoff, granularity, days) {
+      activeChartGranularity = granularity || 'hourly';
+      activeChartDays = days || (activeChartGranularity === 'hourly' ? 7 : 30);
       const box = document.getElementById('ucChartBody');
       if (!box) return;
-      document.getElementById('btnChartDaily')?.classList.toggle('active', activeChartGranularity === 'daily');
-      document.getElementById('btnChartHourly')?.classList.toggle('active', activeChartGranularity === 'hourly');
-      box.innerHTML = '<div style="padding:28px;text-align:center;color:#94a3b8;font-size:12px;">Consultando série temporal no Data Lake (ami_interval / uc_day_features)...</div>';
+
+      document.getElementById('btnPeriod7h')?.classList.toggle('active', activeChartGranularity === 'hourly' && activeChartDays === 7);
+      document.getElementById('btnPeriod14h')?.classList.toggle('active', activeChartGranularity === 'hourly' && activeChartDays === 14);
+      document.getElementById('btnPeriod30d')?.classList.toggle('active', activeChartGranularity === 'daily');
+
+      box.innerHTML = '<div style="padding:28px;text-align:center;color:#94a3b8;font-size:12px;">Consultando telemetria real no Data Lake (ami_interval / uc_day_features)...</div>';
 
       try {
-        const params = new URLSearchParams({ granularity: activeChartGranularity });
+        const params = new URLSearchParams({
+          granularity: activeChartGranularity,
+          days: activeChartDays
+        });
         if (cutoff) params.set('cutoff', cutoff);
         const res = await fetch(`/api/v1/meter/${encodeURIComponent(uc)}/timeseries?${params.toString()}`);
         const data = await res.json();
@@ -1439,10 +1526,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       const pts = data.points;
-      const W = 680, H = 250;
-      const padL = 46, padR = 16, padT = 18, padB = 34;
+      const W = 680;
+      const H1 = 220; // Gráfico 1: Consumo & Bandas
+      const H2 = 110; // Gráfico 2: Cobertura Telecom & Gaps
+      const padL = 46, padR = 16, padT = 16, padB = 26;
       const plotW = W - padL - padR;
-      const plotH = H - padT - padB;
+      const plotH1 = H1 - padT - padB;
+      const plotH2 = H2 - padT - padB;
 
       const vals = pts.map(p => Number(p.value || 0));
       const uppers = pts.map(p => Number(p.upper_hod !== undefined ? p.upper_hod : data.upper_band || 0));
@@ -1451,14 +1541,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const minY = 0;
 
       const xOf = (i) => padL + (pts.length > 1 ? (i / (pts.length - 1)) * plotW : plotW / 2);
-      const yOf = (v) => padT + plotH - ((v - minY) / Math.max(maxY - minY, 1e-6)) * plotH;
+      const yOfVal = (v) => padT + plotH1 - ((v - minY) / Math.max(maxY - minY, 1e-6)) * plotH1;
+      const yOfCov = (c) => padT + plotH2 - (Math.max(0, Math.min(1.0, c)) * plotH2);
 
       // Gap Telecom vertical bands
       const colW = pts.length > 1 ? plotW / (pts.length - 1) : plotW;
-      let gapRects = '';
+      let gapRects1 = '';
+      let missingCount = 0;
       pts.forEach((p, i) => {
-        if (p.flag === 'GAP_TELECOM') {
-          gapRects += `<rect x="${(xOf(i) - colW / 2).toFixed(1)}" y="${padT}" width="${Math.max(2, colW).toFixed(1)}" height="${plotH}" fill="#64748b" opacity="0.22" />`;
+        if (p.coverage < 0.70 || p.flag === 'GAP_TELECOM') {
+          missingCount++;
+          gapRects1 += `<rect x="${(xOf(i) - colW / 2).toFixed(1)}" y="${padT}" width="${Math.max(2, colW).toFixed(1)}" height="${plotH1}" fill="#ef4444" opacity="0.16" />`;
         }
       });
 
@@ -1468,49 +1561,86 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const sx = xOf(data.step_change.index);
         const wStep = Math.max(0, padL + plotW - sx);
         stepOverlay = `
-          <rect x="${sx.toFixed(1)}" y="${padT}" width="${wStep.toFixed(1)}" height="${plotH}" fill="#f59e0b" opacity="0.11" />
-          <line x1="${sx.toFixed(1)}" y1="${padT}" x2="${sx.toFixed(1)}" y2="${padT + plotH}" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="5,3" />
+          <rect x="${sx.toFixed(1)}" y="${padT}" width="${wStep.toFixed(1)}" height="${plotH1}" fill="#f59e0b" opacity="0.11" />
+          <line x1="${sx.toFixed(1)}" y1="${padT}" x2="${sx.toFixed(1)}" y2="${padT + plotH1}" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="5,3" />
         `;
       }
 
       // MAD Band polygon
       const lowerPts = pts.map((p, i) => Number(p.lower_hod !== undefined ? p.lower_hod : data.lower_band || 0));
-      const polyUpper = pts.map((_, i) => `${xOf(i).toFixed(1)},${yOf(uppers[i]).toFixed(1)}`).join(' ');
-      const polyLower = pts.map((_, i) => `${xOf(pts.length - 1 - i).toFixed(1)},${yOf(lowerPts[pts.length - 1 - i]).toFixed(1)}`).join(' ');
+      const polyUpper = pts.map((_, i) => `${xOf(i).toFixed(1)},${yOfVal(uppers[i]).toFixed(1)}`).join(' ');
+      const polyLower = pts.map((_, i) => `${xOf(pts.length - 1 - i).toFixed(1)},${yOfVal(lowerPts[pts.length - 1 - i]).toFixed(1)}`).join(' ');
 
-      const baseLinePts = pts.map((_, i) => `${xOf(i).toFixed(1)},${yOf(bases[i]).toFixed(1)}`).join(' ');
-      const valLinePts = pts.map((p, i) => `${xOf(i).toFixed(1)},${yOf(p.value).toFixed(1)}`).join(' ');
+      const baseLinePts = pts.map((_, i) => `${xOf(i).toFixed(1)},${yOfVal(bases[i]).toFixed(1)}`).join(' ');
+      const valLinePts = pts.map((p, i) => `${xOf(i).toFixed(1)},${yOfVal(p.value).toFixed(1)}`).join(' ');
 
       // Anomaly point circles
       let anomMarkers = '';
       pts.forEach((p, i) => {
         const cx = xOf(i).toFixed(1);
-        const cy = yOf(p.value).toFixed(1);
+        const cy = yOfVal(p.value).toFixed(1);
         const tip = `${p.label} | ${p.value} kWh | Cob: ${(p.coverage * 100).toFixed(0)}% | z=${p.z_self}`;
         if (p.flag === 'PICO_OUTLIER') {
           anomMarkers += `<circle cx="${cx}" cy="${cy}" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.2"><title>PICO: ${tip}</title></circle>`;
         } else if (p.flag === 'QUEDA_OUTLIER' || p.flag === 'DEGRAU_QUEDA') {
           anomMarkers += `<circle cx="${cx}" cy="${cy}" r="4.2" fill="#f59e0b" stroke="#0b0f17" stroke-width="1"><title>QUEDA: ${tip}</title></circle>`;
         } else {
-          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#38bdf8" opacity="0.65"><title>${tip}</title></circle>`;
+          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="2.3" fill="#38bdf8" opacity="0.65"><title>${tip}</title></circle>`;
         }
       });
 
-      // Y-axis ticks & X-axis labels
-      let gridLines = '';
+      // Y-axis ticks & X-axis labels for Chart 1
+      let gridLines1 = '';
       for (let t = 0; t <= 4; t++) {
         const valT = (maxY * t) / 4;
-        const yT = yOf(valT).toFixed(1);
-        gridLines += `<line x1="${padL}" y1="${yT}" x2="${padL + plotW}" y2="${yT}" stroke="#1e293b" stroke-width="1" />`;
-        gridLines += `<text x="${padL - 6}" y="${Number(yT) + 3}" text-anchor="end" fill="#94a3b8" font-size="10">${valT.toFixed(1)}</text>`;
+        const yT = yOfVal(valT).toFixed(1);
+        gridLines1 += `<line x1="${padL}" y1="${yT}" x2="${padL + plotW}" y2="${yT}" stroke="#1e293b" stroke-width="1" />`;
+        gridLines1 += `<text x="${padL - 6}" y="${Number(yT) + 3}" text-anchor="end" fill="#94a3b8" font-size="10">${valT.toFixed(1)}</text>`;
       }
-      const xStep = Math.max(1, Math.floor(pts.length / 6));
-      let xTicks = '';
+      const xStep = Math.max(1, Math.floor(pts.length / 7));
+      let xTicks1 = '';
       for (let i = 0; i < pts.length; i += xStep) {
-        xTicks += `<text x="${xOf(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" fill="#94a3b8" font-size="10">${pts[i].label}</text>`;
+        xTicks1 += `<text x="${xOf(i).toFixed(1)}" y="${H1 - 7}" text-anchor="middle" fill="#94a3b8" font-size="9.5">${pts[i].label}</text>`;
+      }
+
+      // ----------------------------------------------------------------------
+      // Gráfico 2: Diagnóstico de Dados Faltantes e Cobertura de Telecomunicação
+      // ----------------------------------------------------------------------
+      let covBars = '';
+      pts.forEach((p, i) => {
+        const covVal = Math.max(0, Math.min(1.0, Number(p.coverage || 0)));
+        const barH = covVal * plotH2;
+        const bx = (xOf(i) - colW * 0.42).toFixed(1);
+        const by = (padT + plotH2 - barH).toFixed(1);
+        const bw = Math.max(2, colW * 0.84).toFixed(1);
+        const color = covVal < 0.70 ? '#ef4444' : (covVal < 0.90 ? '#f59e0b' : '#10b981');
+        covBars += `<rect x="${bx}" y="${by}" width="${bw}" height="${Math.max(1, barH).toFixed(1)}" fill="${color}" opacity="0.85"><title>${p.label}: Cobertura ${(covVal*100).toFixed(1)}%</title></rect>`;
+      });
+
+      // Linha de Limiar 70% de Cobertura
+      const y70 = yOfCov(0.70).toFixed(1);
+      const gridLines2 = `
+        <line x1="${padL}" y1="${padT}" x2="${padL + plotW}" y2="${padT}" stroke="#1e293b" stroke-width="1" />
+        <line x1="${padL}" y1="${y70}" x2="${padL + plotW}" y2="${y70}" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="4,3" />
+        <line x1="${padL}" y1="${padT + plotH2}" x2="${padL + plotW}" y2="${padT + plotH2}" stroke="#1e293b" stroke-width="1" />
+        <text x="${padL - 6}" y="${padT + 3}" text-anchor="end" fill="#94a3b8" font-size="9.5">100%</text>
+        <text x="${padL - 6}" y="${Number(y70) + 3}" text-anchor="end" fill="#ef4444" font-size="9.5" font-weight="bold">70%</text>
+        <text x="${padL - 6}" y="${padT + plotH2 + 3}" text-anchor="end" fill="#94a3b8" font-size="9.5">0%</text>
+      `;
+
+      let xTicks2 = '';
+      for (let i = 0; i < pts.length; i += xStep) {
+        xTicks2 += `<text x="${xOf(i).toFixed(1)}" y="${H2 - 6}" text-anchor="middle" fill="#94a3b8" font-size="9.5">${pts[i].label}</text>`;
       }
 
       const unit = data.granularity === 'hourly' ? 'kWh/h' : 'kWh/dia';
+      const avgCovPct = (pts.reduce((acc, p) => acc + (p.coverage || 0), 0) / Math.max(pts.length, 1) * 100).toFixed(1);
+      const missingPct = ((missingCount / Math.max(pts.length, 1)) * 100).toFixed(1);
+
+      const missingBadge = missingCount > 0
+        ? `<span style="color:#ef4444;font-weight:700;">🚨 ${missingCount} janelas c/ falha de telemetria (&lt;70% cob. — ${missingPct}% do período)</span>`
+        : `<span style="color:#10b981;font-weight:700;">✅ Telemetria 100% íntegra (sem gaps críticos)</span>`;
+
       const stepTxt = data.step_change
         ? `Degrau CUSUM: ${data.step_change.delta_pct > 0 ? '+' : ''}${data.step_change.delta_pct}% em ${data.step_change.date}`
         : 'Sem degrau CUSUM crítico';
@@ -1525,31 +1655,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <span>Mediana Base: <b>${data.baseline_median} ${unit}</b> · MAD: <b>${data.baseline_mad}</b> · Slope: <b>${data.slope_kwh_day ?? '-'} kWh/dia</b></span>
           <span style="color:#fbbf24">${stepTxt}</span>
         </div>
-        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;background:#070b12;border-radius:6px;border:1px solid #1e293b;">
-          ${gridLines}
-          ${gapRects}
+
+        <!-- GRÁFICO 1: Curva de Consumo Real & Detecção -->
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:3px;">1. Telemetria Ativa & Envelopes de Anomalia</div>
+        <svg viewBox="0 0 ${W} ${H1}" style="width:100%;height:auto;display:block;background:#070b12;border-radius:6px 6px 0 0;border:1px solid #1e293b;border-bottom:none;">
+          ${gridLines1}
+          ${gapRects1}
           ${stepOverlay}
           <polygon points="${polyUpper} ${polyLower}" fill="#0284c7" opacity="0.14" />
           <polyline fill="none" stroke="#38bdf8" stroke-width="1.3" stroke-dasharray="4,3" points="${baseLinePts}" />
           <polyline fill="none" stroke="#f8fafc" stroke-width="2" points="${valLinePts}" />
           ${anomMarkers}
-          ${xTicks}
+          ${xTicks1}
         </svg>
-        <div class="chart-legend">
+
+        <div class="chart-legend" style="border-left:1px solid #1e293b;border-right:1px solid #1e293b;padding:4px 8px;background:#0a0f18;">
           <span><i class="legend-dot" style="background:#f8fafc"></i>Consumo Real (${unit})</span>
           <span><i class="legend-dot" style="background:#38bdf8"></i>Mediana Baseline</span>
           <span><i class="legend-dot" style="background:#0284c7"></i>Banda MAD (±3.5σ)</span>
           <span><i class="legend-dot" style="background:#ef4444"></i>Pico Anômalo (z &gt; +3.5)</span>
           <span><i class="legend-dot" style="background:#f59e0b"></i>Queda / Degrau CUSUM</span>
-          <span><i class="legend-dot" style="background:#64748b"></i>Gap Telecom (&lt;70% cob.)</span>
         </div>
+
+        <!-- GRÁFICO 2: Diagnóstico de Dados Faltantes & Cobertura -->
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin:8px 0 3px 0;display:flex;justify-content:space-between;flex-wrap:wrap;">
+          <span>2. Diagnóstico de Dados Faltantes (Completude da Telemetria por Janela)</span>
+          <span>${missingBadge} · Méd: <b>${avgCovPct}%</b></span>
+        </div>
+        <svg viewBox="0 0 ${W} ${H2}" style="width:100%;height:auto;display:block;background:#070b12;border-radius:0 0 6px 6px;border:1px solid #1e293b;">
+          ${gridLines2}
+          ${covBars}
+          ${xTicks2}
+        </svg>
+
+        <div class="chart-legend" style="margin-top:4px;">
+          <span><i class="legend-dot" style="background:#10b981"></i>Cobertura Ótima (≥90%)</span>
+          <span><i class="legend-dot" style="background:#f59e0b"></i>Cobertura Parcial (70-90%)</span>
+          <span><i class="legend-dot" style="background:#ef4444"></i>Dados Faltantes / Gap Telecom (&lt;70%)</span>
+          <span style="color:#64748b;font-size:10.5px;">*Gaps não são computados como queda elétrica</span>
+        </div>
+
         <div class="anom-event-list">${eventsHtml}</div>
       `;
     }
 
     function openDetail(uc) {
-      const d = pageRecords.find(x => (x.id__uc_id === uc || x.UC === uc));
+      const idx = pageRecords.findIndex(x => (x.id__uc_id === uc || x.UC === uc));
+      const d = idx >= 0 ? pageRecords[idx] : null;
       if (!d) return;
+
       activeDrawerUc = uc;
       activeDrawerCutoff = d.meta__cutoff_date || d.CUTOFF_DATE || '';
       document.getElementById('drawerUc').innerText = `UC ${maskUcText(uc)}`;
@@ -1557,18 +1711,110 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       catEl.innerText = formatCat(d.CATEGORIA_DIAGNOSTICA || 'OPERACAO_REGULAR');
       catEl.className = `badge ${getBadgeClass(d.CATEGORIA_DIAGNOSTICA || '')}`;
 
+      const totalCands = pageRecords.length;
+      const candNum = idx + 1;
+      const prevDisabled = idx <= 0 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : '';
+      const nextDisabled = idx >= totalCands - 1 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : '';
+
       const content = `
+        <!-- Barra de Navegação Rápida entre Candidatos -->
+        <div class="nav-uc-bar">
+          <button class="nav-uc-btn" onclick="navigateDetailUc(-1)" ${prevDisabled}>◀ Anterior (←)</button>
+          <div style="font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>Candidato <b>${candNum}</b> de <b>${totalCands}</b></span>
+            <select class="nav-uc-select" onchange="openDetail(this.value)">
+              ${pageRecords.map((r, i) => {
+                const rUc = r.id__uc_id || r.UC;
+                const isSel = rUc === uc ? 'selected' : '';
+                const rCat = formatCat(r.CATEGORIA_DIAGNOSTICA || 'REGULAR');
+                return `<option value="${rUc}" ${isSel}>#${i + 1}: UC ${maskUcText(rUc)} (${rCat})</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <button class="nav-uc-btn" onclick="navigateDetailUc(1)" ${nextDisabled}>Próxima (→) ▶</button>
+        </div>
+
+        <div class="kv-grid" style="margin-bottom: 12px;">
+          <div class="kv-box" style="border: 1px solid #ef4444; background: #1c1117;">
+            <div class="kv-k" style="color:#ef4444; font-weight:700;">🔥 Dias Anomalia Seguidos</div>
+            <div class="kv-v" style="color:#fca5a5; font-weight:800; font-size:16px;">${d.DIAS_ANOMALIA_SEGUIDOS || 0} dias</div>
+          </div>
+          <div class="kv-box">
+            <div class="kv-k">Score Consenso</div>
+            <div class="kv-v" style="color:var(--primary); font-weight:700;">${Number(d.ANOMALY_SCORE || 0).toFixed(4)}</div>
+          </div>
+          <div class="kv-box">
+            <div class="kv-k">Candidato a Vistoria</div>
+            <div class="kv-v" style="color:${d.IS_CANDIDATO_VISTORIA ? '#ef4444' : '#94a3b8'}; font-weight:700;">${d.IS_CANDIDATO_VISTORIA ? '🎯 SIM (Prioritário)' : 'NÃO'}</div>
+          </div>
+          <div class="kv-box">
+            <div class="kv-k">Subtipo Diagnóstico</div>
+            <div class="kv-v" style="font-size:11px;">${d.SUBTIPO_DIAGNOSTICO || '-'}</div>
+          </div>
+        </div>
+
         <div class="chart-card">
           <div class="chart-toolbar">
-            <div class="detail-title" style="margin:0">📈 Série Temporal Real & Detecção de Anomalias</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="chart-btn active" id="btnChartDaily" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'daily')">30d Diário (uc_day)</button>
-              <button class="chart-btn" id="btnChartHourly" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly')">7d Horário (ami_interval)</button>
+            <div class="detail-title" style="margin:0">📈 Acompanhamento Temporal & Diagnóstico</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:11px;color:#94a3b8">Período:</span>
+              <button class="chart-btn active" id="btnPeriod7h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 7)">7d Horário</button>
+              <button class="chart-btn" id="btnPeriod14h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 14)">14d Horário</button>
+              <button class="chart-btn" id="btnPeriod30d" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'daily', 30)">30d Diário</button>
               <button class="chart-btn" id="btnLgpdToggle" onclick="toggleLgpdMode()">${lgpdMaskMode ? '🔒 LGPD: Censurado' : '🔓 LGPD: Visível'}</button>
             </div>
           </div>
           <div id="ucChartBody"></div>
         </div>
+
+        <div class="detail-section">
+          <div class="detail-title">Contexto Elétrico e Cadastral</div>
+          <div class="kv-grid">
+            <div class="kv-box"><div class="kv-k">Alimentador</div><div class="kv-v">${d.meta__feeder || d.ALIMENTADOR || '-'}</div></div>
+            <div class="kv-box"><div class="kv-k">Posto Operacional (Trafo)</div><div class="kv-v">${d.meta__posto || d.POSTO_OPERACIONAL || '-'}</div></div>
+            <div class="kv-box"><div class="kv-k">Tensão Base</div><div class="kv-v">${d.x__tensao_base || 127} V</div></div>
+            <div class="kv-box"><div class="kv-k">Faseamento</div><div class="kv-v">${d.x__fase_circuito || 'MONO'}</div></div>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-title">Métricas Comportamentais (30 Dias)</div>
+          <div class="kv-grid">
+            <div class="kv-box"><div class="kv-k">Consumo Diário Mediano</div><div class="kv-v">${Number(d.x__hist_fa_sum_median || 0).toFixed(2)} kWh</div></div>
+            <div class="kv-box"><div class="kv-k">Dispersão Robusta (MAD)</div><div class="kv-v">${Number(d.x__hist_fa_sum_mad || 0).toFixed(2)}</div></div>
+            <div class="kv-box"><div class="kv-k">Inclinação Tendência (Slope)</div><div class="kv-v">${Number(d.x__trend_fa_slope || 0).toFixed(4)}</div></div>
+            <div class="kv-box"><div class="kv-k">Fator de Carga Médio</div><div class="kv-v">${Number(d.x__hist_load_factor_mean || 0).toFixed(2)}</div></div>
+            <div class="kv-box"><div class="kv-k">Desbalanço de Corrente (P90)</div><div class="kv-v">${Number(d.x__hist_current_imbalance_max || 0).toFixed(2)}</div></div>
+            <div class="kv-box"><div class="kv-k">Desbalanço Tensão (P95)</div><div class="kv-v">${Number(d.x__hist_voltage_imbalance_max || 0).toFixed(2)}%</div></div>
+            <div class="kv-box"><div class="kv-k">Reversão Ativa (RA Max)</div><div class="kv-v">${Number(d.x__hist_ra_reversal_ratio_max || 0).toFixed(2)}</div></div>
+            <div class="kv-box"><div class="kv-k">Dias de Reversão</div><div class="kv-v">${d.x__hist_ra_reversal_days || 0} dias</div></div>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-title">Integridade, Vizinhança Espacial & Ciclo de Vida</div>
+          <div class="kv-grid">
+            <div class="kv-box"><div class="kv-k">Cobertura da UC</div><div class="kv-v">${(Number(d.x__avg_interval_coverage || 0) * 100).toFixed(1)}%</div></div>
+            <div class="kv-box"><div class="kv-k">Cobertura Mediana dos Vizinhos (Trafo/Geo)</div><div class="kv-v">${(Number(d.meta__peer_median_coverage || 0.95) * 100).toFixed(1)}%</div></div>
+            <div class="kv-box"><div class="kv-k">Déficit vs. Vizinhos</div><div class="kv-v">${(Number(d.meta__coverage_deficit_vs_peers || 0) * 100).toFixed(1)}%</div></div>
+            <div class="kv-box"><div class="kv-k">Dias Confiáveis (>70%)</div><div class="kv-v">${d.x__coverage_reliable_days || 0} dias</div></div>
+            <div class="kv-box"><div class="kv-k">Medidores na História da UC</div><div class="kv-v">${d.meta__n_meters_historical || 1} medidor(es)</div></div>
+            <div class="kv-box"><div class="kv-k">Idade do Medidor Atual</div><div class="kv-v">${d.x__meter_age_days || 0} dias</div></div>
+            <div class="kv-box"><div class="kv-k">Troca de Medidor Recente (30d)</div><div class="kv-v">${d.x__meter_changed_30d ? 'SIM' : 'NÃO'}</div></div>
+            <div class="kv-box"><div class="kv-k">Classe Comportamental</div><div class="kv-v">${d.CLASSE_COMPORTAMENTAL || '-'}</div></div>
+            <div class="kv-box"><div class="kv-k">Método de Detecção</div><div class="kv-v">${d.METODO_DETECCAO_APLICADO || '-'}</div></div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-title">Trajetória Longitudinal de Classes entre Cutoffs</div>
+          <div class="kv-box"><div class="kv-k">Evolução Temporal</div><div class="kv-v" style="white-space:normal">${d.TRAJETORIA_CLASSES_TEMPORAL || d.CLASSE_COMPORTAMENTAL || '-'}</div></div>
+        </div>
+      `;
+      document.getElementById('drawerContent').innerHTML = content;
+      document.getElementById('detailDrawer').classList.add('open');
+      document.getElementById('drawerOverlay').classList.add('open');
+      loadUcChart(uc, activeDrawerCutoff, 'hourly', 7);
+    }
 
         <div class="detail-section">
           <div class="detail-title">Contexto Elétrico e Cadastral</div>
@@ -1720,7 +1966,14 @@ class CockpitHandler(BaseHTTPRequestHandler):
 
                 filtered_df = df
                 if cat_filter:
-                    if "CATEGORIA_DIAGNOSTICA" in filtered_df.columns:
+                    if cat_filter == "CANDIDATOS_A_VISTORIA":
+                        if "IS_CANDIDATO_VISTORIA" in filtered_df.columns:
+                            filtered_df = filtered_df.filter(pl.col("IS_CANDIDATO_VISTORIA") == True)
+                        elif "IS_ANOMALY" in filtered_df.columns:
+                            filtered_df = filtered_df.filter(pl.col("IS_ANOMALY") == True)
+                        if "DIAS_ANOMALIA_SEGUIDOS" in filtered_df.columns:
+                            filtered_df = filtered_df.sort(["DIAS_ANOMALIA_SEGUIDOS", "ANOMALY_SCORE"], descending=[True, True])
+                    elif "CATEGORIA_DIAGNOSTICA" in filtered_df.columns:
                         filtered_df = filtered_df.filter(
                             (pl.col("CATEGORIA_DIAGNOSTICA") == cat_filter) |
                             (pl.col("CATEGORIA_DIAGNOSTICA").cast(pl.String).str.contains(cat_filter))
@@ -1829,14 +2082,16 @@ class CockpitHandler(BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             cutoff = (qs.get("cutoff") or [""])[0].strip() or None
             granularity = (qs.get("granularity") or ["daily"])[0].strip().lower()
+            days_str = (qs.get("days") or [""])[0].strip()
+            days = int(days_str) if days_str.isdigit() else (7 if granularity == "hourly" else 30)
             try:
                 if granularity == "hourly":
                     payload = load_uc_hourly_timeseries(
-                        uc_decoded, base_dir=BASE_DIR, cutoff_date=cutoff, week_days=7, baseline_days=28
+                        uc_decoded, base_dir=BASE_DIR, cutoff_date=cutoff, week_days=days, baseline_days=max(28, days + 7)
                     )
                 else:
                     payload = load_uc_daily_timeseries(
-                        uc_decoded, base_dir=BASE_DIR, cutoff_date=cutoff, days=35
+                        uc_decoded, base_dir=BASE_DIR, cutoff_date=cutoff, days=max(days, 30)
                     )
                 self._send_json(payload)
             except Exception as exc:

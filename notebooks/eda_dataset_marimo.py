@@ -470,6 +470,108 @@ def _(meter_hist, mo, pl, plt, uc_ctx):
 
 
 @app.cell
+def _(ROOT, mo):
+    import json
+    # Leitura dos principais candidatos a vistoria para seleção rápida
+    _cand_file = ROOT / "output" / "reports" / "top_candidates_private.json"
+    _options = {}
+    if _cand_file.exists():
+        try:
+            with open(_cand_file, "r", encoding="utf-8") as _f:
+                _cands = json.load(_f)
+                for _c in _cands[:25]:
+                    _raw = str(_c.get("uc_raw") or "")
+                    _cens = str(_c.get("uc_censored") or _raw)
+                    _cat = str(_c.get("category") or "ANOMALIA")
+                    _options[f"{_cens} — {_cat} (UC: {_raw})"] = _raw
+        except Exception:
+            pass
+
+    if not _options:
+        _options = {
+            "685***20 — Desequilíbrio/Bypass (UC: 68546220)": "68546220",
+            "934***50 — Carga Plana Estável (UC: 93420250)": "93420250",
+            "116****57 — Volátil Diurno (UC: 116781157)": "116781157",
+        }
+
+    uc_dropdown = mo.ui.dropdown(
+        options=_options,
+        value=list(_options.values())[0],
+        label="🎯 Candidatos a Vistoria (Pré-seleção)",
+    )
+    uc_text = mo.ui.text(
+        value="",
+        placeholder="Ou digite o código de qualquer UC...",
+        label="🔍 UC Customizada",
+    )
+    gran_dropdown = mo.ui.dropdown(
+        options=["7d Horário (168h)", "14d Horário (336h)", "30d Diário"],
+        value="7d Horário (168h)",
+        label="⏱️ Período & Granularidade",
+    )
+    return gran_dropdown, uc_dropdown, uc_text
+
+
+@app.cell
+def _(ROOT, gran_dropdown, mo, uc_dropdown, uc_text):
+    # ── 8. Inspeção Sob Demanda de UC (Série Temporal & Diagnóstico Telecom) ──
+    from src.eda.uc_timeseries import (
+        load_uc_daily_timeseries,
+        plot_uc_interactive,
+    )
+    from src.utils.censorship import censor_uc_id
+
+    _target_uc = (uc_text.value or "").strip() or uc_dropdown.value
+    _gran_str = gran_dropdown.value or "7d Horário (168h)"
+    _days = 7 if "7d" in _gran_str else (14 if "14d" in _gran_str else 30)
+    _gran = "hourly" if "Horário" in _gran_str else "daily"
+
+    _title = mo.md(
+        """
+        ## 8. Inspeção Sob Demanda de UC (Série Temporal & Diagnóstico de Dados Faltantes)
+
+        Carregamento dinâmico *on-the-fly* direto do Data Lake (`ami_interval` e `uc_day_features`).
+        Exibe a curva de consumo com bandas operacionais robustas (MAD $\\pm 3.5\\sigma$) e o diagnóstico
+        hora a hora de completude/cobertura telecom (identificando pacotes perdidos sob o limiar de 70%).
+        """
+    )
+    _controls = mo.hstack([uc_dropdown, uc_text, gran_dropdown], justify="start", gap=2)
+
+    if not _target_uc:
+        _content = mo.callout("Selecione ou digite uma UC para inspecionar.", kind="info")
+    else:
+        _fig = plot_uc_interactive(
+            uc_id=_target_uc,
+            base_dir=ROOT / "output",
+            granularity=_gran,
+            days=_days,
+            show_censored=True,
+        )
+        _stats = load_uc_daily_timeseries(_target_uc, base_dir=ROOT / "output", days=30)
+        _streak = _stats.get("dias_anomalia_seguidos", 0)
+        _med = _stats.get("baseline_median", 0.0)
+        _mad = _stats.get("baseline_mad", 0.0)
+        _slope = _stats.get("slope_kwh_day", 0.0)
+        _rel_days = _stats.get("reliable_days", 0)
+
+        _kpis = mo.hstack(
+            [
+                mo.stat(value=f"{censor_uc_id(_target_uc)}", label="UC Inspecionada"),
+                mo.stat(value=f"{_streak} dias", label="🔥 Dias Anomalia Seguidos"),
+                mo.stat(value=f"{_med:.2f} kWh/dia", label="Mediana Histórica"),
+                mo.stat(value=f"{_mad:.2f} kWh/dia", label="Dispersão MAD"),
+                mo.stat(value=f"{_slope:+.3f} kWh/dia²", label="Tendência (Slope)"),
+                mo.stat(value=f"{_rel_days} / 30 dias", label="Dias Confiáveis (≥70%)"),
+            ],
+            justify="space-between",
+        )
+        _content = mo.vstack([_kpis, mo.as_html(_fig)])
+
+    mo.vstack([_title, _controls, _content])
+    return
+
+
+@app.cell
 def _(mo):
     export_btn = mo.ui.run_button(label="💾 Exportar figuras para docs/figures/eda")
     return (export_btn,)
@@ -477,7 +579,7 @@ def _(mo):
 
 @app.cell
 def _(ROOT, arrival_fig, comp_fig, delay_fig, export_btn, mo, outlier_fig):
-    # ── 8. Exportação de figuras para o artigo ──────────────────────────────
+    # ── 9. Exportação de figuras para o artigo ──────────────────────────────
     _msg = mo.md("")
     if export_btn.value:
         _out_dir = ROOT / "docs" / "figures" / "eda"
@@ -489,7 +591,7 @@ def _(ROOT, arrival_fig, comp_fig, delay_fig, export_btn, mo, outlier_fig):
                 _f.savefig(_out_dir / f"{_name}.png", dpi=200, bbox_inches="tight")
                 _saved.append(_name)
         _msg = mo.callout(f"Salvas em `{_out_dir}`: {', '.join(_saved) or 'nenhuma'}", kind="success")
-    mo.vstack([mo.md("## 8. Exportar figuras"), export_btn, _msg])
+    mo.vstack([mo.md("## 9. Exportar figuras"), export_btn, _msg])
     return
 
 

@@ -8,16 +8,14 @@
 
 ## 1. Ato I — A Armadilha da Média: Por que Duas UCs com o Mesmo Consumo Faturado São Completamente Diferentes
 
-Imagine dois medidores inteligentes instalados no mesmo alimentador de Araucária. No sistema comercial legado de faturamento mensal, ambos encerram o mês com praticamente a mesma energia ativa acumulada — por exemplo, algo em torno de `15` a `20 kWh/dia` de consumo mediano. Para um filtro tradicional baseado em média mensal ou faturamento histórico, essas duas Unidades Consumidoras são indistinguíveis.
+Considere dois medidores inteligentes reais da rede de Araucária extraídos automaticamente pelo script [`find_eda_examples.py`](file:///d:/Projects/tcc_extraction/scripts/find_eda_examples.py) (ver [`comparacao_duas_ucs_mesmo_consumo.png`](file:///d:/Projects/tcc_extraction/docs/figures/eda/exemplos/comparacao_duas_ucs_mesmo_consumo.png) e [`acompanhamento_semanal_comparacao_par.png`](file:///d:/Projects/tcc_extraction/docs/figures/eda/exemplos/acompanhamento_semanal_comparacao_par.png)). No sistema comercial legado de faturamento mensal, ambos encerram a janela de 30 dias com praticamente a mesma energia ativa diária mediana (~`20 kWh/dia`):
 
-Quando trazemos a telemetria AMI de 5 minutos (`FA_INTERVAL`) e construímos o vetor robusto em janela móvel (`uc_window_features`), porém, a semelhança desaparece na segunda casa decimal. É exatamente esse contraste que o gráfico [`docs/figures/eda/exemplos/comparacao_duas_ucs_mesmo_consumo.png`](file:///d:/Projects/tcc_extraction/docs/figures/eda/exemplos/comparacao_duas_ucs_mesmo_consumo.png) evidencia:
+1. **UC Estável `934***50` (Mediana = `20,382 kWh/dia`, `MAD = 0,051`, `CV = 0,0025`, Fator de Carga `0,973`, Alimentador Fonte Nova):**  
+   Sua curva de carga horária real de 7 dias (`168h` extraídas de `ami_interval`) exibe uma linha praticamente plana em torno de `0,85 kWh/h` 24 horas por dia, 7 dias por semana ($FC \approx 1{,}0$). Essa é a assinatura física característica de cargas contínuas ininterruptas (como estações rádio-base de telecomunicação, refrigeração industrial ou servidores).
+2. **UC Volátil `116****57` (Mediana = `19,224 kWh/dia`, `MAD = 16,564`, `CV = 0,8572`, Fator de Carga `0,150`, Alimentador CSN):**  
+   Embora a **mediana diária de faturamento seja virtualmente idêntica** à da primeira UC, sua dispersão robusta (`MAD`) é **324 vezes maior**. No acompanhamento semanal contínuo (`168h`), a curva real oscila de consumo próximo a zero na madrugada para picos comerciais diurnos que atingem **`7,03 kWh/h`**, além de apresentar desequilíbrio de corrente máximo elevado (`1,0`).
 
-1. **UC Estável (`x__hist_fa_sum_median` ≈ semelhante, `x__hist_fa_sum_mad` baixo):**  
-   Sua curva de carga horária real de 24 horas (banda `P10–P90` extraída de `ami_interval`) exibe um regime previsível — carga de base constante na madrugada, elevação suave nos horários de ocupação e baixa variância dia após dia. O coeficiente de variação robusto (`x__fa_cv_window = MAD / (|mediana| + 0.1)`) permanece contido e o fator de carga (`x__hist_load_factor_mean`) é consistente com a classe cadastral.
-2. **UC Irregular / Alta Dispersão (`x__hist_fa_sum_median` ≈ idêntico, `x__hist_fa_sum_mad` muito elevado):**  
-   Embora a **mediana diária de faturamento seja virtualmente a mesma** (diferença relativa inferior a `8%` na seleção automática de [`find_contrasting_uc_pair`](file:///d:/Projects/tcc_extraction/scripts/find_eda_examples.py)), a dispersão robusta (`MAD`) é ordens de grandeza maior. Em dias alternados ou horários específicos, a curva real salta de valores próximos a zero para picos súbitos ou apresenta instabilidade entre fases.
-
-> **Lição de engenharia:** A média e a mediana isoladas comprimem 288 leituras diárias de 5 minutos em um único escalar e **apagam a assinatura física do consumo**. Somente ao parear tendência central robusta (`HIST_FA_SUM_MEDIAN`) com métricas de dispersão resistente a outliers (`MAD`, `FA_CV_WINDOW`, `IQR` intradiário) e perfil horário real é possível distinguir um consumidor regular de um medidor com uso intermitente extremo, carga clandestina chaveada ou fraude parcial.
+> **Lição de engenharia:** A média e a mediana isoladas comprimem 288 leituras diárias de 5 minutos em um único escalar e **apagam a assinatura física do consumo**. Somente ao parear tendência central robusta (`HIST_FA_SUM_MEDIAN`) com métricas de dispersão resistente a outliers (`MAD`, `FA_CV_WINDOW`, `IQR` intradiário) e perfil horário real é possível distinguir uma carga plana contínua de um perfil comercial pulsante ou irregular.
 
 ---
 
@@ -85,33 +83,40 @@ Após `IS_ANOMALY = True`, uma camada explicável de pós-classificação traduz
 - **`POSSIVEL_GD_NAO_CADASTRADA`** (`704` casos no snapshot): quando `RA_REVERSAL_DAYS` / `RA_REVERSAL_RATIO_MAX` revela energia injetada de volta na rede sem registro de microgeração.
 - **`MEDIDOR_TRAVADO_OU_CONSUMO_ZERO`** (`3` casos no snapshot): consumo nulo com medidor energizado e comunicando.
 
----
-
-## 4. Novo Produto no Cockpit Web: Dashboard Quantitativo de Anomalias & Gráfico Interativo por UC
-
-Para transformar toda essa pipeline matemática em uma ferramenta operacional imediata para os engenheiros da COPEL no servidor web ([`scripts/run_web_cockpit.py`](file:///d:/Projects/tcc_extraction/scripts/run_web_cockpit.py)), foram implementadas duas capacidades centrais:
-
-1. **Dashboard Analítico de Anomalias Detectadas (`GET /api/v1/dashboard`):**
-   - Consolidado no topo da tela principal, mostra a contagem exata e o percentual de todas as UCs detectadas em cada categoria diagnóstica (`CATEGORIA_DIAGNOSTICA`), bem como o detalhamento de **quantas anomalias exibem Queda Sustentada (`Slope < -0.05`)**, **Alta Dispersão / Picos (`CV > 0.8`)** e **Composição Simultânea de Queda + Picos**.
-   - Exibe também o ranking dos **Top Alimentadores por incidência de anomalias**.
-   - **Interatividade 1-clique:** clicar em qualquer barra de tipo de anomalia ou chip de alimentador filtra instantaneamente a tabela operacional logo abaixo para listar apenas aquelas UCs.
-
-2. **Visualizador Interativo da Série Temporal da UC no Drawer (`GET /api/v1/meter/<uc>/timeseries`):**
-   - Ao clicar em qualquer UC da tabela, o painel lateral agora renderiza um gráfico SVG interativo consultado diretamente do Data Lake real (sem pré-carregar gigabytes na memória, usando leitura *lazy* particionada via [`src/eda/uc_timeseries.py`](file:///d:/Projects/tcc_extraction/src/eda/uc_timeseries.py)).
-   - Permite alternar entre a visão **`30d Diário (uc_day_features)`** e **`7d Horário (ami_interval — 168h)`**, exibe a **Mediana Baseline**, a **Banda Operacional MAD (±3.5σ)**, regiões sombreadas de **Gap Telecom (`< 70%`)**, o **marco exato de início de degrau CUSUM** e marcadores pontuais de **Picos (`z > +3.5`)** com tooltip detalhado ao passar o mouse.
-   - Inclui ainda um botão **`🔒 LGPD: Censurado / 🔓 Visível`** dentro do Drawer para que o analista possa mascarar instantaneamente o número da UC ao fazer capturas de tela para relatórios executivos ou apresentações acadêmicas.
+### Caso Empírico Selecionado (`acompanhamento_semanal_outlier.png`)
+No snapshot real processado (`cutoff = 2026-11-04`), o buscador automático isolou a **UC `685***20`** (Alimentador Polonia, cobertura `99,49%`), classificada como **`DESEQUILIBRIO_CARGA_OU_BYPASS`** com **`ANOMALY_SCORE = 0,6212`**. Mesmo mantendo uma mediana histórica alta (`81,076 kWh/dia`, `MAD = 24,459`), a UC apresenta simultaneamente tendência descendente acentuada (`Slope = -1,3682 kWh/dia`) e severo desequilíbrio de corrente (`0,798`), revelando perda de simetria entre fases compatível com derivação parcial sob carga.
 
 ---
 
-## 5. Como Reproduzir as Figuras Reais e Abrir o Novo Cockpit Web
+## 4. Novo Produto no Cockpit Web e Marimo Notebook: Candidatos a Vistoria, Persistência e Gráfico Duplo On-Demand
 
-Execute os comandos abaixo no terminal do projeto (`d:\Projects\tcc_extraction`):
+Para transformar toda essa pipeline matemática em uma ferramenta operacional imediata para os engenheiros da COPEL no servidor web ([`scripts/run_web_cockpit.py`](file:///d:/Projects/tcc_extraction/scripts/run_web_cockpit.py)) e no notebook analítico ([`notebooks/eda_dataset_marimo.py`](file:///d:/Projects/tcc_extraction/notebooks/eda_dataset_marimo.py)), foram implementadas quatro capacidades centrais:
 
-```powershell
-# 1. Regenerar os exemplos reais (Par Contrastante + Acompanhamento Real de Anomalia) com censura LGPD
+1. **Categoria `CANDIDATOS_A_VISTORIA` & Métrica `DIAS_ANOMALIA_SEGUIDOS`:**  
+   - O pipeline ([`category_reporting.py`](file:///d:/Projects/tcc_extraction/src/models/category_reporting.py)) e o script [`enrich_candidate_vistorias.py`](file:///d:/Projects/tcc_extraction/scripts/enrich_candidate_vistorias.py) isolam exclusivamente anomalias físicas acionáveis (`IS_CANDIDATO_VISTORIA = True`) e quantificam quantos **dias consecutivos** a UC sustentou o desvio ativo (`DIAS_ANOMALIA_SEGUIDOS`), evitando o despacho de equipes por eventos transitórios de 1 único dia.
+2. **Dashboard Analítico de Anomalias Detectadas (`GET /api/v1/dashboard`):**  
+   - Consolidado no topo da tela principal, mostra a contagem exata e o percentual de todas as UCs detectadas em cada categoria diagnóstica (`CATEGORIA_DIAGNOSTICA`), bem como o botão de atalho rápido **`🎯 Candidatos a Vistoria (Campo)`** e os **Top Alimentadores**.
+3. **Visualizador Duplo Interativo On-Demand (`GET /api/v1/meter/<uc>/timeseries` e `plot_uc_interactive`):**  
+   - Sem pré-gerar imagens estáticas para 260k UCs: ao clicar em **`📈 Gráfico & Raio-X`** no Cockpit (ou selecionar qualquer UC no Marimo Notebook), o sistema consulta o Data Lake real sob demanda e renderiza **dois gráficos sincronizados**:
+     - *Gráfico Superior:* Consumo real (`7d Horário`, `14d Horário` ou `30d Diário`), Mediana Baseline, Banda Operacional MAD (±3.5σ), início de degrau CUSUM e Picos (`z > +3.5`).
+     - *Gráfico Inferior:* Diagnóstico de **Dados Faltantes / Cobertura Telecom (%)** contra o limiar de 70%.
+4. **Navegação Contínua entre Candidatos & Modo LGPD:**  
+   - No painel lateral (*Drawer*), os botões **`◀ Anterior (←)`**, **`Próxima (→) ▶`** e os **atalhos de teclado (`←` / `→`)** permitem revisar os gráficos dos candidatos um a um sem fechar a janela, além do botão **`🔒 LGPD: Censurado / 🔓 Visível`**.
+
+---
+
+## 5. Como Reproduzir as Figuras Reais e Abrir o Novo Cockpit Web (Windows CMD)
+
+Execute os comandos abaixo no Prompt de Comando (CMD) dentro de `d:\Projects\tcc_extraction`:
+
+```cmd
+:: 1. Regenerar os exemplos reais (Par Contrastante + Acompanhamento Real) com censura LGPD
 uv run python scripts/find_eda_examples.py
 
-# 2. Subir o Cockpit Web com o novo Dashboard de Anomalias e Gráficos por UC
+:: 2. Enriquecer o dataset com IS_CANDIDATO_VISTORIA e DIAS_ANOMALIA_SEGUIDOS
+uv run python scripts/enrich_candidate_vistorias.py
+
+:: 3. Subir o Cockpit Web com Dashboard de Candidatos e Gráficos Duplos On-Demand
 uv run python scripts/run_web_cockpit.py --port 8050
 ```
 

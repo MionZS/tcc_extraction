@@ -279,6 +279,43 @@ def find_outlier_with_drop_and_spike(
     return None
 
 
+def find_top_outlier_candidates(
+    df: pl.DataFrame,
+    cols: dict[str, str | None],
+    top_n: int = 30,
+) -> list[dict[str, Any]]:
+    """Return ranked list of top candidate UCs across diagnostic anomaly categories."""
+    uc_col = cols["uc"]
+    if not uc_col:
+        return []
+    work = df
+    if cols["cutoff"]:
+        work = work.sort(cols["cutoff"]).unique(subset=[uc_col], keep="last")
+    if cols["is_anom"]:
+        try:
+            anoms = work.filter(
+                pl.col(cols["is_anom"]).cast(pl.String).str.to_lowercase().is_in(["true", "1"])
+            )
+        except Exception:
+            anoms = work.filter(pl.col(cols["is_anom"]) == True)
+        if anoms.height == 0:
+            anoms = work
+    else:
+        anoms = work
+
+    if cols["cov"]:
+        try:
+            clean = anoms.filter(pl.col(cols["cov"]).cast(pl.Float64) >= 0.70)
+            if clean.height > 0:
+                anoms = clean
+        except Exception:
+            pass
+
+    sort_col = cols["score"] or cols["mad"] or uc_col
+    top_rows = anoms.sort(sort_col, descending=True).head(top_n).to_dicts()
+    return [_row_summary(r, cols) for r in top_rows]
+
+
 def plot_comparison_pair(
     uc_a: dict[str, Any],
     uc_b: dict[str, Any],
@@ -752,6 +789,17 @@ def main() -> None:
     (REPORTS_DIR / "private_examples_lookup.json").write_text(
         json.dumps(private_meta, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+
+    # Export Top 30 Anomaly Candidates for Study Case Review
+    candidates = find_top_outlier_candidates(df, cols, top_n=30)
+    pub_cands = [_sanitized_summary(c) for c in candidates]
+    (REPORTS_DIR / "top_candidates_review.json").write_text(
+        json.dumps(pub_cands, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    (REPORTS_DIR / "top_candidates_private.json").write_text(
+        json.dumps(candidates, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"[Candidatos para Estudo de Caso] {len(candidates)} UCs exportadas para {REPORTS_DIR / 'top_candidates_review.json'}")
     print("Concluído com sucesso.")
 
 

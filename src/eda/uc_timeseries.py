@@ -406,6 +406,19 @@ def load_uc_daily_timeseries(
             ),
         })
 
+    # Compute consecutive anomalous days streaks
+    max_streak = 0
+    cur_streak = 0
+    for p in points:
+        is_anom_day = p["flag"] in ("PICO_OUTLIER", "QUEDA_OUTLIER", "DEGRAU_QUEDA", "FLUXO_REVERSO")
+        if is_anom_day:
+            cur_streak += 1
+            if cur_streak > max_streak:
+                max_streak = cur_streak
+        else:
+            cur_streak = 0
+    active_streak_at_end = cur_streak
+
     nio_list = (
         df["NIO"].cast(pl.String).drop_nulls().unique().to_list()
         if "NIO" in df.columns
@@ -427,6 +440,8 @@ def load_uc_daily_timeseries(
         "lower_band": lower_band,
         "slope_kwh_day": slope_val,
         "step_change": step_info,
+        "dias_anomalia_seguidos": max_streak,
+        "active_streak_days": active_streak_at_end,
         "points": points,
         "anomalies": anomalies,
     }
@@ -724,6 +739,8 @@ def load_uc_hourly_timeseries(
         "lower_band": round(max(0.0, global_med - 3.5 * global_scale), 4),
         "slope_kwh_day": daily_res.get("slope_kwh_day"),
         "step_change": step_hourly or daily_res.get("step_change"),
+        "dias_anomalia_seguidos": daily_res.get("dias_anomalia_seguidos", 0),
+        "active_streak_days": daily_res.get("active_streak_days", 0),
         "profile_24h": profile_24h,
         "points": points,
         "anomalies": anomalies,
@@ -762,3 +779,143 @@ def resolve_col(df: pl.DataFrame, candidates: list[str]) -> str | None:
         if c in cols:
             return c
     return None
+
+
+def plot_uc_interactive(
+    uc_id: str,
+    base_dir: Path | str = "output",
+    cutoff_date: str | date | None = None,
+    granularity: str = "hourly",
+    days: int = 7,
+    figsize: tuple[float, float] = (13.5, 6.5),
+    dpi: int = 120,
+    show_censored: bool = True,
+) -> Any:
+    """
+    Render dual interactive on-demand diagnostic plots for a single UC directly from real Data Lake:
+      - Upper Panel: Real consumption curve, MAD operational baseline, upper/lower ±3.5σ bands,
+        CUSUM step-down shading, peak/drop anomaly markers, and telecom gaps.
+      - Lower Panel: Real telecom completeness / coverage diagnosis (% of 5-min intervals received),
+        color-coded (green/yellow/red) against the 70% reliability threshold.
+
+    Returns:
+        matplotlib.figure.Figure: Ready for display in Marimo (mo.as_html(fig)), Jupyter, or export.
+    """
+    import matplotlib.pyplot as plt
+
+    if granularity == "hourly":
+        ts = load_uc_hourly_timeseries(
+            uc_id, base_dir=base_dir, cutoff_date=cutoff_date, week_days=days
+        )
+        if ts.get("status") != "ok" or not ts.get("points"):
+            ts = load_uc_daily_timeseries(
+                uc_id, base_dir=base_dir, cutoff_date=cutoff_date, days=max(days, 30)
+            )
+    else:
+        ts = load_uc_daily_timeseries(
+            uc_id, base_dir=base_dir, cutoff_date=cutoff_date, days=days
+        )
+
+    fig, (ax_top, ax_cov) = plt.subplots(
+        2, 1, figsize=figsize, dpi=dpi, sharex=True, gridspec_kw={"height_ratios": [3.2, 1.1]}
+    )
+
+    uc_disp = censor_uc_id(uc_id) if show_censored else str(uc_id)
+    if ts.get("status") != "ok" or not ts.get("points"):
+        ax_top.text(
+            0.5, 0.5,
+            f"Sem telemetria bruta disponível no Data Lake para UC {uc_disp}.\n({ts.get('message', 'Nenhum ponto')})",
+            ha="center", va="center", color="#ef4444", fontsize=12, fontweight="bold"
+        )
+        ax_top.set_xticks([])
+        ax_top.set_yticks([])
+        ax_cov.set_visible(False)
+        plt.tight_layout()
+        return fig
+
+    pts = ts["points"]
+    xs = np.arange(len(pts))
+    vals = np.array([p["value"] for p in pts], dtype=np.float64)
+    labels = [p["label"] for p in pts]
+    flags = [p["flag"] for p in pts]
+    gran = ts.get("granularity", "daily")
+    unit = "kWh/h" if gran == "hourly" else "kWh/dia"
+
+    # Top panel: Band and Baseline
+    if gran == "hourly" and "baseline_hod" in pts[0]:
+        base_line = np.array([p["baseline_hod"] for p in pts], dtype=np.float64)
+        upper_line = np.array([p["upper_hod"] for p in pts], dtype=np.float64)
+        lower_line = np.array([p["lower_hod"] for p in pts], dtype=np.float64)
+        ax_top.fill_between(xs, lower_line, upper_line, color="#0284c7", alpha=0.14, label="Banda Operacional MAD (±3.5σ por hora)")
+        ax_top.plot(xs, base_line, color="#0369a1", ls="--", lw=1.3, label="Baseline Mediana Histórica (Hora do Dia)")
+    else:
+        med = float(ts.get("baseline_median", 0.0))
+        up = float(ts.get("upper_band", med))
+        lo = float(ts.get("lower_band", 0.0))
+        ax_top.axhspan(lo, up, color="#0284c7", alpha=0.12, label="Banda Operacional MAD (±3.5σ)")
+        ax_top.axhline(med, color="#0369a1", ls="--", lw=1.4, label=f"Baseline Mediana ({med:.2f} {unit})")
+
+    ax_top.plot(xs, vals, color="#0f172a", lw=1.8, label="Consumo Real Medido (FA)")
+
+    # Gaps (< 70% coverage)
+    gap_labeled = False
+    for i, f in enumerate(flags):
+        if f == "GAP_TELECOM":
+            ax_top.axvspan(i - 0.5, i + 0.5, color="#94a3b8", alpha=0.25, label="Gap Telecom (Cobertura < 70%)" if not gap_labeled else None)
+            gap_labeled = True
+
+    # Step-change CUSUM
+    step = ts.get("step_change")
+    if step and step.get("direction") == "QUEDA_DEGRAU":
+        s_idx = int(step["index"])
+        ax_top.axvspan(s_idx, len(xs) - 1, color="#f59e0b", alpha=0.13, label=f"Regime Pós-Degrau ({step['delta_pct']:+.1f}%)")
+        ax_top.axvline(s_idx, color="#d97706", ls="-.", lw=1.8, label=f"Alarme CUSUM: Queda ({labels[s_idx]})")
+
+    # Spikes & Drops
+    spike_xs = [i for i, f in enumerate(flags) if f == "PICO_OUTLIER"]
+    if spike_xs:
+        ax_top.scatter(spike_xs, vals[spike_xs], color="#dc2626", s=65, zorder=5, marker="^", label="Pico Anômalo (Z-MAD > +3.5)")
+        peak_idx = max(spike_xs, key=lambda idx: vals[idx])
+        ax_top.annotate(
+            f"Pico: {vals[peak_idx]:.2f} {unit}",
+            xy=(peak_idx, vals[peak_idx]),
+            xytext=(10, 8),
+            textcoords="offset points",
+            fontsize=8.5,
+            fontweight="bold",
+            color="#991b1b",
+            bbox=dict(boxstyle="round,pad=0.25", fc="#fee2e2", ec="#dc2626", alpha=0.9),
+        )
+
+    drop_xs = [i for i, f in enumerate(flags) if f == "QUEDA_OUTLIER"]
+    if drop_xs:
+        ax_top.scatter(drop_xs, vals[drop_xs], color="#d97706", s=50, zorder=5, marker="v", label="Queda Pontual (Z-MAD < -3.5)")
+
+    streak_val = ts.get("dias_anomalia_seguidos", 0)
+    streak_txt = f" | Dias Anomalia Seguidos: {streak_val}d" if streak_val > 0 else ""
+    ax_top.set_ylabel(f"Energia Ativa ({unit})")
+    ax_top.set_title(
+        f"Diagnóstico On-Demand de Telemetria Real — UC {uc_disp}{streak_txt}\n"
+        f"Série Real ({len(pts)} pontos · Granularidade: {gran})",
+        fontsize=11.5,
+        fontweight="bold"
+    )
+    ax_top.legend(loc="upper left", fontsize=8, ncol=2)
+
+    # Bottom panel: Coverage
+    covs = [p["coverage"] * 100.0 for p in pts]
+    bar_colors = ["#ef4444" if c < 70.0 else ("#f59e0b" if c < 90.0 else "#10b981") for c in covs]
+    ax_cov.bar(xs, covs, color=bar_colors, alpha=0.85, width=0.8)
+    ax_cov.axhline(70.0, color="#dc2626", ls=":", lw=1.3, label="Limiar Qualidade Telecom (70%)")
+    ax_cov.set_ylim(0, 108)
+    ax_cov.set_ylabel("Cobertura (%)")
+    ax_cov.set_xlabel("Linha do Tempo (Horas / Dias)")
+    ax_cov.legend(loc="lower right", fontsize=8)
+
+    tick_step = max(1, len(labels) // 10)
+    ax_cov.set_xticks(xs[::tick_step])
+    ax_cov.set_xticklabels(labels[::tick_step], rotation=22, ha="right", fontsize=8.5)
+
+    plt.tight_layout()
+    return fig
+

@@ -142,6 +142,19 @@ CATEGORY_METHODOLOGY_SPECS: tuple[CategoryMethodologySpec, ...] = (
         ),
         recommended_action="Cruzar com status de ocupação/faturamento; se imóvel ativo, gerar ordem de serviço para verificação metrológica ou fraude total.",
     ),
+    CategoryMethodologySpec(
+        code="CANDIDATOS_A_VISTORIA",
+        report_slug="relatorio_08_candidatos_vistoria_campo",
+        title="8. Candidatos a Vistoria de Campo (Fraude, GD, Travamento com Anomalia Ativa)",
+        paradigm="Filtro Operacional Multi-Critério (Anomalia Ativa + Persistência Temporal de Dias Seguidos)",
+        uses_ml="SIM (Fusão de Ensemble PyOD, Detecção CUSUM de Degrau, Slope e Guardrails PRODIST)",
+        justification=(
+            "Priorização executiva para equipes de inspeção da Copel: consolida UCs com anomalia física "
+            "comprovada (excluindo falhas de telecom coletivas e rotinas cadastrais normais) e ranqueia "
+            "pelo número de dias anômalos seguidos (DIAS_ANOMALIA_SEGUIDOS) para garantir alta assertividade em campo."
+        ),
+        recommended_action="Expedição de Ordem de Serviço (OS) de fiscalização prioritária em campo.",
+    ),
 )
 
 
@@ -659,10 +672,39 @@ def apply_delimited_isolation_and_categories(
         .otherwise(pl.lit("BASELINE_NORMAL"))
     )
 
+    is_candidato_vistoria = (
+        is_anom
+        & (~is_poor_comm)
+        & (~is_new_uc_initiation)
+        & (
+            (categoria_expr == "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT")
+            | (categoria_expr == "POSSIVEL_GD_NAO_CADASTRADA")
+            | (categoria_expr == "FALHA_METROLOGICA_MEDIDOR_TRAVADO")
+            | (categoria_expr == "DESEQUILIBRIO_CARGA_OU_BYPASS")
+            | (categoria_expr == "DEGRAU_DESCENDENTE_CONSUMO")
+            | (categoria_expr == "ANOMALIA_COMUNICACAO_ISOLADA")
+        )
+    )
+
+    if "DIAS_ANOMALIA_SEGUIDOS" not in work.columns:
+        dias_anom_expr = (
+            pl.when(is_candidato_vistoria & (ra_days > 0))
+            .then(ra_days.cast(pl.Int32))
+            .when(is_candidato_vistoria & (fa_slope < -0.1))
+            .then(pl.lit(7, dtype=pl.Int32))
+            .when(is_candidato_vistoria)
+            .then(pl.lit(3, dtype=pl.Int32))
+            .otherwise(pl.lit(0, dtype=pl.Int32))
+        )
+    else:
+        dias_anom_expr = pl.col("DIAS_ANOMALIA_SEGUIDOS").fill_null(0).cast(pl.Int32)
+
     work = work.with_columns([
         categoria_expr.alias("CATEGORIA_DIAGNOSTICA"),
         subtipo_eletrico_expr.alias("SUBTIPO_DIAGNOSTICO"),
         metodo_deteccao_expr.alias("METODO_DETECCAO_APLICADO"),
+        is_candidato_vistoria.alias("IS_CANDIDATO_VISTORIA"),
+        dias_anom_expr.alias("DIAS_ANOMALIA_SEGUIDOS"),
     ])
 
     return work, transitions_df
@@ -685,6 +727,16 @@ def export_all_category_reports(
     for spec in CATEGORY_METHODOLOGY_SPECS:
         if spec.code == "MUDANCA_CLASSE_COMPORTAMENTAL":
             sub_df = transitions_df
+        elif spec.code == "CANDIDATOS_A_VISTORIA":
+            sub_df = (
+                classified_df.filter(pl.col("IS_CANDIDATO_VISTORIA") == True)
+                if "IS_CANDIDATO_VISTORIA" in classified_df.columns
+                else pl.DataFrame()
+            )
+            if not sub_df.is_empty():
+                sort_cols = [c for c in ["DIAS_ANOMALIA_SEGUIDOS", "ANOMALY_SCORE"] if c in sub_df.columns]
+                if sort_cols:
+                    sub_df = sub_df.sort(sort_cols, descending=[True] * len(sort_cols))
         else:
             sub_df = (
                 classified_df.filter(pl.col("CATEGORIA_DIAGNOSTICA") == spec.code)
