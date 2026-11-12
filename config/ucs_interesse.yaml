@@ -1,0 +1,33 @@
+# ==============================================================================
+# CONFIGURAÇÃO DE UNIDADES CONSUMIDORAS (UCs) DE INTERESSE PARA O TCC E EDA
+# Permite inspecionar UCs específicas na geração de relatórios e figuras semanais
+# ==============================================================================
+
+# Lista de UCs de interesse para rastreamento aprofundado e gráficos semanais
+ucs_interesse:
+  - id: "UC_EXEMPLO_PADRAO_ESTAVEL"
+    descricao: "Consumo residencial típico estável com alto fator de carga"
+    categoria_esperada: "NORMAL"
+    destaque: true
+
+  - id: "UC_EXEMPLO_DEGRAU_FRAUDE"
+    descricao: "Queda abrupta de consumo com desbalanceamento de corrente (Mudança de Regime)"
+    categoria_esperada: "ANOMALIA_CONFIRMADA"
+    destaque: true
+
+  - id: "UC_EXEMPLO_GD_CLANDESTINA"
+    descricao: "Injeção ativa no período diurno (10h-16h) sem cadastro prévio de GD"
+    categoria_esperada: "POSSIVEL_GD_CLANDESTINA"
+    destaque: true
+
+  - id: "UC_EXEMPLO_QUARENTENA_TELECOM"
+    descricao: "Perda severa de pacotes e completude inferior a 50%"
+    categoria_esperada: "QUARENTENA_TELECOM"
+    destaque: false
+
+# Parâmetros para comparação de UCs com mesmo consumo e perfis opostos
+comparacao_pares:
+  faixa_consumo_kwh_dia: [15.0, 20.0]
+  tolerancia_percentual: 0.02 # UCs com até 2% de diferença na mediana diária
+  criterio_divergencia: "mad_ratio" # Razão entre MADs de dispersão
+

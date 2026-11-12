@@ -1,0 +1,75 @@
+{
+  "lgpd_censored": true,
+  "contrasting_pair": {
+    "uc_stable": {
+      "uc_censored": "934***50",
+      "cutoff": "2026-11-04",
+      "coverage": 0.9944,
+      "median_kwh_day": 20.382,
+      "mad_kwh_day": 0.051,
+      "slope": -0.0022,
+      "cv_window": 0.0025,
+      "load_factor": 0.973,
+      "current_imbalance": 0.001,
+      "anomaly_score": 0.3568,
+      "category": "REGULAR",
+      "subtype": "",
+      "feeder": "Fonte Nova",
+      "classe": "4324"
+    },
+    "uc_volatile": {
+      "uc_censored": "116****57",
+      "cutoff": "2026-11-04",
+      "coverage": 0.9944,
+      "median_kwh_day": 19.224,
+      "mad_kwh_day": 16.564,
+      "slope": 1.1269,
+      "cv_window": 0.8572,
+      "load_factor": 0.15,
+      "current_imbalance": 1.0,
+      "anomaly_score": 0.4963,
+      "category": "REGULAR",
+      "subtype": "",
+      "feeder": "CSN",
+      "classe": "4496"
+    },
+    "mode": "24h_ami_interval",
+    "weekly_timeline": {
+      "status": "ok",
+      "n_hours": 168,
+      "uc_a_censored": "934***50",
+      "uc_b_censored": "116****57",
+      "max_kwh_a": 0.933,
+      "max_kwh_b": 7.03,
+      "granularity": "hourly"
+    }
+  },
+  "outlier_timeline": {
+    "uc": {
+      "uc_censored": "685***20",
+      "cutoff": "2026-11-04",
+      "coverage": 0.9949,
+      "median_kwh_day": 81.076,
+      "mad_kwh_day": 24.459,
+      "slope": -1.3682,
+      "cv_window": 0.3013,
+      "load_factor": 0.427,
+      "current_imbalance": 0.798,
+      "anomaly_score": 0.6212,
+      "category": "DESEQUILIBRIO_CARGA_OU_BYPASS",
+      "subtype": "",
+      "feeder": "Polonia",
+      "classe": "5477"
+    },
+    "granularity": "hourly",
+    "points_count": 168,
+    "window_start": "2026-10-29 00:00",
+    "window_end": "2026-11-04 23:00",
+    "baseline_median": 1.39,
+    "baseline_mad": 0.587,
+    "slope_kwh_day": -1.3682,
+    "step_change": null,
+    "detected_anomalies_count": 0,
+    "detected_anomalies": []
+  }
+}
