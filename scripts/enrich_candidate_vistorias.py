@@ -15,9 +15,11 @@ Atualiza:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -40,27 +42,76 @@ def _normalize_id(s: str) -> str:
     return str(s).strip().lstrip("0") or "0"
 
 
+def _compute_streak_for_group(group: pl.DataFrame) -> tuple[int, int]:
+    """Compute (max_streak_days, active_streak_at_end) for a temporally bounded daily slice."""
+    if group.height == 0:
+        return (0, 0)
+
+    covs = group["INTERVAL_COVERAGE"].to_numpy() if "INTERVAL_COVERAGE" in group.columns else np.ones(group.height)
+    fas = group["FA_INTERVAL_SUM"].fill_null(0.0).to_numpy()
+    ras = group["RA_REVERSAL_RATIO"].fill_null(0.0).to_numpy() if "RA_REVERSAL_RATIO" in group.columns else np.zeros(group.height)
+    cimb = group["CURRENT_IMBALANCE_MAX"].fill_null(0.0).to_numpy() if "CURRENT_IMBALANCE_MAX" in group.columns else np.zeros(group.height)
+
+    rel_mask = covs >= 0.70
+    rel_fa = fas[rel_mask] if np.sum(rel_mask) >= 3 else fas
+    med = float(np.median(rel_fa)) if len(rel_fa) > 0 else 0.0
+    mad = float(np.median(np.abs(rel_fa - med))) if len(rel_fa) > 0 else 0.0
+    scale = max(1.4826 * mad, 0.10 * abs(med), 0.05)
+
+    max_streak = 0
+    cur_streak = 0
+
+    for i in range(len(fas)):
+        if covs[i] < 0.70:
+            cur_streak = 0
+            continue
+
+        val = fas[i]
+        z = (val - med) / scale if scale > 0 else 0.0
+        is_anom = (
+            abs(z) > 3.5
+            or ras[i] > 0.08
+            or cimb[i] > 0.40
+            or (val < 0.05 and med > 0.50)
+        )
+
+        if is_anom:
+            cur_streak += 1
+            if cur_streak > max_streak:
+                max_streak = cur_streak
+        else:
+            cur_streak = 0
+
+    return (max_streak, cur_streak)
+
+
 def compute_consecutive_streaks_from_daily(
     day_features_root: Path,
-    candidate_ucs: set[str],
-) -> dict[str, tuple[int, int]]:
+    candidate_cutoffs: dict[str, set[str]],
+    window_days: int = 30,
+) -> dict[tuple[str, str], tuple[int, int]]:
     """
     Scan daily partitions for candidate UCs and compute:
       (max_streak_days, active_streak_at_end)
+    strictly bounded inside (cutoff_date - window_days, cutoff_date] per (UC, cutoff)
+    to guarantee zero future-information leakage across cutoffs.
     """
     parquet_files = sorted(day_features_root.glob("**/data.parquet"))
     if not parquet_files:
         print("[AVISO] Nenhuma partição em uc_day_features encontrada.")
         return {}
 
-    print(f"Lendo {len(parquet_files)} partições diárias para {len(candidate_ucs)} UCs candidatas...")
+    print(
+        f"Lendo {len(parquet_files)} partições diárias para {len(candidate_cutoffs)} UCs candidatas "
+        f"(janela estrita <= cutoff_date, sem vazamento futuro)..."
+    )
 
     frames: list[pl.DataFrame] = []
     wanted_cols = [
         "UC", "REPORT_DAY", "INTERVAL_COVERAGE", "FA_INTERVAL_SUM",
         "RA_REVERSAL_RATIO", "CURRENT_IMBALANCE_MAX"
     ]
-    cand_list = list(candidate_ucs)
+    cand_list = list(candidate_cutoffs.keys())
 
     for p in parquet_files:
         try:
@@ -86,56 +137,46 @@ def compute_consecutive_streaks_from_daily(
 
     all_days = pl.concat(frames, how="diagonal_relaxed")
     if "REPORT_DAY" in all_days.columns:
-        all_days = all_days.sort(["_uc_norm", "REPORT_DAY"]).unique(subset=["_uc_norm", "REPORT_DAY"], keep="last")
+        all_days = (
+            all_days.with_columns(pl.col("REPORT_DAY").cast(pl.Date))
+            .sort(["_uc_norm", "REPORT_DAY"])
+            .unique(subset=["_uc_norm", "REPORT_DAY"], keep="last")
+        )
 
-    streaks: dict[str, tuple[int, int]] = {}
+    streaks: dict[tuple[str, str], tuple[int, int]] = {}
 
     for uc_norm, group in all_days.partition_by("_uc_norm", as_dict=True).items():
-        norm_key = uc_norm[0] if isinstance(uc_norm, tuple) else uc_norm
-        covs = group["INTERVAL_COVERAGE"].to_numpy() if "INTERVAL_COVERAGE" in group.columns else np.ones(group.height)
-        fas = group["FA_INTERVAL_SUM"].fill_null(0.0).to_numpy()
-        ras = group["RA_REVERSAL_RATIO"].fill_null(0.0).to_numpy() if "RA_REVERSAL_RATIO" in group.columns else np.zeros(group.height)
-        cimb = group["CURRENT_IMBALANCE_MAX"].fill_null(0.0).to_numpy() if "CURRENT_IMBALANCE_MAX" in group.columns else np.zeros(group.height)
+        norm_key = str(uc_norm[0] if isinstance(uc_norm, tuple) else uc_norm)
+        cutoffs = candidate_cutoffs.get(norm_key, {""})
 
-        # Baseline robusta
-        rel_mask = covs >= 0.70
-        rel_fa = fas[rel_mask] if np.sum(rel_mask) >= 3 else fas
-        med = float(np.median(rel_fa)) if len(rel_fa) > 0 else 0.0
-        mad = float(np.median(np.abs(rel_fa - med))) if len(rel_fa) > 0 else 0.0
-        scale = max(1.4826 * mad, 0.10 * abs(med), 0.05)
-
-        max_streak = 0
-        cur_streak = 0
-
-        for i in range(len(fas)):
-            cov = covs[i]
-            if cov < 0.70:
-                cur_streak = 0
-                continue
-
-            val = fas[i]
-            z = (val - med) / scale if scale > 0 else 0.0
-
-            is_anom = (
-                abs(z) > 3.5
-                or ras[i] > 0.08
-                or cimb[i] > 0.40
-                or (val < 0.05 and med > 0.50)
-            )
-
-            if is_anom:
-                cur_streak += 1
-                if cur_streak > max_streak:
-                    max_streak = cur_streak
+        for cutoff_str in cutoffs:
+            if cutoff_str and "REPORT_DAY" in group.columns:
+                try:
+                    cutoff_dt = date.fromisoformat(cutoff_str[:10])
+                    win_start = cutoff_dt - timedelta(days=window_days)
+                    bounded = group.filter(
+                        (pl.col("REPORT_DAY") > win_start) & (pl.col("REPORT_DAY") <= cutoff_dt)
+                    )
+                except ValueError:
+                    bounded = group
             else:
-                cur_streak = 0
+                bounded = group
 
-        streaks[str(norm_key)] = (max_streak, cur_streak)
+            streaks[(norm_key, cutoff_str)] = _compute_streak_for_group(bounded)
 
     return streaks
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Gera relatório de candidatos a vistoria com persistência temporal sem vazamento futuro.")
+    parser.add_argument("--window-days", type=int, default=30, help="Janela retroativa em dias até meta__cutoff_date (padrão: 30).")
+    parser.add_argument(
+        "--update-main",
+        action="store_true",
+        help="Se definido, também grava IS_CANDIDATO_VISTORIA e DIAS_ANOMALIA_SEGUIDOS em classified_ucs_latest.parquet/csv (padrão: gera apenas relatório separado).",
+    )
+    args = parser.parse_args()
+
     t0 = time.time()
     print("=" * 80)
     print("ENRIQUECIMENTO: CANDIDATOS A VISTORIA E DIAS DE ANOMALIA SEGUIDOS")
@@ -152,13 +193,19 @@ def main() -> None:
 
     cols = set(df.columns)
     uc_col = "id__uc_id" if "id__uc_id" in cols else "UC"
+    cutoff_col = "meta__cutoff_date" if "meta__cutoff_date" in cols else None
     anom_col = "IS_ANOMALY" if "IS_ANOMALY" in cols else None
     cat_col = "CATEGORIA_DIAGNOSTICA" if "CATEGORIA_DIAGNOSTICA" in cols else None
 
-    # Normalizar UC
-    df = df.with_columns(
-        pl.col(uc_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_uc_norm")
-    )
+    # Normalizar UC e Cutoff
+    df = df.with_columns([
+        pl.col(uc_col).cast(pl.String).str.strip_chars().str.replace(r"^0+", "").alias("_uc_norm"),
+        (
+            pl.col(cutoff_col).cast(pl.String).str.slice(0, 10).fill_null("")
+            if cutoff_col
+            else pl.lit("")
+        ).alias("_cutoff_str"),
+    ])
 
     # Identificar anomalias acionáveis
     actionable_cats = [
@@ -179,22 +226,37 @@ def main() -> None:
         (is_anom_expr & cat_match_expr).alias("IS_CANDIDATO_VISTORIA")
     )
 
-    candidate_ucs = set(
-        df.filter(pl.col("IS_CANDIDATO_VISTORIA") == True)["_uc_norm"].drop_nulls().to_list()
+    cand_pairs = (
+        df.filter(pl.col("IS_CANDIDATO_VISTORIA") == True)
+        .select(["_uc_norm", "_cutoff_str"])
+        .drop_nulls(subset=["_uc_norm"])
+        .unique()
+        .to_dicts()
     )
-    print(f"Total de UCs candidatas a vistoria de campo identificadas: {len(candidate_ucs):,}")
+    candidate_cutoffs: dict[str, set[str]] = {}
+    for row in cand_pairs:
+        u = str(row["_uc_norm"])
+        c = str(row["_cutoff_str"] or "")
+        candidate_cutoffs.setdefault(u, set()).add(c)
 
-    streaks = compute_consecutive_streaks_from_daily(DAY_FEATURES_DIR, candidate_ucs)
-    print(f"Cálculo de streak concluído para {len(streaks):,} UCs com histórico diário.")
+    print(
+        f"Total de pares (UC, cutoff) candidatos a vistoria: {len(cand_pairs):,} "
+        f"({len(candidate_cutoffs):,} UCs únicas)"
+    )
 
-    # Mapear streaks para o DataFrame
+    streaks = compute_consecutive_streaks_from_daily(
+        DAY_FEATURES_DIR, candidate_cutoffs, window_days=args.window_days
+    )
+    print(f"Cálculo de streak concluído para {len(streaks):,} pares (UC, cutoff) com histórico diário.")
+
+    # Mapear streaks para o DataFrame por (_uc_norm, _cutoff_str)
     streak_records = [
-        {"_uc_norm": k, "DIAS_ANOMALIA_SEGUIDOS": v[0], "DIAS_ANOMALIA_ATIVOS": v[1]}
+        {"_uc_norm": k[0], "_cutoff_str": k[1], "DIAS_ANOMALIA_SEGUIDOS": v[0], "DIAS_ANOMALIA_ATIVOS": v[1]}
         for k, v in streaks.items()
     ]
     if streak_records:
         streak_df = pl.DataFrame(streak_records)
-        df = df.join(streak_df, on="_uc_norm", how="left")
+        df = df.join(streak_df, on=["_uc_norm", "_cutoff_str"], how="left")
     else:
         df = df.with_columns([
             pl.lit(0, dtype=pl.Int32).alias("DIAS_ANOMALIA_SEGUIDOS"),
@@ -219,16 +281,19 @@ def main() -> None:
 
     df = df.with_columns(
         fallback_expr.cast(pl.Int32).alias("DIAS_ANOMALIA_SEGUIDOS")
-    ).drop(["_uc_norm"])
+    ).drop(["_uc_norm", "_cutoff_str"])
 
     if "DIAS_ANOMALIA_ATIVOS" in df.columns:
         df = df.with_columns(pl.col("DIAS_ANOMALIA_ATIVOS").fill_null(0).cast(pl.Int32))
 
-    # Salvar Parquet e CSV atualizados
-    print(f"Salvando {PARQUET_PATH}...")
-    df.write_parquet(PARQUET_PATH, compression="zstd")
-    print(f"Salvando {CSV_PATH}...")
-    df.write_csv(CSV_PATH, separator=";")
+    # Salvar Parquet e CSV principais apenas se --update-main for especificado
+    if args.update_main:
+        print(f"Salvando tabela principal atualizada em {PARQUET_PATH}...")
+        df.write_parquet(PARQUET_PATH, compression="zstd")
+        print(f"Salvando CSV principal em {CSV_PATH}...")
+        df.write_csv(CSV_PATH, separator=";")
+    else:
+        print("Tabela principal (classified_ucs_latest) preservada intacta (use --update-main para sobrescrever).")
 
     # Salvar relatório específico de candidatos a vistoria
     CAT_DIR.mkdir(parents=True, exist_ok=True)

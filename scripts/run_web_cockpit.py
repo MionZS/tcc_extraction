@@ -14,18 +14,17 @@ Serves:
 from __future__ import annotations
 
 import argparse
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from collections import OrderedDict
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import json
 import mimetypes
 from pathlib import Path
 import sys
+import threading
 import urllib.parse
 import webbrowser
 
 import polars as pl
-
-from http.server import ThreadingHTTPServer
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -39,11 +38,14 @@ CLASSIFIED_PARQUET = REPORTS_DIR / "classified_ucs_latest.parquet"
 CLASSIFIED_CSV = REPORTS_DIR / "classified_ucs_latest.csv"
 SUMMARY_JSON = REPORTS_DIR / "model_training_summary_latest.json"
 
+_DATA_LOCK = threading.Lock()
 _CACHED_DF: pl.DataFrame | None = None
 _CACHED_FEEDERS: list[str] | None = None
 _CACHED_CATEGORIES: list[str] | None = None
 _CACHED_SUMMARY: dict | None = None
 _CACHED_DASHBOARD: dict | None = None
+_ANOMALIES_CACHE: OrderedDict[tuple, bytes] = OrderedDict()
+_ANOMALIES_CACHE_MAX = 64
 
 
 _CATEGORY_META: dict[str, dict[str, str]] = {
@@ -106,148 +108,157 @@ def _build_dashboard_stats(df: pl.DataFrame) -> dict:
     if _CACHED_DASHBOARD is not None:
         return _CACHED_DASHBOARD
 
-    cols = set(df.columns)
-    uc_col = "id__uc_id" if "id__uc_id" in cols else ("UC" if "UC" in cols else None)
-    cat_col = "CATEGORIA_DIAGNOSTICA" if "CATEGORIA_DIAGNOSTICA" in cols else None
-    sub_col = "SUBTIPO_DIAGNOSTICO" if "SUBTIPO_DIAGNOSTICO" in cols else None
-    anom_col = "IS_ANOMALY" if "IS_ANOMALY" in cols else None
-    score_col = "ANOMALY_SCORE" if "ANOMALY_SCORE" in cols else None
-    feeder_col = "meta__feeder" if "meta__feeder" in cols else ("ALIMENTADOR" if "ALIMENTADOR" in cols else None)
-    slope_col = "x__trend_fa_slope" if "x__trend_fa_slope" in cols else None
-    cv_col = "x__fa_cv_window" if "x__fa_cv_window" in cols else None
-    cutoff_col = "meta__cutoff_date" if "meta__cutoff_date" in cols else None
+    with _DATA_LOCK:
+        if _CACHED_DASHBOARD is not None:
+            return _CACHED_DASHBOARD
 
-    total_rows = int(df.height)
-    work = df
-    if uc_col and cutoff_col:
-        work = df.sort(cutoff_col).unique(subset=[uc_col], keep="last")
-    elif uc_col:
-        work = df.unique(subset=[uc_col], keep="last")
-    total_unique_ucs = int(work.height)
+        cols = set(df.columns)
+        uc_col = "id__uc_id" if "id__uc_id" in cols else ("UC" if "UC" in cols else None)
+        cat_col = "CATEGORIA_DIAGNOSTICA" if "CATEGORIA_DIAGNOSTICA" in cols else None
+        sub_col = "SUBTIPO_DIAGNOSTICO" if "SUBTIPO_DIAGNOSTICO" in cols else None
+        anom_col = "IS_ANOMALY" if "IS_ANOMALY" in cols else None
+        score_col = "ANOMALY_SCORE" if "ANOMALY_SCORE" in cols else None
+        feeder_col = "meta__feeder" if "meta__feeder" in cols else ("ALIMENTADOR" if "ALIMENTADOR" in cols else None)
+        slope_col = "x__trend_fa_slope" if "x__trend_fa_slope" in cols else None
+        cv_col = "x__fa_cv_window" if "x__fa_cv_window" in cols else None
+        cutoff_col = "meta__cutoff_date" if "meta__cutoff_date" in cols else None
+        cand_col_name = "IS_CANDIDATO_VISTORIA" if "IS_CANDIDATO_VISTORIA" in cols else None
 
-    total_anomalies = (
-        int(work.filter(pl.col(anom_col) == True).height) if anom_col else 0
-    )
+        total_rows = int(df.height)
+        needed_cols = [
+            c for c in [uc_col, cat_col, sub_col, anom_col, score_col, feeder_col, slope_col, cv_col, cutoff_col, cand_col_name]
+            if c is not None
+        ]
+        work = df.select(needed_cols) if needed_cols else df
+        if uc_col and cutoff_col:
+            work = work.sort(cutoff_col).unique(subset=[uc_col], keep="last")
+        elif uc_col:
+            work = work.unique(subset=[uc_col], keep="last")
+        total_unique_ucs = int(work.height)
 
-    categories_out: list[dict] = []
-    if cat_col:
-        agg_exprs = [pl.len().alias("count")]
-        if anom_col:
-            agg_exprs.append(pl.col(anom_col).cast(pl.Int64).sum().alias("anomalies"))
-        if score_col:
-            agg_exprs.append(pl.col(score_col).cast(pl.Float64).mean().alias("avg_score"))
+        total_anomalies = (
+            int(work.filter(pl.col(anom_col) == True).height) if anom_col else 0
+        )
 
-        grp = work.group_by(cat_col).agg(agg_exprs).sort("count", descending=True)
-        for row in grp.iter_rows(named=True):
-            cat_name = str(row[cat_col] or "OUTROS")
-            cnt = int(row["count"])
-            meta = _CATEGORY_META.get(
-                cat_name,
-                {
-                    "label": cat_name.replace("_", " ").title(),
-                    "mechanism": "Classificação diagnóstica do pipeline",
-                    "color": "#3b82f6",
-                },
+        categories_out: list[dict] = []
+        if cat_col:
+            agg_exprs = [pl.len().alias("count")]
+            if anom_col:
+                agg_exprs.append(pl.col(anom_col).cast(pl.Int64).sum().alias("anomalies"))
+            if score_col:
+                agg_exprs.append(pl.col(score_col).cast(pl.Float64).mean().alias("avg_score"))
+
+            grp = work.group_by(cat_col).agg(agg_exprs).sort("count", descending=True)
+            for row in grp.iter_rows(named=True):
+                cat_name = str(row[cat_col] or "OUTROS")
+                cnt = int(row["count"])
+                meta = _CATEGORY_META.get(
+                    cat_name,
+                    {
+                        "label": cat_name.replace("_", " ").title(),
+                        "mechanism": "Classificação diagnóstica do pipeline",
+                        "color": "#3b82f6",
+                    },
+                )
+                categories_out.append({
+                    "category": cat_name,
+                    "label": meta["label"],
+                    "mechanism": meta["mechanism"],
+                    "color": meta["color"],
+                    "count": cnt,
+                    "pct": round((cnt / max(total_unique_ucs, 1)) * 100.0, 2),
+                    "anomalies": int(row.get("anomalies") or 0),
+                    "avg_score": round(float(row.get("avg_score") or 0.0), 4),
+                })
+
+        cand_col = "IS_CANDIDATO_VISTORIA" if "IS_CANDIDATO_VISTORIA" in cols else None
+        cand_cnt = int(work.filter(pl.col(cand_col) == True).height) if cand_col else 0
+        if cand_col and cand_cnt > 0:
+            cand_sub = work.filter(pl.col(cand_col) == True)
+            avg_c_score = float(cand_sub[score_col].mean() or 0.0) if score_col else 0.0
+            categories_out.insert(0, {
+                "category": "CANDIDATOS_A_VISTORIA",
+                "label": "🎯 Candidatos a Vistoria (Campo)",
+                "mechanism": "Anomalias físicas ativas ordenadas por persistência",
+                "color": "#dc2626",
+                "count": cand_cnt,
+                "pct": round((cand_cnt / max(total_unique_ucs, 1)) * 100.0, 2),
+                "anomalies": cand_cnt,
+                "avg_score": round(avg_c_score, 4),
+            })
+
+        subtypes_out: list[dict] = []
+        if sub_col:
+            sub_grp = (
+                work.filter(pl.col(sub_col).is_not_null())
+                .group_by(sub_col)
+                .agg(pl.len().alias("count"))
+                .sort("count", descending=True)
+                .head(12)
             )
-            categories_out.append({
-                "category": cat_name,
-                "label": meta["label"],
-                "mechanism": meta["mechanism"],
-                "color": meta["color"],
-                "count": cnt,
-                "pct": round((cnt / max(total_unique_ucs, 1)) * 100.0, 2),
-                "anomalies": int(row.get("anomalies") or 0),
-                "avg_score": round(float(row.get("avg_score") or 0.0), 4),
-            })
+            for row in sub_grp.iter_rows(named=True):
+                subtypes_out.append({
+                    "subtype": str(row[sub_col]),
+                    "count": int(row["count"]),
+                })
 
-    cand_col = "IS_CANDIDATO_VISTORIA" if "IS_CANDIDATO_VISTORIA" in cols else None
-    cand_cnt = int(work.filter(pl.col(cand_col) == True).height) if cand_col else 0
-    if cand_col and cand_cnt > 0:
-        cand_sub = work.filter(pl.col(cand_col) == True)
-        avg_c_score = float(cand_sub[score_col].mean() or 0.0) if score_col else 0.0
-        categories_out.insert(0, {
-            "category": "CANDIDATOS_A_VISTORIA",
-            "label": "🎯 Candidatos a Vistoria (Campo)",
-            "mechanism": "Anomalias físicas ativas ordenadas por persistência",
-            "color": "#dc2626",
-            "count": cand_cnt,
-            "pct": round((cand_cnt / max(total_unique_ucs, 1)) * 100.0, 2),
-            "anomalies": cand_cnt,
-            "avg_score": round(avg_c_score, 4),
-        })
-
-    subtypes_out: list[dict] = []
-    if sub_col:
-        sub_grp = (
-            work.filter(pl.col(sub_col).is_not_null())
-            .group_by(sub_col)
-            .agg(pl.len().alias("count"))
-            .sort("count", descending=True)
-            .head(12)
+        # Behavioral mechanism counts among anomalous UCs
+        anoms_only = work.filter(pl.col(anom_col) == True) if anom_col else work.head(0)
+        drop_signal_cnt = (
+            int(anoms_only.filter(pl.col(slope_col) < -0.05).height)
+            if slope_col and anoms_only.height > 0
+            else 0
         )
-        for row in sub_grp.iter_rows(named=True):
-            subtypes_out.append({
-                "subtype": str(row[sub_col]),
-                "count": int(row["count"]),
-            })
-
-    # Behavioral mechanism counts among anomalous UCs
-    anoms_only = work.filter(pl.col(anom_col) == True) if anom_col else work.head(0)
-    drop_signal_cnt = (
-        int(anoms_only.filter(pl.col(slope_col) < -0.05).height)
-        if slope_col and anoms_only.height > 0
-        else 0
-    )
-    high_disp_cnt = (
-        int(anoms_only.filter(pl.col(cv_col) > 0.8).height)
-        if cv_col and anoms_only.height > 0
-        else 0
-    )
-    both_drop_and_spike_cnt = (
-        int(anoms_only.filter((pl.col(slope_col) < -0.05) & (pl.col(cv_col) > 0.8)).height)
-        if slope_col and cv_col and anoms_only.height > 0
-        else 0
-    )
-
-    top_feeders: list[dict] = []
-    if feeder_col and anom_col:
-        f_grp = (
-            work.filter(pl.col(feeder_col).is_not_null())
-            .group_by(feeder_col)
-            .agg([
-                pl.len().alias("total"),
-                pl.col(anom_col).cast(pl.Int64).sum().alias("anomalies"),
-            ])
-            .filter(pl.col("anomalies") > 0)
-            .sort("anomalies", descending=True)
-            .head(8)
+        high_disp_cnt = (
+            int(anoms_only.filter(pl.col(cv_col) > 0.8).height)
+            if cv_col and anoms_only.height > 0
+            else 0
         )
-        for row in f_grp.iter_rows(named=True):
-            tot_f = int(row["total"])
-            an_f = int(row["anomalies"])
-            top_feeders.append({
-                "feeder": str(row[feeder_col]),
-                "total": tot_f,
-                "anomalies": an_f,
-                "rate_pct": round((an_f / max(tot_f, 1)) * 100.0, 2),
-            })
+        both_drop_and_spike_cnt = (
+            int(anoms_only.filter((pl.col(slope_col) < -0.05) & (pl.col(cv_col) > 0.8)).height)
+            if slope_col and cv_col and anoms_only.height > 0
+            else 0
+        )
 
-    _CACHED_DASHBOARD = {
-        "total_rows": total_rows,
-        "total_unique_ucs": total_unique_ucs,
-        "total_anomalies": total_anomalies,
-        "anomaly_rate_pct": round((total_anomalies / max(total_unique_ucs, 1)) * 100.0, 3),
-        "signal_breakdown": {
-            "candidatos_vistoria": cand_cnt,
-            "drop_slope_neg_anomalies": drop_signal_cnt,
-            "high_mad_dispersion_anomalies": high_disp_cnt,
-            "combined_drop_and_spike": both_drop_and_spike_cnt,
-        },
-        "categories": categories_out,
-        "subtypes": subtypes_out,
-        "top_feeders": top_feeders,
-    }
-    return _CACHED_DASHBOARD
+        top_feeders: list[dict] = []
+        if feeder_col and anom_col:
+            f_grp = (
+                work.filter(pl.col(feeder_col).is_not_null())
+                .group_by(feeder_col)
+                .agg([
+                    pl.len().alias("total"),
+                    pl.col(anom_col).cast(pl.Int64).sum().alias("anomalies"),
+                ])
+                .filter(pl.col("anomalies") > 0)
+                .sort("anomalies", descending=True)
+                .head(8)
+            )
+            for row in f_grp.iter_rows(named=True):
+                tot_f = int(row["total"])
+                an_f = int(row["anomalies"])
+                top_feeders.append({
+                    "feeder": str(row[feeder_col]),
+                    "total": tot_f,
+                    "anomalies": an_f,
+                    "rate_pct": round((an_f / max(tot_f, 1)) * 100.0, 2),
+                })
+
+        _CACHED_DASHBOARD = {
+            "total_rows": total_rows,
+            "total_unique_ucs": total_unique_ucs,
+            "total_anomalies": total_anomalies,
+            "anomaly_rate_pct": round((total_anomalies / max(total_unique_ucs, 1)) * 100.0, 3),
+            "signal_breakdown": {
+                "candidatos_vistoria": cand_cnt,
+                "drop_slope_neg_anomalies": drop_signal_cnt,
+                "high_mad_dispersion_anomalies": high_disp_cnt,
+                "combined_drop_and_spike": both_drop_and_spike_cnt,
+            },
+            "categories": categories_out,
+            "subtypes": subtypes_out,
+            "top_feeders": top_feeders,
+        }
+        return _CACHED_DASHBOARD
 
 
 def _load_data() -> pl.DataFrame:
@@ -256,18 +267,22 @@ def _load_data() -> pl.DataFrame:
     if _CACHED_DF is not None and not _CACHED_DF.is_empty():
         return _CACHED_DF
 
-    if CLASSIFIED_PARQUET.exists() and CLASSIFIED_PARQUET.stat().st_size > 0:
-        try:
-            _CACHED_DF = pl.read_parquet(CLASSIFIED_PARQUET)
+    with _DATA_LOCK:
+        if _CACHED_DF is not None and not _CACHED_DF.is_empty():
             return _CACHED_DF
-        except Exception:
-            pass
 
-    if CLASSIFIED_CSV.exists() and CLASSIFIED_CSV.stat().st_size > 0:
-        _CACHED_DF = pl.read_csv(CLASSIFIED_CSV, separator=";", infer_schema_length=5000, ignore_errors=True)
-        return _CACHED_DF
+        if CLASSIFIED_PARQUET.exists() and CLASSIFIED_PARQUET.stat().st_size > 0:
+            try:
+                _CACHED_DF = pl.read_parquet(CLASSIFIED_PARQUET)
+                return _CACHED_DF
+            except Exception:
+                pass
 
-    return pl.DataFrame()
+        if CLASSIFIED_CSV.exists() and CLASSIFIED_CSV.stat().st_size > 0:
+            _CACHED_DF = pl.read_csv(CLASSIFIED_CSV, separator=";", infer_schema_length=5000, ignore_errors=True)
+            return _CACHED_DF
+
+        return pl.DataFrame()
 
 
 def _load_summary() -> dict:
@@ -871,11 +886,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     const pageSize = 50;
     let totalRecords = 0;
     let debounceTimer = null;
+    let activeFetchController = null;
+    let activeFetchSeq = 0;
+    const queryCache = new Map();
+    const QUERY_CACHE_MAX = 50;
 
-    async function initCockpit() {
+    function initCockpit() {
       renderTableHead();
-      await fetchColumns();
-      await fetchData();
+      fetchData();
+      fetchColumns();
     }
 
     async function fetchColumns() {
@@ -949,7 +968,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         ensureCol('IS_CANDIDATO_VISTORIA');
         ensureCol('CATEGORIA_DIAGNOSTICA');
         ensureCol('ANOMALY_SCORE');
-        document.getElementById('categorySelect').value = 'CANDIDATOS_A_VISTORIA';
+        setCategorySelectValue('CANDIDATOS_A_VISTORIA');
         clearCustomFilter();
         return;
       } else if (preset === 'new_uc') {
@@ -1126,6 +1145,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return map[col] || col;
     }
 
+    function _applyAnomaliesPayload(json) {
+      totalRecords = json.total || 0;
+      if (json.feeders && json.feeders.length > 0 && currentFeeders.length === 0) {
+        currentFeeders = json.feeders;
+        populateFeeders(currentFeeders);
+      }
+      if (json.categories && json.categories.length > 0 && currentCategories.length === 0) {
+        currentCategories = json.categories;
+        populateCategories(currentCategories);
+      }
+      updateKPIs(json.summary || {}, json.total_all || totalRecords);
+      renderTable(json.data || []);
+    }
+
     async function fetchData() {
       const q = encodeURIComponent(document.getElementById('searchInput').value || '');
       const cat = encodeURIComponent(document.getElementById('categorySelect').value || '');
@@ -1137,37 +1170,58 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         customQuery = `&filter_col=${encodeURIComponent(customFilter.col)}&filter_op=${encodeURIComponent(customFilter.op)}&filter_val=${encodeURIComponent(customFilter.val)}`;
       }
 
+      const url = `/api/v1/anomalies?limit=${pageSize}&offset=${offset}&q=${q}&category=${cat}&feeder=${feeder}${customQuery}`;
+
+      if (activeFetchController) {
+        activeFetchController.abort();
+        activeFetchController = null;
+      }
+      const seq = ++activeFetchSeq;
+
       renderTableHead();
+
+      if (queryCache.has(url)) {
+        const cached = queryCache.get(url);
+        queryCache.delete(url);
+        queryCache.set(url, cached);
+        _applyAnomaliesPayload(cached);
+        return;
+      }
+
       const tbody = document.getElementById('tableBody');
       tbody.innerHTML = `<tr><td colspan="${selectedColumns.length + 1}" style="text-align:center; padding: 24px; color: var(--text-dim)">Carregando UCs...</td></tr>`;
 
+      activeFetchController = new AbortController();
+      const signal = activeFetchController.signal;
+
       try {
-        const url = `/api/v1/anomalies?limit=${pageSize}&offset=${offset}&q=${q}&category=${cat}&feeder=${feeder}${customQuery}`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal });
         const json = await res.json();
-        
-        totalRecords = json.total || 0;
-        if (json.feeders && json.feeders.length > 0 && currentFeeders.length === 0) {
-          currentFeeders = json.feeders;
-          populateFeeders(currentFeeders);
+        if (seq !== activeFetchSeq) return;
+
+        queryCache.set(url, json);
+        if (queryCache.size > QUERY_CACHE_MAX) {
+          const oldestKey = queryCache.keys().next().value;
+          queryCache.delete(oldestKey);
         }
-        if (json.categories && json.categories.length > 0 && currentCategories.length === 0) {
-          currentCategories = json.categories;
-          populateCategories(currentCategories);
-        }
-        updateKPIs(json.summary || {}, json.total_all || totalRecords);
-        renderTable(json.data || []);
+        _applyAnomaliesPayload(json);
       } catch (err) {
+        if (err && err.name === 'AbortError') return;
         console.error(err);
-        tbody.innerHTML = `<tr><td colspan="${selectedColumns.length + 1}" style="text-align:center; padding: 24px; color: var(--danger)">Erro ao carregar dados do servidor.</td></tr>`;
+        if (seq === activeFetchSeq) {
+          tbody.innerHTML = `<tr><td colspan="${selectedColumns.length + 1}" style="text-align:center; padding: 24px; color: var(--danger)">Erro ao carregar dados do servidor.</td></tr>`;
+        }
       }
     }
 
     function populateCategories(categories) {
       const sel = document.getElementById('categorySelect');
       const cur = sel.value;
+      const allCats = categories.includes('CANDIDATOS_A_VISTORIA')
+        ? categories
+        : ['CANDIDATOS_A_VISTORIA', ...categories];
       sel.innerHTML = '<option value="">Todas as Categorias Diagnósticas</option>';
-      categories.forEach(c => {
+      allCats.forEach(c => {
         const icon = getCategoryIcon(c);
         sel.innerHTML += `<option value="${c}">${icon} ${formatCat(c)}</option>`;
       });
@@ -1216,9 +1270,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('kpiTelecom').innerText = telecomCount.toLocaleString();
     }
 
-    function filterByCategory(cat) {
+    function setCategorySelectValue(cat) {
       const sel = document.getElementById('categorySelect');
-      sel.value = cat;
+      if (cat && !Array.from(sel.options).some(o => o.value === cat)) {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.text = `${getCategoryIcon(cat)} ${formatCat(cat)}`;
+        sel.appendChild(opt);
+      }
+      sel.value = cat || '';
+    }
+
+    function filterByCategory(cat) {
+      setCategorySelectValue(cat);
       currentPage = 1;
       fetchData();
     }
@@ -1816,55 +1880,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       loadUcChart(uc, activeDrawerCutoff, 'hourly', 7);
     }
 
-        <div class="detail-section">
-          <div class="detail-title">Contexto Elétrico e Cadastral</div>
-          <div class="kv-grid">
-            <div class="kv-box"><div class="kv-k">Alimentador</div><div class="kv-v">${d.meta__feeder || d.ALIMENTADOR || '-'}</div></div>
-            <div class="kv-box"><div class="kv-k">Posto Operacional (Trafo)</div><div class="kv-v">${d.meta__posto || d.POSTO_OPERACIONAL || '-'}</div></div>
-            <div class="kv-box"><div class="kv-k">Tensão Base</div><div class="kv-v">${d.x__tensao_base || 127} V</div></div>
-            <div class="kv-box"><div class="kv-k">Faseamento</div><div class="kv-v">${d.x__fase_circuito || 'MONO'}</div></div>
-          </div>
-        </div>
-
-        <div class="detail-section">
-          <div class="detail-title">Métricas Comportamentais (30 Dias)</div>
-          <div class="kv-grid">
-            <div class="kv-box"><div class="kv-k">Consumo Diário Mediano</div><div class="kv-v">${Number(d.x__hist_fa_sum_median || 0).toFixed(2)} kWh</div></div>
-            <div class="kv-box"><div class="kv-k">Dispersão Robusta (MAD)</div><div class="kv-v">${Number(d.x__hist_fa_sum_mad || 0).toFixed(2)}</div></div>
-            <div class="kv-box"><div class="kv-k">Inclinação Tendência (Slope)</div><div class="kv-v">${Number(d.x__trend_fa_slope || 0).toFixed(4)}</div></div>
-            <div class="kv-box"><div class="kv-k">Fator de Carga Médio</div><div class="kv-v">${Number(d.x__hist_load_factor_mean || 0).toFixed(2)}</div></div>
-            <div class="kv-box"><div class="kv-k">Desbalanço de Corrente (P90)</div><div class="kv-v">${Number(d.x__hist_current_imbalance_max || 0).toFixed(2)}</div></div>
-            <div class="kv-box"><div class="kv-k">Desbalanço Tensão (P95)</div><div class="kv-v">${Number(d.x__hist_voltage_imbalance_max || 0).toFixed(2)}%</div></div>
-            <div class="kv-box"><div class="kv-k">Reversão Ativa (RA Max)</div><div class="kv-v">${Number(d.x__hist_ra_reversal_ratio_max || 0).toFixed(2)}</div></div>
-            <div class="kv-box"><div class="kv-k">Dias de Reversão</div><div class="kv-v">${d.x__hist_ra_reversal_days || 0} dias</div></div>
-          </div>
-        </div>
-
-        <div class="detail-section">
-          <div class="detail-title">Integridade, Vizinhança Espacial & Ciclo de Vida</div>
-          <div class="kv-grid">
-            <div class="kv-box"><div class="kv-k">Cobertura da UC</div><div class="kv-v">${(Number(d.x__avg_interval_coverage || 0) * 100).toFixed(1)}%</div></div>
-            <div class="kv-box"><div class="kv-k">Cobertura Mediana dos Vizinhos (Trafo/Geo)</div><div class="kv-v">${(Number(d.meta__peer_median_coverage || 0.95) * 100).toFixed(1)}%</div></div>
-            <div class="kv-box"><div class="kv-k">Déficit vs. Vizinhos</div><div class="kv-v">${(Number(d.meta__coverage_deficit_vs_peers || 0) * 100).toFixed(1)}%</div></div>
-            <div class="kv-box"><div class="kv-k">Dias Confiáveis (>70%)</div><div class="kv-v">${d.x__coverage_reliable_days || 0} dias</div></div>
-            <div class="kv-box"><div class="kv-k">Medidores na História da UC</div><div class="kv-v">${d.meta__n_meters_historical || 1} medidor(es)</div></div>
-            <div class="kv-box"><div class="kv-k">Idade do Medidor Atual</div><div class="kv-v">${d.x__meter_age_days || 0} dias</div></div>
-            <div class="kv-box"><div class="kv-k">Troca de Medidor Recente (30d)</div><div class="kv-v">${d.x__meter_changed_30d ? 'SIM' : 'NÃO'}</div></div>
-            <div class="kv-box"><div class="kv-k">Classe Comportamental</div><div class="kv-v">${d.CLASSE_COMPORTAMENTAL || '-'}</div></div>
-            <div class="kv-box"><div class="kv-k">Método de Detecção</div><div class="kv-v">${d.METODO_DETECCAO_APLICADO || '-'}</div></div>
-          </div>
-        </div>
-        <div class="detail-section">
-          <div class="detail-title">Trajetória Longitudinal de Classes entre Cutoffs</div>
-          <div class="kv-box"><div class="kv-k">Evolução Temporal</div><div class="kv-v" style="white-space:normal">${d.TRAJETORIA_CLASSES_TEMPORAL || d.CLASSE_COMPORTAMENTAL || '-'}</div></div>
-        </div>
-      `;
-      document.getElementById('drawerContent').innerHTML = content;
-      document.getElementById('detailDrawer').classList.add('open');
-      document.getElementById('drawerOverlay').classList.add('open');
-      loadUcChart(uc, activeDrawerCutoff, 'daily');
-    }
-
     function closeDrawer() {
       document.getElementById('detailDrawer').classList.remove('open');
       document.getElementById('drawerOverlay').classList.remove('open');
@@ -1925,54 +1940,71 @@ class CockpitHandler(BaseHTTPRequestHandler):
             self._send_json({"columns": cols_info})
             return
 
-        # 3. API: Anomalies & Classified List (Paginated on Server + Query Filter)
+        # 3. API: Anomalies & Classified List (Paginated on Server + Query Filter + LRU Cache)
         if path == "/api/v1/anomalies":
             global _CACHED_FEEDERS, _CACHED_CATEGORIES
+            cat_filter = query.get("category", [""])[0]
+            feeder_filter = query.get("feeder", [""])[0]
+            q_filter = query.get("q", [""])[0].strip().lower()
+            limit = int(query.get("limit", [50])[0])
+            offset = int(query.get("offset", [0])[0])
+            filter_col = query.get("filter_col", [""])[0].strip()
+            filter_op = query.get("filter_op", ["eq"])[0].strip()
+            filter_val = query.get("filter_val", [""])[0].strip()
+
+            cache_key = (cat_filter, feeder_filter, q_filter, filter_col, filter_op, filter_val, offset, limit)
+            with _DATA_LOCK:
+                cached_bytes = _ANOMALIES_CACHE.get(cache_key)
+                if cached_bytes is not None:
+                    _ANOMALIES_CACHE.move_to_end(cache_key)
+                    self._send_json_bytes(cached_bytes)
+                    return
+
             df = _load_data()
             summary = _load_summary()
             if df.is_empty():
                 payload = {"data": [], "total": 0, "summary": summary, "feeders": [], "categories": []}
+                raw_bytes = self._encode_json(payload)
             else:
-                cat_filter = query.get("category", [""])[0]
-                feeder_filter = query.get("feeder", [""])[0]
-                q_filter = query.get("q", [""])[0].strip().lower()
-                limit = int(query.get("limit", [50])[0])
-                offset = int(query.get("offset", [0])[0])
+                with _DATA_LOCK:
+                    if _CACHED_FEEDERS is None:
+                        _CACHED_FEEDERS = sorted([
+                            f for f in (
+                                df.get_column("meta__feeder").drop_nulls().unique().to_list()
+                                if "meta__feeder" in df.columns
+                                else (df.get_column("ALIMENTADOR").drop_nulls().unique().to_list() if "ALIMENTADOR" in df.columns else [])
+                            )
+                            if f and str(f).strip()
+                        ])
 
-                # Dynamic field filters: filter_col, filter_op, filter_val
-                filter_col = query.get("filter_col", [""])[0].strip()
-                filter_op = query.get("filter_op", ["eq"])[0].strip()
-                filter_val = query.get("filter_val", [""])[0].strip()
-
-                if _CACHED_FEEDERS is None:
-                    _CACHED_FEEDERS = sorted([
-                        f for f in (
-                            df.get_column("meta__feeder").drop_nulls().unique().to_list()
-                            if "meta__feeder" in df.columns
-                            else (df.get_column("ALIMENTADOR").drop_nulls().unique().to_list() if "ALIMENTADOR" in df.columns else [])
-                        )
-                        if f and str(f).strip()
-                    ])
-
-                if _CACHED_CATEGORIES is None:
-                    _CACHED_CATEGORIES = sorted([
-                        c for c in (
-                            df.get_column("CATEGORIA_DIAGNOSTICA").drop_nulls().unique().to_list()
-                            if "CATEGORIA_DIAGNOSTICA" in df.columns
-                            else []
-                        )
-                        if c and str(c).strip()
-                    ])
+                    if _CACHED_CATEGORIES is None:
+                        _CACHED_CATEGORIES = sorted([
+                            c for c in (
+                                df.get_column("CATEGORIA_DIAGNOSTICA").drop_nulls().unique().to_list()
+                                if "CATEGORIA_DIAGNOSTICA" in df.columns
+                                else []
+                            )
+                            if c and str(c).strip()
+                        ])
 
                 filtered_df = df
+                sort_candidates = False
                 if cat_filter:
                     if cat_filter == "CANDIDATOS_A_VISTORIA":
+                        sort_candidates = True
                         if "IS_CANDIDATO_VISTORIA" in filtered_df.columns:
                             filtered_df = filtered_df.filter(pl.col("IS_CANDIDATO_VISTORIA") == True)
                         elif "IS_ANOMALY" in filtered_df.columns:
                             filtered_df = filtered_df.filter(pl.col("IS_ANOMALY") == True)
-                        if "DIAS_ANOMALIA_SEGUIDOS" in filtered_df.columns:
-                            filtered_df = filtered_df.sort(["DIAS_ANOMALIA_SEGUIDOS", "ANOMALY_SCORE"], descending=[True, True])
+                            if "CATEGORIA_DIAGNOSTICA" in filtered_df.columns:
+                                filtered_df = filtered_df.filter(
+                                    ~pl.col("CATEGORIA_DIAGNOSTICA").is_in([
+                                        "NORMAL",
+                                        "QUEDA_TELECOM_ISOLADA",
+                                        "QUARENTENA_TELECOM",
+                                        "MEDIDOR_NOVO_QUARENTENA",
+                                    ])
+                                )
                     elif "CATEGORIA_DIAGNOSTICA" in filtered_df.columns:
                         filtered_df = filtered_df.filter(
                             (pl.col("CATEGORIA_DIAGNOSTICA") == cat_filter) |
@@ -2018,6 +2050,12 @@ class CockpitHandler(BaseHTTPRequestHandler):
                     except Exception as ef:
                         print(f"Erro ao aplicar filtro dinâmico {filter_col} {filter_op} {filter_val}: {ef}")
 
+                if sort_candidates:
+                    if "DIAS_ANOMALIA_SEGUIDOS" in filtered_df.columns:
+                        filtered_df = filtered_df.sort(["DIAS_ANOMALIA_SEGUIDOS", "ANOMALY_SCORE"], descending=[True, True])
+                    elif "ANOMALY_SCORE" in filtered_df.columns:
+                        filtered_df = filtered_df.sort("ANOMALY_SCORE", descending=True)
+
                 total_matched = filtered_df.height
 
                 # Fast slice
@@ -2033,8 +2071,13 @@ class CockpitHandler(BaseHTTPRequestHandler):
                     "categories": _CACHED_CATEGORIES,
                     "summary": summary,
                 }
+                raw_bytes = self._encode_json(payload)
+                with _DATA_LOCK:
+                    _ANOMALIES_CACHE[cache_key] = raw_bytes
+                    if len(_ANOMALIES_CACHE) > _ANOMALIES_CACHE_MAX:
+                        _ANOMALIES_CACHE.popitem(last=False)
 
-            self._send_json(payload)
+            self._send_json_bytes(raw_bytes)
             return
 
         # 3. API: Export Data
@@ -2116,7 +2159,7 @@ class CockpitHandler(BaseHTTPRequestHandler):
 
         self.send_error(404, "Not Found")
 
-    def _send_json(self, data: Any):
+    def _encode_json(self, data: Any) -> bytes:
         def _json_default(obj):
             if hasattr(obj, "isoformat"):
                 return obj.isoformat()
@@ -2124,11 +2167,29 @@ class CockpitHandler(BaseHTTPRequestHandler):
                 return obj.item()
             return str(obj)
 
+        return json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8")
+
+    def _send_json_bytes(self, raw_bytes: bytes):
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(raw_bytes)))
         self.end_headers()
-        self.wfile.write(json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8"))
+        self.wfile.write(raw_bytes)
+
+    def _send_json(self, data: Any):
+        self._send_json_bytes(self._encode_json(data))
+
+
+def _prewarm_caches() -> None:
+    """Warm dataset, summary and dashboard stats in background right on startup."""
+    try:
+        df = _load_data()
+        _load_summary()
+        if not df.is_empty():
+            _build_dashboard_stats(df)
+    except Exception as exc:
+        print(f"[Cockpit] Aviso no pre-warm: {exc}")
 
 
 def run_web_cockpit(host: str = "127.0.0.1", port: int = 8050, open_browser: bool = True):
@@ -2136,6 +2197,8 @@ def run_web_cockpit(host: str = "127.0.0.1", port: int = 8050, open_browser: boo
     server_address = (host, port)
     httpd = ThreadingHTTPServer(server_address, CockpitHandler)
     url = f"http://localhost:{port}"
+
+    threading.Thread(target=_prewarm_caches, daemon=True).start()
 
     print(f"\n⚡ Cockpit Analítico AMI rodando em: {url}")
     print("Pressione Ctrl+C para encerrar o servidor.\n")
