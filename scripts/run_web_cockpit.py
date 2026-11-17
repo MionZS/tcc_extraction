@@ -337,7 +337,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       align-items: center;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 250;
     }
     .brand {
       display: flex;
@@ -448,9 +448,70 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       background-color: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
-      overflow: hidden;
+      overflow: visible;
     }
-    .table-responsive { width: 100%; overflow-x: auto; }
+    .table-scroll-top,
+    .table-scroll-sticky {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      height: 16px;
+      background-color: #0d121a;
+      scrollbar-width: thin;
+      scrollbar-color: #475569 #0d121a;
+    }
+    .table-scroll-top {
+      border-bottom: 1px solid var(--card-border);
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+    }
+    .table-scroll-sticky {
+      position: sticky;
+      bottom: 0;
+      z-index: 35;
+      border-top: 1px solid var(--card-border);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .table-scroll-top > div,
+    .table-scroll-sticky > div {
+      height: 1px;
+    }
+    .table-responsive {
+      width: 100%;
+      overflow: auto;
+      max-height: calc(100vh - 280px);
+      min-height: 260px;
+      scrollbar-width: thin;
+      scrollbar-color: #475569 #0d121a;
+    }
+    .table-scroll-top::-webkit-scrollbar,
+    .table-scroll-sticky::-webkit-scrollbar,
+    .table-responsive::-webkit-scrollbar {
+      height: 12px;
+      width: 10px;
+    }
+    .table-scroll-top::-webkit-scrollbar-track,
+    .table-scroll-sticky::-webkit-scrollbar-track,
+    .table-responsive::-webkit-scrollbar-track {
+      background: #0d121a;
+    }
+    .table-scroll-top::-webkit-scrollbar-thumb,
+    .table-scroll-sticky::-webkit-scrollbar-thumb,
+    .table-responsive::-webkit-scrollbar-thumb {
+      background-color: #334155;
+      border-radius: 6px;
+      border: 2px solid #0d121a;
+    }
+    .table-card:hover .table-scroll-top::-webkit-scrollbar-thumb,
+    .table-card:hover .table-scroll-sticky::-webkit-scrollbar-thumb,
+    .table-card:hover .table-responsive::-webkit-scrollbar-thumb {
+      background-color: #475569;
+    }
+    .table-scroll-top::-webkit-scrollbar-thumb:hover,
+    .table-scroll-sticky::-webkit-scrollbar-thumb:hover,
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+      background-color: var(--primary);
+    }
     table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
     th {
       background-color: #121820;
@@ -459,6 +520,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       padding: 12px 14px;
       border-bottom: 1px solid var(--card-border);
       white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
     td {
       padding: 12px 14px;
@@ -504,14 +568,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     /* Drawer */
     .drawer {
       position: fixed;
-      right: -520px;
-      top: 0;
+      right: 0;
+      top: 69px;
       width: 500px;
-      height: 100vh;
+      height: calc(100vh - 69px);
       background-color: var(--card-bg);
       border-left: 1px solid var(--card-border);
       box-shadow: -8px 0 24px rgba(0,0,0,0.5);
-      transition: right 0.3s ease;
+      transform: translateX(100%);
+      visibility: hidden;
+      pointer-events: none;
+      transition: transform 0.25s ease, visibility 0.25s ease;
       z-index: 200;
       overflow-y: auto;
       padding: 24px;
@@ -604,10 +671,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .col-check-item input {
       accent-color: var(--primary);
     }
-    .drawer.open { right: 0; }
+    .drawer.open { transform: translateX(0); visibility: visible; pointer-events: auto; }
     .drawer-overlay {
       position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
+      top: 69px; left: 0; width: 100vw; height: calc(100vh - 69px);
       background: rgba(0,0,0,0.6);
       z-index: 199;
       display: none;
@@ -632,6 +699,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     /* Anomaly Breakdown Dashboard & Interactive UC Chart */
     .drawer { width: min(760px, 95vw) !important; }
     .dash-panel { background: var(--card-bg, #111827); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; }
+    .dash-panel.collapsed { padding: 10px 18px; margin-bottom: 12px; }
+    .dash-panel.collapsed .dash-header { margin-bottom: 0; }
+    .dash-panel.collapsed .dash-grid { display: none; }
     .dash-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
     .dash-title { font-size: 14px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px; }
     .dash-sub { font-size: 12px; color: var(--text-dim); }
@@ -719,7 +789,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <div class="dash-title">📊 Painel Analítico de Anomalias Detectadas (Clique em uma classe para filtrar e abrir o gráfico da UC)</div>
           <div class="dash-sub" id="dashMetaSub">Carregando distribuição por categoria diagnóstica, queda (Slope/CUSUM) e picos (MAD)...</div>
         </div>
-        <button class="chart-btn" onclick="filterFromDashboardCategory('')">Mostrar Todas</button>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="chart-btn" onclick="filterFromDashboardCategory('')">Mostrar Todas</button>
+          <button class="chart-btn" id="btnToggleDash" onclick="toggleDashboardPanel()" title="Recolher ou expandir este painel">✕ Fechar Painel</button>
+        </div>
       </div>
       <div class="dash-grid">
         <div class="dash-bars" id="dashCategoryBars"></div>
@@ -805,8 +878,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <!-- Table Card -->
     <div class="table-card">
-      <div class="table-responsive">
-        <table>
+      <div class="table-scroll-top" id="tableTopScroll" title="Rolagem horizontal rápida da tabela">
+        <div id="tableTopScrollSpacer"></div>
+      </div>
+      <div class="table-responsive" id="tableResponsive">
+        <table id="dataTable">
           <thead id="tableHead">
             <tr>
               <th>UC</th>
@@ -824,6 +900,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <tr><td colspan="9" style="text-align:center; padding: 24px; color: var(--text-dim)">Carregando dados analíticos...</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="table-scroll-sticky" id="tableStickyScroll" title="Rolagem horizontal sempre visível (ou use Shift + Roda do Mouse sobre a tabela)">
+        <div id="tableStickyScrollSpacer"></div>
       </div>
       <div class="pagination">
         <span id="pageInfo">Exibindo 0 de 0 UCs</span>
@@ -891,7 +970,75 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     const queryCache = new Map();
     const QUERY_CACHE_MAX = 50;
 
+    function toggleDashboardPanel(forceCollapsed) {
+      const panel = document.getElementById('anomalyDashboard');
+      const btn = document.getElementById('btnToggleDash');
+      if (!panel) return;
+      const shouldCollapse = typeof forceCollapsed === 'boolean'
+        ? forceCollapsed
+        : !panel.classList.contains('collapsed');
+      panel.classList.toggle('collapsed', shouldCollapse);
+      if (btn) {
+        btn.innerText = shouldCollapse ? '▸ Expandir Painel' : '✕ Fechar Painel';
+      }
+      try { localStorage.setItem('cockpit_dash_collapsed', shouldCollapse ? '1' : '0'); } catch (_) {}
+    }
+
+    function initTableScrollSync() {
+      const topScroll = document.getElementById('tableTopScroll');
+      const stickyScroll = document.getElementById('tableStickyScroll');
+      const mainScroll = document.getElementById('tableResponsive');
+      if (!mainScroll) return;
+
+      let lock = false;
+      const syncFrom = (src) => {
+        if (lock) return;
+        lock = true;
+        const left = src.scrollLeft;
+        if (topScroll && src !== topScroll) topScroll.scrollLeft = left;
+        if (stickyScroll && src !== stickyScroll) stickyScroll.scrollLeft = left;
+        if (src !== mainScroll) mainScroll.scrollLeft = left;
+        requestAnimationFrame(() => { lock = false; });
+      };
+
+      if (topScroll) topScroll.addEventListener('scroll', () => syncFrom(topScroll));
+      if (stickyScroll) stickyScroll.addEventListener('scroll', () => syncFrom(stickyScroll));
+      mainScroll.addEventListener('scroll', () => syncFrom(mainScroll));
+
+      // Permite scroll horizontal de qualquer ponto da tabela com Shift + Roda do Mouse
+      mainScroll.addEventListener('wheel', (e) => {
+        if (e.shiftKey && Math.abs(e.deltaY) > 0) {
+          e.preventDefault();
+          mainScroll.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+
+      window.addEventListener('resize', syncTableScrollWidth);
+    }
+
+    function syncTableScrollWidth() {
+      const table = document.getElementById('dataTable');
+      const topSpacer = document.getElementById('tableTopScrollSpacer');
+      const stickySpacer = document.getElementById('tableStickyScrollSpacer');
+      const topScroll = document.getElementById('tableTopScroll');
+      const stickyScroll = document.getElementById('tableStickyScroll');
+      const mainScroll = document.getElementById('tableResponsive');
+      if (!table || !mainScroll) return;
+      const w = table.scrollWidth + 'px';
+      const needsScroll = table.scrollWidth > mainScroll.clientWidth + 1;
+      if (topSpacer) topSpacer.style.width = w;
+      if (stickySpacer) stickySpacer.style.width = w;
+      if (topScroll) topScroll.style.display = needsScroll ? 'block' : 'none';
+      if (stickyScroll) stickyScroll.style.display = needsScroll ? 'block' : 'none';
+    }
+
     function initCockpit() {
+      try {
+        if (localStorage.getItem('cockpit_dash_collapsed') === '1') {
+          toggleDashboardPanel(true);
+        }
+      } catch (_) {}
+      initTableScrollSync();
       renderTableHead();
       fetchData();
       fetchColumns();
@@ -1405,6 +1552,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('pageInfo').innerText = `Exibindo ${start + 1} a ${Math.min(start + data.length, totalRecords)} de ${totalRecords.toLocaleString()} UCs`;
       document.getElementById('prevBtn').disabled = currentPage === 1;
       document.getElementById('nextBtn').disabled = (start + pageSize) >= totalRecords;
+      requestAnimationFrame(syncTableScrollWidth);
     }
 
     function getBadgeClass(cat) {
@@ -1915,10 +2063,14 @@ class CockpitHandler(BaseHTTPRequestHandler):
 
         # 1. Static HTML
         if path in ("/", "/index.html"):
+            html_bytes = HTML_TEMPLATE.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Content-Length", str(len(html_bytes)))
             self.end_headers()
-            self.wfile.write(HTML_TEMPLATE.encode("utf-8"))
+            self.wfile.write(html_bytes)
             return
 
         # 2. API: Columns introspection for dynamic picker
