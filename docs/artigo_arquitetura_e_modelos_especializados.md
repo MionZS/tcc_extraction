@@ -170,7 +170,7 @@ O experimento opera em duas modalidades integradas:
 
 ### 5.1 O Conjunto de 10 Figuras Demonstrativas Geradas (`output/ml_method_demo/`)
 
-O script [`demo_ml_methods.py`](file:///d:/Projects/tcc_extraction/scripts/demo_ml_methods.py) gera 10 figuras científicas padronizadas (200 DPI) para inserção direta no TCC e no artigo:
+O script [`demo_ml_methods.py`](file:///d:/Projects/tcc_extraction/scripts/demo_ml_methods.py) gera 10 figuras científicas padronizadas (200 DPI) salvas em `output/ml_method_demo/` e sincronizadas automaticamente com `docs/figures/ml_method_demo/` para versionamento e inserção direta no TCC e no artigo:
 
 1. **`01_raw_profiles.png` (Perfis Diários Crus):** Mostra o emaranhado das curvas de carga e como curvas normalizadas ($x_d / \sum x_d$) revelam hábitos distintos que a energia agregada em kWh esconde.
 2. **`02_kmeans_profiles.png` (Clusters K-Means):** Demonstra a separação dos 4 arquétipos com centróides $\mu_k$, dispersão e métricas objetivas (Silhouette Score e Inércia), reforçando que K-Means serve para construir referências comparáveis.

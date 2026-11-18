@@ -31,6 +31,7 @@ from __future__ import annotations
 import gc
 import json
 from pathlib import Path
+import shutil
 import sys
 import time
 import tracemalloc
@@ -59,6 +60,7 @@ from src.utils.censorship import censor_uc_id
 
 # Diretórios de entrada e saída
 OUT_DIR = PROJECT_ROOT / "output" / "ml_method_demo"
+DOCS_FIG_DIR = PROJECT_ROOT / "docs" / "figures" / "ml_method_demo"
 REPORTS_DIR = PROJECT_ROOT / "output" / "reports"
 CLASSIFIED_PARQUET = REPORTS_DIR / "classified_ucs_latest.parquet"
 CLASSIFIED_CSV = REPORTS_DIR / "classified_ucs_latest.csv"
@@ -1283,10 +1285,18 @@ def main() -> None:
     print("\nExportando métricas e profiling em CSV...")
     export_quantitative_metrics(bench, kmeans_res, pca_res, pca_rec_res, if_res, lof_res, ecod_res, comp_res, OUT_DIR)
 
+    # 12. Sincronizar cópia dos artefatos leves em docs/figures/ml_method_demo/
+    DOCS_FIG_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"\nSincronizando figuras e CSVs para {DOCS_FIG_DIR} (versionado via Git)...")
+    for file_path in OUT_DIR.glob("*.*"):
+        shutil.copy2(file_path, DOCS_FIG_DIR / file_path.name)
+    print(f" -> {len(list(OUT_DIR.glob('*.*')))} artefatos sincronizados em {DOCS_FIG_DIR.relative_to(PROJECT_ROOT)}.")
+
     elapsed = time.time() - t_start
     print("\n" + "=" * 80)
     print(f"CONCLUÍDO COM SUCESSO EM {elapsed:.1f} SEGUNDOS!")
     print(f"Todas as 10 figuras e arquivos CSV foram gerados em: {OUT_DIR}")
+    print(f"Cópias para controle de versão prontas em: {DOCS_FIG_DIR}")
     print("=" * 80)
 
 

@@ -3,7 +3,11 @@ config.json
 .venv/
 __pycache__/
 *.pyc
+
+# Ignore general outputs and large parquet/data artifacts
 output/
+!output/ml_method_demo/
+!output/ml_method_demo/**
 
 vault/
 *.txt

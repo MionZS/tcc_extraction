@@ -1,0 +1,7 @@
+method;paradigm;question_answered;n_flagged;flag_rate_pct;top_100_overlap_pct;top_500_overlap_pct;median_score;runtime_fit_ms;peak_ram_mb
+K-Means (Perfis);Clusterização Não-Supervisionada;Quais curvas possuem comportamento semelhante?;0;0.0;-;-;-;441.4;1.577
+PCA Residual;Subespaço Linear / Erro L2;Quem viola a variedade linear dominante?;50;5.0;36;69.8;0.0096;37.03;0.365
+Isolation Forest;Árvores de Isolamento Global;Quem é raro globalmente no hiper-espaço?;50;5.0;72;75.2;0.2623;1931.24;0.859
+Local Outlier Factor (LOF);Densidade Relativa k-NN Local;Quem é estranho em relação aos seus vizinhos?;50;5.0;33;68.6;0.0012;14.29;1.011
+ECOD;Caudas Empíricas Não-Paramétricas;Quem ocupa as caudas das distribuições marginais?;50;5.0;53;82.8;0.1354;1.39;0.102
+Ensemble Especialistas (Composite);Combinação Ponderada com Calibração Empírica;Como integrar evidências ortogonais para priorização de campo?;50;5.0;100.0;100.0;0.4647;1983.95;1.011

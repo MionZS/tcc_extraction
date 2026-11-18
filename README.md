@@ -205,6 +205,8 @@ dataclasses frozen, helper `_log()`. Testes: `pytest tests -q`, `tmp_path`, mock
 
 ### Dicionários e referência de queries
 
+- Artigo de Estudo de Caso Completo (Baseado em Imagens Reais): [`docs/artigo_estudo_de_caso_completo.md`](docs/artigo_estudo_de_caso_completo.md).
+- Artigo Metodológico de Arquitetura e Modelos Especializados: [`docs/artigo_arquitetura_e_modelos_especializados.md`](docs/artigo_arquitetura_e_modelos_especializados.md).
 - Amostra 200 NIOs (legado CSV): [`docs/data_dictionary_sample200.md`](docs/data_dictionary_sample200.md).
 - Queries por fonte: `queries/cis_*` (cadastro), `queries/geo_*` (topologia),
   `queries/mdm_coluna.sql` + `meter_*` (fenômeno), `queries/label_sources/` (rótulos),
