@@ -35,6 +35,7 @@ Saídas:
 
 from __future__ import annotations
 
+import argparse
 import gc
 import json
 from pathlib import Path
@@ -149,7 +150,7 @@ class ECODDetectorDemo:
 # -----------------------------------------------------------------------------
 # 3. CARREGAMENTO E SANEAMENTO DO DATASET REAL (Copel Araucária)
 # -----------------------------------------------------------------------------
-def load_real_benchmark() -> dict[str, Any]:
+def load_real_benchmark(censor_enabled: bool = False) -> dict[str, Any]:
     """Carrega dados 100% REAIS da concessão:
       - Tabela analítica classificada (classified_ucs_latest)
       - Curvas de carga horárias reais (ami_interval / uc_day_features)
@@ -331,6 +332,12 @@ def load_real_benchmark() -> dict[str, Any]:
         "outlier_step_down": idx_step_down,
     }
 
+    def format_uc(raw_uc: str | int) -> str:
+        s = str(raw_uc)
+        if censor_enabled:
+            return censor_uc_id(s)
+        return s
+
     return {
         "t": t_hours,
         "X_raw_24h": real_profiles_24h,
@@ -347,6 +354,8 @@ def load_real_benchmark() -> dict[str, Any]:
         "known_ucs": known_ucs,
         "df_all_count": total_windows_dataset,
         "df_clean_count": df_clean.height,
+        "censor_enabled": censor_enabled,
+        "format_uc": format_uc,
     }
 
 
@@ -485,13 +494,14 @@ def plot_01_raw_profiles(bench: dict[str, Any], out_path: Path) -> None:
         ax1.plot(t, X_raw[idx], color="#64748b", alpha=0.18, linewidth=0.8)
 
     # Destaque de UCs reais arquétipos
+    fmt_uc = bench.get("format_uc", lambda x: str(x))
     idx_norm = case_idx["stable_normal"]
     idx_sol = case_idx["volatile_solar"]
     idx_imb = case_idx["outlier_imbalance"]
 
-    ax1.plot(t, X_raw[idx_norm], color="#2563eb", linewidth=2.2, label=f"UC {censor_uc_id(bench['uc_ids'][idx_norm])} (Residencial Estável)")
-    ax1.plot(t, X_raw[idx_sol], color="#059669", linewidth=2.2, label=f"UC {censor_uc_id(bench['uc_ids'][idx_sol])} (Perfil GD / Solar)")
-    ax1.plot(t, X_raw[idx_imb], color="#dc2626", linewidth=2.2, label=f"UC {censor_uc_id(bench['uc_ids'][idx_imb])} (Carga Atípica / Bypass)")
+    ax1.plot(t, X_raw[idx_norm], color="#2563eb", linewidth=2.2, label=f"UC {fmt_uc(bench['uc_ids'][idx_norm])} (Residencial Estável)")
+    ax1.plot(t, X_raw[idx_sol], color="#059669", linewidth=2.2, label=f"UC {fmt_uc(bench['uc_ids'][idx_sol])} (Perfil GD / Solar)")
+    ax1.plot(t, X_raw[idx_imb], color="#dc2626", linewidth=2.2, label=f"UC {fmt_uc(bench['uc_ids'][idx_imb])} (Carga Atípica / Bypass)")
 
     ax1.set_title("A. Curvas de Carga Reais de Araucária em Magnitude (kW)", fontweight="bold")
     ax1.set_xlabel("Hora do Dia (h)")
@@ -679,8 +689,9 @@ def plot_04_pca_residual(bench: dict[str, Any], pca_res: dict[str, Any], out_pat
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 5), sharey=True)
 
+    fmt_uc = bench.get("format_uc", lambda x: str(x))
     err_norm = residuals[idx_normal]
-    uc_norm_lbl = censor_uc_id(bench["uc_ids"][idx_normal])
+    uc_norm_lbl = fmt_uc(bench["uc_ids"][idx_normal])
     ax1.plot(t, X_norm[idx_normal], color="#0f172a", linewidth=2.2, label=f"Real UC {uc_norm_lbl}")
     ax1.plot(t, X_rec[idx_normal], color="#10b981", linestyle="--", linewidth=2.0, label="Reconstrução $\\hat{x}$")
     ax1.fill_between(t, X_norm[idx_normal], X_rec[idx_normal], color="#10b981", alpha=0.25, label=f"Resíduo $E = {err_norm:.4f}$ (Baixo)")
@@ -692,7 +703,7 @@ def plot_04_pca_residual(bench: dict[str, Any], pca_res: dict[str, Any], out_pat
     ax1.legend(loc="upper right", framealpha=0.9, fontsize=8.5)
 
     err_anom = residuals[idx_structural]
-    uc_anom_lbl = censor_uc_id(bench["uc_ids"][idx_structural])
+    uc_anom_lbl = fmt_uc(bench["uc_ids"][idx_structural])
     ax2.plot(t, X_norm[idx_structural], color="#0f172a", linewidth=2.2, label=f"Real UC {uc_anom_lbl}")
     ax2.plot(t, X_rec[idx_structural], color="#ef4444", linestyle="--", linewidth=2.0, label="Reconstrução $\\hat{x}$")
     ax2.fill_between(t, X_norm[idx_structural], X_rec[idx_structural], color="#ef4444", alpha=0.35, label=f"Resíduo $E = {err_anom:.4f}$ (ELEVADO)")
@@ -909,8 +920,9 @@ def plot_07_ecod(bench: dict[str, Any], out_path: Path) -> dict[str, Any]:
     ecod_scores = (raw_ecod - e_min) / (e_max - e_min + 1e-12)
 
     # Caso selecionado: Injeção GD ou Desequilíbrio
+    fmt_uc = bench.get("format_uc", lambda x: str(x))
     idx_target = case_idx["volatile_solar"]
-    uc_target_lbl = censor_uc_id(bench["uc_ids"][idx_target])
+    uc_target_lbl = fmt_uc(bench["uc_ids"][idx_target])
 
     fig, axes = plt.subplots(2, 2, figsize=(13.5, 8.5))
     axes = axes.flatten()
@@ -1008,8 +1020,9 @@ def plot_08_detector_comparison(
     im = ax1.imshow(mat_data, cmap="YlOrRd", vmin=0, vmax=1.0, aspect="auto")
     plt.colorbar(im, ax=ax1, label="Score Normalizado por Ranking Empírico $z_{i,m} \\in [0, 1]$")
 
+    fmt_uc = bench.get("format_uc", lambda x: str(x))
     det_labels = ["Isolation\nForest", "Local Outlier\nFactor", "ECOD\n(Caudas)", "PCA\nResidual", "Ensemble\nComposto"]
-    case_labels = [f"{lbl}\n({censor_uc_id(bench['uc_ids'][idx])})" for lbl, idx in cases_keys]
+    case_labels = [f"{lbl}\n({fmt_uc(bench['uc_ids'][idx])})" for lbl, idx in cases_keys]
 
     ax1.set_xticks(range(5))
     ax1.set_xticklabels(det_labels, fontsize=8.5, fontweight="bold")
@@ -1130,9 +1143,10 @@ def plot_09_ablation_funnel(bench: dict[str, Any], comp_res: dict[str, Any], out
     jumps = rank_global[idx_in_feeder] - rank_feeder[idx_in_feeder]
     best_jump_idx = idx_in_feeder[np.argmax(jumps)]
 
+    fmt_uc = bench.get("format_uc", lambda x: str(x))
     rg = rank_global[best_jump_idx]
     rf = rank_feeder[best_jump_idx]
-    uc_jump_lbl = censor_uc_id(bench["uc_ids"][best_jump_idx])
+    uc_jump_lbl = fmt_uc(bench["uc_ids"][best_jump_idx])
 
     ax2.scatter(rg, rf, c="#dc2626", s=140, marker="*", edgecolors="#0f172a", linewidth=2.0, label="UC c/ Salto Contextual")
     ax2.annotate(
@@ -1177,9 +1191,11 @@ def plot_10_case_studies(bench: dict[str, Any], comp_res: dict[str, Any], out_pa
     axE = fig.add_subplot(gs[1, 1])
     axF = fig.add_subplot(gs[1, 2])
 
+    fmt_uc = bench.get("format_uc", lambda x: str(x))
+
     # Caso A: UC Normal Típica
     idx_a = case_idx["stable_normal"]
-    lbl_a = censor_uc_id(bench["uc_ids"][idx_a])
+    lbl_a = fmt_uc(bench["uc_ids"][idx_a])
     axA.plot(t, X_raw[idx_a], color="#2563eb", linewidth=2.0)
     axA.set_title(f"Caso A: Normal Típica (UC {lbl_a})\nScore Composto: {s_ensemble[idx_a]:.3f}", fontweight="bold", fontsize=10.0)
     axA.set_ylabel("Demanda (kW)")
@@ -1188,7 +1204,7 @@ def plot_10_case_studies(bench: dict[str, Any], comp_res: dict[str, Any], out_pa
 
     # Caso B: Outlier Multivariado Extremo
     idx_b = case_idx["outlier_multivariate"]
-    lbl_b = censor_uc_id(bench["uc_ids"][idx_b])
+    lbl_b = fmt_uc(bench["uc_ids"][idx_b])
     axB.plot(t, X_raw[idx_b], color="#dc2626", linewidth=2.0)
     axB.set_title(f"Caso B: Anomalia Global (UC {lbl_b})\nScore Composto: {s_ensemble[idx_b]:.3f}", fontweight="bold", fontsize=10.0)
     axB.set_xlabel("Hora do Dia (h)")
@@ -1196,7 +1212,7 @@ def plot_10_case_studies(bench: dict[str, Any], comp_res: dict[str, Any], out_pa
 
     # Caso C: Desequilíbrio de Carga / Bypass de Fase
     idx_c = case_idx["outlier_imbalance"]
-    lbl_c = censor_uc_id(bench["uc_ids"][idx_c])
+    lbl_c = fmt_uc(bench["uc_ids"][idx_c])
     axC.plot(t, X_raw[idx_c], color="#d97706", linewidth=2.0)
     axC.set_title(f"Caso C: Desequilíbrio / Bypass (UC {lbl_c})\nScore Composto: {s_ensemble[idx_c]:.3f}", fontweight="bold", fontsize=10.0)
     axC.set_xlabel("Hora do Dia (h)")
@@ -1204,7 +1220,7 @@ def plot_10_case_studies(bench: dict[str, Any], comp_res: dict[str, Any], out_pa
 
     # Caso D: GD / Fluxo Reverso sem Cadastro
     idx_d = case_idx["volatile_solar"]
-    lbl_d = censor_uc_id(bench["uc_ids"][idx_d])
+    lbl_d = fmt_uc(bench["uc_ids"][idx_d])
     axD.plot(t, X_raw[idx_d], color="#7c3aed", linewidth=2.0)
     axD.set_title(f"Caso D: Injeção GD Não-Cadastrada (UC {lbl_d})\nScore Composto: {s_ensemble[idx_d]:.3f}", fontweight="bold", fontsize=10.0)
     axD.set_ylabel("Demanda (kW)")
@@ -1213,7 +1229,7 @@ def plot_10_case_studies(bench: dict[str, Any], comp_res: dict[str, Any], out_pa
 
     # Caso E: Morfologia Rara / Alto Resíduo PCA
     idx_e = case_idx["outlier_step_down"]
-    lbl_e = censor_uc_id(bench["uc_ids"][idx_e])
+    lbl_e = fmt_uc(bench["uc_ids"][idx_e])
     axE.plot(t, X_raw[idx_e], color="#059669", linewidth=2.0)
     axE.set_title(f"Caso E: Morfologia Rara / Queda (UC {lbl_e})\nScore Composto: {s_ensemble[idx_e]:.3f}", fontweight="bold", fontsize=10.0)
     axE.set_xlabel("Hora do Dia (h)")
@@ -1262,7 +1278,7 @@ def plot_10_case_studies(bench: dict[str, Any], comp_res: dict[str, Any], out_pa
         axF.axhline(base_kwh, color="#2563eb", linestyle="--", linewidth=1.8, label=f"Consumo Mediano ({base_kwh:.1f} kWh)")
         axF.axvline(18, color="#dc2626", linestyle=":", linewidth=2.0, label="Quebra CUSUM")
 
-    axF.set_title(f"Caso F: Dinâmica Longitudinal (UC {censor_uc_id(target_uc_f)})\nQuebra de Patamar Sustentada (CUSUM)", fontweight="bold", fontsize=10.0)
+    axF.set_title(f"Caso F: Dinâmica Longitudinal (UC {fmt_uc(target_uc_f)})\nQuebra de Patamar Sustentada (CUSUM)", fontweight="bold", fontsize=10.0)
     axF.set_xlabel("Dia da Janela Analítica (Dias)")
     axF.set_ylabel("Consumo Diário (kWh)")
     axF.legend(loc="upper right", framealpha=0.9, fontsize=7.5)
@@ -1297,22 +1313,29 @@ def export_quantitative_metrics(
 
     for i in range(n_samples):
         records.append({
-            "uc_id": censor_uc_id(bench["uc_ids"][i]),
+            "final_rank": int(ranks[i]),
+            "uc_id": str(bench["uc_ids"][i]),
+            "uc_id_censored": censor_uc_id(bench["uc_ids"][i]),
             "feeder": str(bench["feeders"][i]),
             "diagnostic_category": bench["categories"][i],
-            "kmeans_cluster": int(kmeans_res["clusters"][i]),
-            "pca_reconstruction_error": round(float(pca_rec_res["residuals"][i]), 5),
+            "composite_score": round(float(s_ens[i]), 4),
             "if_score": round(float(if_res["iso_scores"][i]), 4),
             "lof_score": round(float(lof_res["lof_scores"][i]), 4),
             "ecod_score": round(float(ecod_res["ecod_scores"][i]), 4),
-            "composite_score": round(float(s_ens[i]), 4),
-            "final_rank": int(ranks[i]),
+            "pca_reconstruction_error": round(float(pca_rec_res["residuals"][i]), 5),
+            "kmeans_cluster": int(kmeans_res["clusters"][i]),
+            "consumption_median_kwh": round(float(bench["features"][i, 0]), 2),
+            "cv_window": round(float(bench["features"][i, 1]), 3),
+            "current_imbalance_max": round(float(bench["features"][i, 3]), 3),
+            "reversal_ratio_max": round(float(bench["features"][i, 5]), 3),
+            "trend_fa_slope": round(float(bench["features"][i, 6]), 4),
+            "is_candidate_inspection": bool(bench["is_candidate"][i]),
         })
 
-    metrics_df = pl.DataFrame(records)
+    metrics_df = pl.DataFrame(records).sort("final_rank")
     metrics_path = out_dir / "metrics.csv"
     metrics_df.write_csv(metrics_path, separator=";")
-    print(f" -> Salvo: {metrics_path.name} ({metrics_df.height:,} UCs reais auditadas)")
+    print(f" -> Salvo: {metrics_path.name} ({metrics_df.height:,} UCs reais auditadas, ordenadas por rank de anomalia)")
 
     k_100 = min(100, len(s_ens))
     k_500 = min(500, len(s_ens))
@@ -1409,10 +1432,26 @@ def export_quantitative_metrics(
 # -----------------------------------------------------------------------------
 # 6. EXECUÇÃO PRINCIPAL DO PIPELINE DEMONSTRATIVO REAL
 # -----------------------------------------------------------------------------
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Demonstração Metodológica Completa de ML em Dados Reais (Copel Araucária)."
+    )
+    parser.add_argument(
+        "--censor",
+        action="store_true",
+        help="Habilita máscara/censura LGPD das UCs nas figuras e tabelas (padrão: desativado, exibe UCs reais sem censura).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
+    censor_enabled = args.censor
+
     t_start = time.time()
     print("=" * 80)
     print("DEMONSTRAÇÃO METODOLÓGICA DE ML — 100% BASEADA EM DADOS REAIS DA CONCESSÃO")
+    print(f"Modo: {'Censurado (LGPD)' if censor_enabled else 'Sem Censura / UCs Reais Visíveis'}")
     print("Objetivo: Evidenciar perguntas, efeitos e complementaridade com dados reais.")
     print("=" * 80)
 
@@ -1421,7 +1460,7 @@ def main() -> None:
 
     # 1. Carregar Dataset Real
     print("\n[1/10] Carregando telemetria e atributos reais da Copel Araucária...")
-    bench = load_real_benchmark()
+    bench = load_real_benchmark(censor_enabled=censor_enabled)
 
     # 2. Gerar Figura 01: Perfis Diários Crus
     print("\n[2/10] Gerando Figura 01: Perfis Diários Crus Reais...")
