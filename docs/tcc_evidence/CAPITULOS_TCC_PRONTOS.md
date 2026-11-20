@@ -43,3 +43,30 @@ Este padrão reproduz fidedignamente o rastro pericial de adulteração no padr�
 Na instalação `UC 29113296`, o histórico diário de 30 dias atesta um consumo regular e estável ao redor de $25.45\text{ kWh/dia}$, com $100\%$ de integridade do registrador metrológico acumulador. Todavia, a telemetria horária de 14 dias acusa descarte de pacotes de $50.0\%$ na malha RF mesh ($168/336$ janelas degradadas).
 
 Sem o filtro de qualidade, o algoritmo computaria a soma dos intervalos parciais e geraria um alarme falso de sub-consumo severo. A camada de *Gating de Quarentena* (`meta__telecom_status == "QUARANTINE"`) intervém e bloqueia o despacho de campo (`IS_CANDIDATO_VISTORIA = NÃO`), economizando o deslocamento inútil de viaturas de inspeção e comprovando a imunidade do pipeline a ruídos de telecomunicação.
+
+
+---
+## Adendo Experimental: Avaliação em Novembro/2026
+
+### 3.4 Protocolo de Avaliação Temporal com Dados Reais de Novembro/2026
+A validação do modelo com dados de campo foi executada sobre os cortes temporais de 01/11/2026 a 19/11/2026 da concessão de Araucária (PR). Para mitigar qualquer risco de vazamento temporal (*look-ahead bias*), o conjunto de treino utilizou estritamente os cortes mensais consolidados de Agosto, Setembro e Outubro/2026 (197.083 janelas UC × dia), enquanto a avaliação fora do tempo (*out-of-time* - OOT) foi processada sobre a janela de 30 dias com corte em 19/11/2026 (65,686 unidades consumidoras ativas). Medidores com degradação severa de enlace RF Mesh ou apagões prolongados de telemetria (<70% de cobertura horária em mais de 15 dias) foram compulsoriamente segregados em Quarentena de Telecomunicação.
+
+
+### 4.5 Resultados do Teste Fora do Tempo (OOT - Novembro/2026)
+A inferência do pipeline multi-view especializado sobre o corte de 19/11/2026 produziu um score médio de anomalia de **0.1583**. Do total de 65,686 medidores inteligentes avaliados na rede de baixa e média tensão:
+- **728 instalações** (1.11%) apresentaram score $\ge 0,50$, com desvios elétricos ou de comportamento metrológico;
+- **0 instalações** (0.00%) foram priorizadas como **Candidatos Formais à Vistoria de Campo** após filtragem por persistência temporal e conformidade com perfis operacionais acionáveis;
+- A Baseline com *Isolation Forest* global acusou dispersão excessiva em alimentadores rurais com grande sazonalidade, ao passo que o modelo multi-view conteve os falsos alarmes através da separação entre perdas de pacotes RF e quedas reais de carga.
+
+
+### 4.6 Reconciliação Pericial dos Estudos de Caso (Auditoria Novembro/2026)
+A análise temporal individual confirmou:
+1. **UC 90850700 (Hipótese de Bypass PNT):** Queda de consumo de 18,05 para 5,72 kWh/dia (-68,3%) após 48 h de silêncio de telemetria em 29-30/10/2026. A persistência comprovada do degrau estendeu-se por 20 dias consecutivos até 19/11/2026, constituindo hipótese de intervenção física prioritária para vistoria.
+2. **UC 29113296 (Controle Negativo de Telecom):** A taxa de 50,0% de completude derivou da cadência de amostragem de 10 minutos (6 leituras/h frente ao divisor de 12), sem alteração do consumo real (21,8 kWh/dia), sendo retida em Quarentena Telecom sem abertura espúria de ordem de serviço.
+3. **UC 96905697 (Sazonalidade Comercial):** Ciclicidade de fim de semana (redução de ~65% em sábados/domingos com recuperação imediata na segunda-feira).
+4. **UC 82889805 (Possível GD Não Cadastrada):** Injeção reversa de energia ativa diária entre 11h e 15h nos dias ensolarados.
+
+
+### 5.1 Limitações Metodológicas e Recomendações
+Ressalta-se que a plataforma atua na detecção de desvios físicos e priorização operacional de inspeções. Sem laudos de inspeção em campo (Termo de Ocorrência e Inspeção — TOI), os diagnósticos representam **hipóteses diagnósticas de alta probabilidade física** e **candidatos à vistoria**, não devendo ser denominados 'fraudes confirmadas' ou computados sob métricas de economia realizada até que ocorra a averiguação presencial da distribuidora.
+

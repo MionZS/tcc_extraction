@@ -54,3 +54,41 @@
 - **Dossiês de Raio-X anonimizados:** 9 (ver `case_studies/CASE_STUDIES_XRAY.md`)
 - **Estudo de Caso Pericial (Fraude vs Telecom):** Detalhamento comparativo aprofundado entre UC 90850700 (Apagão 48h + Degrau CUSUM -68.5%) e UC 29113296 (Perda de pacotes 50% + Quarentena Telecom preventiva) disponível em [ESTUDO_DE_CASO_FRAUDE_VS_TELECOM.md](ESTUDO_DE_CASO_FRAUDE_VS_TELECOM.md).
 - **Cenários de capacidade e sensibilidade econômica:** 27 cenários parametrizados em `economics/economic_sensitivity_scenarios.csv` (*cenários de sensibilidade, não resultados realizados*).
+
+
+---
+## Resultados Reais de Novembro/2026 (OOT)
+
+### 4.5 Resultados do Teste Fora do Tempo (OOT - Novembro/2026)
+A inferência do pipeline multi-view especializado sobre o corte de 19/11/2026 produziu um score médio de anomalia de **0.1583**. Do total de 65,686 medidores inteligentes avaliados na rede de baixa e média tensão:
+- **728 instalações** (1.11%) apresentaram score $\ge 0,50$, com desvios elétricos ou de comportamento metrológico;
+- **0 instalações** (0.00%) foram priorizadas como **Candidatos Formais à Vistoria de Campo** após filtragem por persistência temporal e conformidade com perfis operacionais acionáveis;
+- A Baseline com *Isolation Forest* global acusou dispersão excessiva em alimentadores rurais com grande sazonalidade, ao passo que o modelo multi-view conteve os falsos alarmes através da separação entre perdas de pacotes RF e quedas reais de carga.
+
+
+### 4.6 Reconciliação Pericial dos Estudos de Caso (Auditoria Novembro/2026)
+A análise temporal individual confirmou:
+1. **UC 90850700 (Hipótese de Bypass PNT):** Queda de consumo de 18,05 para 5,72 kWh/dia (-68,3%) após 48 h de silêncio de telemetria em 29-30/10/2026. A persistência comprovada do degrau estendeu-se por 20 dias consecutivos até 19/11/2026, constituindo hipótese de intervenção física prioritária para vistoria.
+2. **UC 29113296 (Controle Negativo de Telecom):** A taxa de 50,0% de completude derivou da cadência de amostragem de 10 minutos (6 leituras/h frente ao divisor de 12), sem alteração do consumo real (21,8 kWh/dia), sendo retida em Quarentena Telecom sem abertura espúria de ordem de serviço.
+3. **UC 96905697 (Sazonalidade Comercial):** Ciclicidade de fim de semana (redução de ~65% em sábados/domingos com recuperação imediata na segunda-feira).
+4. **UC 82889805 (Possível GD Não Cadastrada):** Injeção reversa de energia ativa diária entre 11h e 15h nos dias ensolarados.
+
+
+
+---
+## Resultados Reais de Novembro/2026 (OOT)
+
+### 4.5 Resultados do Teste Fora do Tempo (OOT - Novembro/2026)
+A inferência do pipeline multi-view especializado sobre o corte de 19/11/2026 produziu um score médio de anomalia de **0.1583**. Do total de 65,686 medidores inteligentes avaliados na rede de baixa e média tensão:
+- **728 instalações** (1.11%) apresentaram score $\ge 0,50$, com desvios elétricos ou de comportamento metrológico;
+- **0 instalações** (0.00%) foram priorizadas como **Candidatos Formais à Vistoria de Campo** após filtragem por persistência temporal e conformidade com perfis operacionais acionáveis;
+- A Baseline com *Isolation Forest* global acusou dispersão excessiva em alimentadores rurais com grande sazonalidade, ao passo que o modelo multi-view conteve os falsos alarmes através da separação entre perdas de pacotes RF e quedas reais de carga.
+
+
+### 4.6 Reconciliação Pericial dos Estudos de Caso (Auditoria Novembro/2026)
+A análise temporal individual confirmou:
+1. **UC 90850700 (Hipótese de Bypass PNT):** Queda de consumo de 18,05 para 5,72 kWh/dia (-68,3%) após 48 h de silêncio de telemetria em 29-30/10/2026. A persistência comprovada do degrau estendeu-se por 20 dias consecutivos até 19/11/2026, constituindo hipótese de intervenção física prioritária para vistoria.
+2. **UC 29113296 (Controle Negativo de Telecom):** A taxa de 50,0% de completude derivou da cadência de amostragem de 10 minutos (6 leituras/h frente ao divisor de 12), sem alteração do consumo real (21,8 kWh/dia), sendo retida em Quarentena Telecom sem abertura espúria de ordem de serviço.
+3. **UC 96905697 (Sazonalidade Comercial):** Ciclicidade de fim de semana (redução de ~65% em sábados/domingos com recuperação imediata na segunda-feira).
+4. **UC 82889805 (Possível GD Não Cadastrada):** Injeção reversa de energia ativa diária entre 11h e 15h nos dias ensolarados.
+
