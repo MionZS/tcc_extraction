@@ -1,0 +1,11 @@
+CATEGORIA_MEDIDOR_TECNOLOGIA;STATUS_SMART;DESCRICAO_FASEAMENTO;QTD_MEDIDORES;QTD_UCS_DISTINTAS;PERCENTUAL_CIDADE
+Smart Tipo B (Baixa Tensão);Smart Grid (AMI);Monofásico;29677;29677;43.98
+Smart Tipo B (Baixa Tensão);Smart Grid (AMI);Bifásico;25466;25466;37.74
+Smart Tipo B (Baixa Tensão);Smart Grid (AMI);Trifásico;5955;5955;8.82
+Smart Tipo B (Baixa Tensão);Smart Grid (AMI);Monofásico Rural;3083;3083;4.57
+Smart Tipo A (Média/Alta Tensão);Smart Grid (AMI);Trifásico;221;216;0.33
+Convencional Grupo A;Eletromecânico / Convencional;Trifásico;1617;299;2.4
+Convencional Grupo B;Eletromecânico / Convencional;Trifásico;508;355;0.75
+Convencional Grupo B;Eletromecânico / Convencional;Bifásico;370;370;0.55
+Convencional Grupo B;Eletromecânico / Convencional;Monofásico;352;352;0.52
+Convencional Grupo B;Eletromecânico / Convencional;Monofásico Rural;230;230;0.34
