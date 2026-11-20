@@ -1,0 +1,6 @@
+coverage_threshold;eligible_windows;eligible_pct;excluded_windows
+0.5;253876;96.59;8973
+0.6;252511;96.07;10338
+0.7;249165;94.79;13684
+0.8;242279;92.17;20570
+0.9;181486;69.05;81363

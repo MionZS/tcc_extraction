@@ -1,0 +1,41 @@
+{
+  "context_formats": {
+    "uc_context": "parquet",
+    "electrical_hierarchy": "parquet",
+    "meter_history": "parquet"
+  },
+  "uc_context_rows": 69895,
+  "electrical_hierarchy_rows": 69895,
+  "meter_history_rows": 72707,
+  "ucs_distintas_cadastro_medidor": 69895,
+  "nios_distintos_cadastro_medidor": 72661,
+  "ucs_com_multiplos_medidores": 1288,
+  "nios_reutilizados_em_multiplas_ucs": 46,
+  "medidores_removidos_registros": 1480,
+  "alimentadores_distintos_hierarquia": 23,
+  "trafos_postos_distintos": 0,
+  "partitions": {
+    "ami_interval_days": 111,
+    "ami_interval_range": [
+      "2026-08-01",
+      "2026-11-19"
+    ],
+    "uc_day_features_days": 102,
+    "uc_day_features_range": [
+      "2026-08-02",
+      "2026-11-12"
+    ],
+    "uc_window_features_cutoffs": 0
+  },
+  "csv_vs_parquet_classified": {
+    "parquet_rows": 262849,
+    "csv_rows": 262849,
+    "row_diff": 0,
+    "parquet_mb": 7.86,
+    "csv_mb": 55.89
+  },
+  "coverage_mean": 0.9216,
+  "coverage_median": 0.991,
+  "coverage_p10": 0.8457,
+  "reliable_days_median": 30.0
+}

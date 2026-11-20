@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-11-20T14:50:17.122044",
+  "mode": "full",
+  "sample_size": 0,
+  "feeder_filter": null,
+  "start_date": null,
+  "end_date": null,
+  "seed": 42,
+  "censor_uc_ids": true,
+  "git_commit": "2f668f6",
+  "python_version": "3.14.7",
+  "os": "Windows-11-10.0.26300-SP0",
+  "polars_version": "1.41.2",
+  "numpy_version": "2.5.3",
+  "sklearn_version": "1.9.1"
+}

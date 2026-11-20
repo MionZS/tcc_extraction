@@ -1,0 +1,7 @@
+key;label;granularity;denominator;formula;filters;observed_value
+total_unique_ucs;UCs Únicas Analisadas;UC (último cutoff por id__uc_id);Todas as UCs presentes no recorte consolidado;COUNT(DISTINCT id__uc_id);Sem filtro (deduplicado por id__uc_id mantendo último meta__cutoff_date);66099
+total_windows;Janelas Avaliadas (UC × Cutoff);Janela (id__uc_id × meta__cutoff_date);Total de linhas da tabela classificada;COUNT(*);Sem filtro;262849
+ucs_with_anomaly;UCs c/ Anomalia Detectada;UC (último cutoff por id__uc_id);total_unique_ucs;COUNT(DISTINCT id__uc_id WHERE IS_ANOMALY == True no último cutoff);IS_ANOMALY == True;932
+candidatos_vistoria;Candidatos a Vistoria (Campo);UC (último cutoff por id__uc_id);total_unique_ucs;COUNT(DISTINCT id__uc_id WHERE IS_CANDIDATO_VISTORIA == True);IS_CANDIDATO_VISTORIA == True;-
+ucs_possivel_gd;UCs c/ Possível GD Não Cadastrada;UC (último cutoff por id__uc_id);total_unique_ucs;COUNT(DISTINCT id__uc_id WHERE CATEGORIA_DIAGNOSTICA == 'POSSIVEL_GD_NAO_CADASTRADA');CATEGORIA_DIAGNOSTICA == 'POSSIVEL_GD_NAO_CADASTRADA';-
+ucs_quarentena_telecom;UCs em Quarentena Telecom;UC (último cutoff por id__uc_id);total_unique_ucs;COUNT(DISTINCT id__uc_id WHERE CATEGORIA_DIAGNOSTICA IN telecom_categories);CATEGORIA_DIAGNOSTICA IN ('TELECOM_QUARANTINE', 'ANOMALIA_COMUNICACAO_ISOLADA', 'GARGALO_COLETIVO_RF_MESH');-

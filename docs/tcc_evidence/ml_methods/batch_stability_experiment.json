@@ -1,0 +1,6 @@
+{
+  "batch_minmax_mean_abs_shift_after_1pct_trim": 0.0569,
+  "batch_minmax_max_abs_shift_after_1pct_trim": 0.3253,
+  "frozen_reference_shift": 0.0,
+  "interpretation": "A normalização min-max dependente do lote desloca scores quando extremos saem do lote; ancoragem congelada P01-P99 elimina essa dependência."
+}

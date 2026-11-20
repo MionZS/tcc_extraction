@@ -1,0 +1,6 @@
+monthly_inspection_capacity;current_candidate_backlog;months_to_clear_backlog;selectivity_needed_pct
+50;274;5.48;18.2
+100;274;2.74;36.5
+150;274;1.83;54.7
+250;274;1.1;91.2
+500;274;0.55;100.0

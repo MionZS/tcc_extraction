@@ -1,0 +1,691 @@
+{
+  "provenance": {
+    "generated_at": "2026-11-20T14:50:17.122044",
+    "mode": "full",
+    "sample_size": 0,
+    "feeder_filter": null,
+    "start_date": null,
+    "end_date": null,
+    "seed": 42,
+    "censor_uc_ids": true,
+    "git_commit": "2f668f6",
+    "python_version": "3.14.7",
+    "os": "Windows-11-10.0.26300-SP0",
+    "polars_version": "1.41.2",
+    "numpy_version": "2.5.3",
+    "sklearn_version": "1.9.1"
+  },
+  "data_quality": {
+    "context_formats": {
+      "uc_context": "parquet",
+      "electrical_hierarchy": "parquet",
+      "meter_history": "parquet"
+    },
+    "uc_context_rows": 69895,
+    "electrical_hierarchy_rows": 69895,
+    "meter_history_rows": 72707,
+    "ucs_distintas_cadastro_medidor": 69895,
+    "nios_distintos_cadastro_medidor": 72661,
+    "ucs_com_multiplos_medidores": 1288,
+    "nios_reutilizados_em_multiplas_ucs": 46,
+    "medidores_removidos_registros": 1480,
+    "alimentadores_distintos_hierarquia": 23,
+    "trafos_postos_distintos": 0,
+    "partitions": {
+      "ami_interval_days": 111,
+      "ami_interval_range": [
+        "2026-08-01",
+        "2026-11-19"
+      ],
+      "uc_day_features_days": 102,
+      "uc_day_features_range": [
+        "2026-08-02",
+        "2026-11-12"
+      ],
+      "uc_window_features_cutoffs": 0
+    },
+    "csv_vs_parquet_classified": {
+      "parquet_rows": 262849,
+      "csv_rows": 262849,
+      "row_diff": 0,
+      "parquet_mb": 7.86,
+      "csv_mb": 55.89
+    },
+    "coverage_mean": 0.9216,
+    "coverage_median": 0.991,
+    "coverage_p10": 0.8457,
+    "reliable_days_median": 30.0
+  },
+  "pipeline": {
+    "n_run_manifests_found": 7,
+    "controlled_benchmark": {
+      "benchmark_executed": true,
+      "dataset_rows": 262849,
+      "source_mb": 7.86,
+      "eager_read_write_sec": 0.1487,
+      "lazy_sink_parquet_sec": 0.1232,
+      "eager_throughput_rows_sec": 1767748,
+      "lazy_throughput_rows_sec": 2133447
+    }
+  },
+  "cockpit": {
+    "total_windows": 262849,
+    "total_unique_ucs": 66099,
+    "windows_with_anomaly": 2629,
+    "ucs_with_anomaly": 932,
+    "anomaly_rate_ucs_pct": 1.41,
+    "anomaly_rate_windows_pct": 1.0,
+    "candidatos_vistoria_ucs": 274,
+    "candidatos_vistoria_windows": 969,
+    "possivel_gd_ucs": 201,
+    "possivel_gd_windows": 704,
+    "quarentena_telecom_ucs": 2939,
+    "quarentena_telecom_windows": 10422,
+    "reference_cutoff_min": "2026-08-31",
+    "reference_cutoff_max": "2026-11-04"
+  },
+  "ml_methods": {
+    "eval_cohort_size": 66099,
+    "clean_train_size": 62766,
+    "n_pure_electrical_features": 16,
+    "feature_cols": [
+      "x__hist_fa_sum_median",
+      "x__hist_fa_sum_mad",
+      "x__hist_ra_reversal_days",
+      "x__hist_ra_reversal_ratio_max",
+      "x__hist_load_factor_mean",
+      "x__hist_voltage_imbalance_max",
+      "x__hist_current_imbalance_max",
+      "x__trend_fa_slope",
+      "x__fa_cv_window",
+      "x__zero_consumption_flag",
+      "x__tensao_base",
+      "x__demanda",
+      "x__consumo_estm",
+      "x__pot_inst_kva",
+      "x__tensao_alimentador",
+      "x__tensao_se"
+    ],
+    "fit_runtime_ms": 5868.55,
+    "peak_ram_mb": 57.163,
+    "stability": {
+      "batch_minmax_mean_abs_shift_after_1pct_trim": 0.0569,
+      "batch_minmax_max_abs_shift_after_1pct_trim": 0.3253,
+      "frozen_reference_shift": 0.0,
+      "interpretation": "A normalização min-max dependente do lote desloca scores quando extremos saem do lote; ancoragem congelada P01-P99 elimina essa dependência."
+    },
+    "traceable_uc": {
+      "uc_id": "973***76",
+      "feeder": "Chapada",
+      "cutoff_date": "2026-11-04",
+      "pure_electrical_features": {
+        "x__hist_fa_sum_median": 351.5725,
+        "x__hist_fa_sum_mad": 19.8475,
+        "x__hist_ra_reversal_days": 1.0,
+        "x__hist_ra_reversal_ratio_max": 1.0,
+        "x__hist_load_factor_mean": 0.6717,
+        "x__hist_voltage_imbalance_max": 1.0625,
+        "x__hist_current_imbalance_max": 1.2548,
+        "x__trend_fa_slope": 3.3907,
+        "x__fa_cv_window": 0.0564,
+        "x__zero_consumption_flag": 0.0,
+        "x__tensao_base": 127.0,
+        "x__demanda": 0.0,
+        "x__consumo_estm": 0.0,
+        "x__pot_inst_kva": 225.0,
+        "x__tensao_alimentador": 13.8,
+        "x__tensao_se": 69.0
+      },
+      "individual_detector_scores": {
+        "iso_forest": 0.9371,
+        "lof": 0.0,
+        "ecod": 0.96,
+        "copod": 0.9168,
+        "hbos": 0.8232,
+        "pca": 0.654
+      },
+      "weights_applied": {
+        "iso_forest": 0.22,
+        "lof": 0.2,
+        "ecod": 0.18,
+        "copod": 0.18,
+        "hbos": 0.1,
+        "pca": 0.12
+      },
+      "prodist_rule_violation_flag": true,
+      "composite_consensus_score": 0.8548,
+      "coverage_gate_passed": true,
+      "assigned_category_in_lake": "POSSIVEL_GD_NAO_CADASTRADA",
+      "rank_in_evaluated_cohort": 1,
+      "cohort_size": 66099
+    }
+  },
+  "eda": {
+    "figures_generated": 12,
+    "items": [
+      {
+        "id": "01",
+        "file": "01_ucs_por_alimentador.png",
+        "csv": "01_ucs_por_alimentador.csv",
+        "title": "Distribuição de UCs Únicas por Alimentador",
+        "method": "Contagem deduplicada por `id__uc_id` agrupada por `meta__feeder`.",
+        "interpretation": "Total de 19 alimentadores mapeados; maior circuito concentra 8,810 UCs.",
+        "limitations": "UCs sem vínculo geográfico aparecem agrupadas como 'Sem Alimentador'."
+      },
+      {
+        "id": "02",
+        "file": "02_ucs_nios_historicos.png",
+        "csv": "02_ucs_nios_historicos.csv",
+        "title": "Relação Histórica UC × NIOs",
+        "method": "Contagem de `NIO` distintos por `UC` em `meter_installation_history`.",
+        "interpretation": "Identificadas 1,288 UCs com troca/múltiplos medidores históricos, justificando a reconciliação temporal UC–NIO.",
+        "limitations": "Restrito ao histórico de instalações disponível na extração CIS/ORCA."
+      },
+      {
+        "id": "03",
+        "file": "03_cobertura_temporal_populacao.png",
+        "csv": "03_cobertura_temporal_populacao.csv",
+        "title": "Cobertura Temporal da População",
+        "method": "Histograma de `x__avg_interval_coverage` na última janela de cada UC.",
+        "interpretation": "Mediana de cobertura de 99.3%, evidenciando cauda degradada abaixo de 70%.",
+        "limitations": "Mede completude de entrega de pacotes, não acurácia metrológica."
+      },
+      {
+        "id": "04",
+        "file": "04_calendario_integridade_real.png",
+        "csv": "04_calendario_integridade_real.csv",
+        "title": "Calendário Real de Integridade das Partições",
+        "method": "Varredura das partições Hive em `output/features/uc_day_features`.",
+        "interpretation": "Continuidade verificada em 102 dias entre 2026-08-02 e 2026-11-12.",
+        "limitations": "Tamanho em disco reflete volume comprimido Zstd por dia."
+      },
+      {
+        "id": "05",
+        "file": "05_distribuicao_consumo_diario.png",
+        "csv": "05_distribuicao_consumo_diario.csv",
+        "title": "Distribuição de Consumo Diário",
+        "method": "Quantis e histogramas linear e logarítmico de `x__hist_fa_sum_median`.",
+        "interpretation": "Forte assimetria à direita: mediana 4.94 kWh/dia vs P99 55.06 kWh/dia, justificando uso de RobustScaler e estimadores não-paramétricos.",
+        "limitations": "Representa energia ativa direta (FA) sem somar energia reativa."
+      },
+      {
+        "id": "06",
+        "file": "06_curvas_carga_por_perfil.png",
+        "csv": "06_curvas_carga_por_perfil.csv",
+        "title": "Curvas de Carga Horárias Normalizadas",
+        "method": "Medianas horárias reais extraídas de `ami_interval` e normalizadas por soma unitária.",
+        "interpretation": "Evidencia diversidade entre picos noturnos residenciais, carga contínua e perfis diurnos.",
+        "limitations": "Amostra restrita às UCs com partições intervalares locais disponíveis."
+      },
+      {
+        "id": "07",
+        "file": "07_variabilidade_dispersao_robusta.png",
+        "csv": "07_variabilidade_dispersao_robusta.csv",
+        "title": "Variabilidade e Dispersão Robusta (MAD vs CV)",
+        "method": "Dispersão bivariada de `x__hist_fa_sum_median` vs `x__hist_fa_sum_mad` colorida por `x__fa_cv_window`.",
+        "interpretation": "Demonstra que UCs com mesmo consumo mediano exibem amplitudes de MAD e CV radicalmente distintas.",
+        "limitations": "Eixos truncados no gráfico para legibilidade do núcleo populacional."
+      },
+      {
+        "id": "08",
+        "file": "08_magnitude_vs_morfologia.png",
+        "csv": "08_magnitude_vs_morfologia.csv",
+        "title": "Diferença entre Magnitude e Formato",
+        "method": "Comparação horária direta de duas UCs reais com energia diária equivalente (~19-20 kWh/dia).",
+        "interpretation": "Refuta regras unidimensionais baseadas apenas em kWh mensal; exige métricas de forma e dispersão.",
+        "limitations": "Caso ilustrativo em par contrastante específico."
+      },
+      {
+        "id": "09",
+        "file": "09_distribuicao_dias_atipicos.png",
+        "csv": "09_distribuicao_dias_atipicos.csv",
+        "title": "Distribuição de Dias Atípicos Consecutivos",
+        "method": "Contagem de `DIAS_ANOMALIA_SEGUIDOS > 0` na população deduplicada.",
+        "interpretation": "Permite separar eventos transitórios de desvios persistentes prioritários para campo.",
+        "limitations": "Limitado ao horizonte da janela de 30 dias."
+      },
+      {
+        "id": "10",
+        "file": "10_distribuicao_scores_especialistas.png",
+        "csv": "10_distribuicao_scores_especialistas.csv",
+        "title": "Distribuição dos Scores por Especialista",
+        "method": "Densidade empírica dos scores [0,1] dos detectores do `CompositeAnomalyDetector`.",
+        "interpretation": "Mostra diferenças de calibração entre escalas lineares (PCA), densidade (LOF) e caudas (ECOD/COPOD).",
+        "limitations": "Normalização min-max altera amplitude relativa conforme extremos do lote."
+      },
+      {
+        "id": "11",
+        "file": "11_concentracao_anomalias_alimentador.png",
+        "csv": "11_concentracao_anomalias_alimentador.csv",
+        "title": "Concentração de Anomalias por Alimentador",
+        "method": "Razão `ucs_anomalas / total_ucs` por alimentador (mín. 20 UCs).",
+        "interpretation": "Evidencia heterogeneidade espacial entre circuitos, motivando modelos contextualizados por alimentador.",
+        "limitations": "Taxa reflete anomalias detectadas pelo modelo, não fraudes confirmadas em campo."
+      },
+      {
+        "id": "12",
+        "file": "12_elegiveis_vs_nao_elegiveis.png",
+        "csv": "12_elegiveis_vs_nao_elegiveis.csv",
+        "title": "Diferenças entre Populações Elegíveis e Inelegíveis",
+        "method": "Comparação estatística entre UCs com cobertura >= 70% e < 70%.",
+        "interpretation": "Quantifica o perfil das UCs isoladas pelo gating de comunicação para evitar viés de seleção silencioso.",
+        "limitations": "UCs com cobertura muito baixa podem ter estimativa de consumo enviesada pelos poucos dias válidos."
+      }
+    ]
+  },
+  "gating": {
+    "rows": [
+      {
+        "coverage_threshold": 0.0,
+        "eligible_ucs": 66099,
+        "eligible_pct": 100.0,
+        "excluded_ucs": 0,
+        "candidates_retained": 274,
+        "candidates_excluded": 0,
+        "median_score_all": 0.1827,
+        "p95_score_all": 0.3734,
+        "spearman_vs_no_gating": 1.0,
+        "top5pct_jaccard_vs_no_gating": 1.0
+      },
+      {
+        "coverage_threshold": 0.5,
+        "eligible_ucs": 63554,
+        "eligible_pct": 96.15,
+        "excluded_ucs": 2545,
+        "candidates_retained": 274,
+        "candidates_excluded": 0,
+        "median_score_all": 0.1789,
+        "p95_score_all": 0.372,
+        "spearman_vs_no_gating": 0.9986,
+        "top5pct_jaccard_vs_no_gating": 0.873
+      },
+      {
+        "coverage_threshold": 0.6,
+        "eligible_ucs": 63178,
+        "eligible_pct": 95.58,
+        "excluded_ucs": 2921,
+        "candidates_retained": 274,
+        "candidates_excluded": 0,
+        "median_score_all": 0.1792,
+        "p95_score_all": 0.3762,
+        "spearman_vs_no_gating": 0.9985,
+        "top5pct_jaccard_vs_no_gating": 0.838
+      },
+      {
+        "coverage_threshold": 0.7,
+        "eligible_ucs": 62766,
+        "eligible_pct": 94.96,
+        "excluded_ucs": 3333,
+        "candidates_retained": 242,
+        "candidates_excluded": 32,
+        "median_score_all": 0.1783,
+        "p95_score_all": 0.3735,
+        "spearman_vs_no_gating": 0.9979,
+        "top5pct_jaccard_vs_no_gating": 0.823
+      },
+      {
+        "coverage_threshold": 0.8,
+        "eligible_ucs": 62189,
+        "eligible_pct": 94.08,
+        "excluded_ucs": 3910,
+        "candidates_retained": 233,
+        "candidates_excluded": 41,
+        "median_score_all": 0.1799,
+        "p95_score_all": 0.3707,
+        "spearman_vs_no_gating": 0.998,
+        "top5pct_jaccard_vs_no_gating": 0.814
+      },
+      {
+        "coverage_threshold": 0.9,
+        "eligible_ucs": 60214,
+        "eligible_pct": 91.1,
+        "excluded_ucs": 5885,
+        "candidates_retained": 218,
+        "candidates_excluded": 56,
+        "median_score_all": 0.1806,
+        "p95_score_all": 0.3743,
+        "spearman_vs_no_gating": 0.9981,
+        "top5pct_jaccard_vs_no_gating": 0.784
+      }
+    ]
+  },
+  "behavior": {
+    "clusters": [
+      {
+        "cluster_id": 0,
+        "ucs_count": 34,
+        "median_kwh": 10.25,
+        "median_cv": 0.179,
+        "median_lf": 0.093
+      },
+      {
+        "cluster_id": 1,
+        "ucs_count": 1305,
+        "median_kwh": 4.85,
+        "median_cv": 0.141,
+        "median_lf": 0.077
+      },
+      {
+        "cluster_id": 2,
+        "ucs_count": 2,
+        "median_kwh": 585.11,
+        "median_cv": 0.026,
+        "median_lf": 0.665
+      },
+      {
+        "cluster_id": 3,
+        "ucs_count": 159,
+        "median_kwh": 3.82,
+        "median_cv": 0.092,
+        "median_lf": 0.382
+      }
+    ],
+    "heatmap_ucs_plotted": 12,
+    "cpd_events_detected": 2
+  },
+  "ablation": {
+    "stages": [
+      {
+        "stage": "M0: Janelas Brutas (UC × Cutoff)",
+        "count": 262849,
+        "pct_of_m1": 397.66,
+        "gap_rate_pct": "-"
+      },
+      {
+        "stage": "M1: Saneamento Temporal (UCs Únicas)",
+        "count": 66099,
+        "pct_of_m1": 100.0,
+        "gap_rate_pct": 5.04
+      },
+      {
+        "stage": "M2: Gating Telecom (Cobertura >= 70%)",
+        "count": 62766,
+        "pct_of_m1": 94.96,
+        "gap_rate_pct": 0.0
+      },
+      {
+        "stage": "M3: Contextualização Topológica (Alimentador)",
+        "count": 58632,
+        "pct_of_m1": 88.7,
+        "gap_rate_pct": 0.0
+      },
+      {
+        "stage": "M4: Anomalias Elétricas Ativas",
+        "count": 242,
+        "pct_of_m1": 0.37,
+        "gap_rate_pct": 74.03
+      },
+      {
+        "stage": "M5: Candidatos Prioritários (Persistência + Regras)",
+        "count": 274,
+        "pct_of_m1": 0.41,
+        "gap_rate_pct": 11.68
+      }
+    ],
+    "gap_rate_unfiltered_anom_pct": 74.03,
+    "gap_rate_m5_pct": 11.68
+  },
+  "case_studies": {
+    "cases_count": 8,
+    "cases": [
+      {
+        "title": "Caso 1: Operação Regular",
+        "uc_id": "753***95",
+        "n_nios_history": 2,
+        "feeder": "Fonte Nova",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.9856,
+        "median_kwh": 5.277,
+        "mad_kwh": 0.748,
+        "cv_window": 0.1391,
+        "slope_kwh_day": 0.004,
+        "current_imbalance_max": 0.0,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.0012,
+        "dias_anomalia_seguidos": 0,
+        "categoria_hipotese": "REGULAR",
+        "is_candidato_vistoria": false,
+        "cusum_step_change": {
+          "index": 14,
+          "date": "2026-10-28",
+          "pre_median": 4.856,
+          "post_median": 6.154,
+          "delta_abs": 1.298,
+          "delta_pct": 26.73,
+          "cusum_peak": 7.6195,
+          "direction": "AUMENTO_DEGRAU"
+        },
+        "plot_file": "case_01_753xxx95.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 2: Anomalia Multivariada Global",
+        "uc_id": "670***50",
+        "n_nios_history": 10,
+        "feeder": "Fonte Nova",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.9664,
+        "median_kwh": 139.592,
+        "mad_kwh": 2.818,
+        "cv_window": 0.0202,
+        "slope_kwh_day": -0.4916,
+        "current_imbalance_max": 0.1359,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.5784,
+        "dias_anomalia_seguidos": 7,
+        "categoria_hipotese": "ANOMALIA_MULTIVARIADA",
+        "is_candidato_vistoria": true,
+        "cusum_step_change": null,
+        "plot_file": "case_02_670xxx50.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 3: Desequilíbrio / Possível Bypass",
+        "uc_id": "114****04",
+        "n_nios_history": 4,
+        "feeder": null,
+        "cutoff_date": "2026-08-31",
+        "avg_coverage": 0.6021,
+        "median_kwh": 216.936,
+        "mad_kwh": 20.165,
+        "cv_window": 0.0929,
+        "slope_kwh_day": -8.526,
+        "current_imbalance_max": 1.0,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.6518,
+        "dias_anomalia_seguidos": 7,
+        "categoria_hipotese": "DESEQUILIBRIO_CARGA_OU_BYPASS",
+        "is_candidato_vistoria": true,
+        "cusum_step_change": null,
+        "plot_file": null,
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 4: Possível GD Não Cadastrada (Fluxo Reverso)",
+        "uc_id": "908***00",
+        "n_nios_history": 2,
+        "feeder": "Oleos Brasil",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.9111,
+        "median_kwh": 17.16,
+        "mad_kwh": 4.576,
+        "cv_window": 0.2651,
+        "slope_kwh_day": -0.1961,
+        "current_imbalance_max": 1.4035,
+        "ra_reversal_ratio_max": 0.4298,
+        "anomaly_score": 0.5412,
+        "dias_anomalia_seguidos": 93,
+        "categoria_hipotese": "POSSIVEL_GD_NAO_CADASTRADA",
+        "is_candidato_vistoria": true,
+        "cusum_step_change": {
+          "index": 15,
+          "date": "2026-10-31",
+          "pre_median": 17.923,
+          "post_median": 5.686,
+          "delta_abs": -12.237,
+          "delta_pct": -68.28,
+          "cusum_peak": 56.9019,
+          "direction": "QUEDA_DEGRAU"
+        },
+        "plot_file": "case_04_908xxx00.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 5: Degrau Descendente / Queda Sustentada",
+        "uc_id": "216***98",
+        "n_nios_history": 2,
+        "feeder": "Van Leer",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.6069,
+        "median_kwh": 365.1,
+        "mad_kwh": 24.61,
+        "cv_window": 0.0674,
+        "slope_kwh_day": -1.8687,
+        "current_imbalance_max": 0.3503,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.6182,
+        "dias_anomalia_seguidos": 1,
+        "categoria_hipotese": "DEGRAU_DESCENDENTE_CONSUMO",
+        "is_candidato_vistoria": true,
+        "cusum_step_change": null,
+        "plot_file": "case_05_216xxx98.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 6: Medidor Travado / Consumo Zero",
+        "uc_id": "721***08",
+        "n_nios_history": 2,
+        "feeder": "Gonvarri",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.606,
+        "median_kwh": 0.0,
+        "mad_kwh": 0.0,
+        "cv_window": 0.0,
+        "slope_kwh_day": 0.0,
+        "current_imbalance_max": 0.0,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.5436,
+        "dias_anomalia_seguidos": 3,
+        "categoria_hipotese": "MEDIDOR_TRAVADO_OU_CONSUMO_ZERO",
+        "is_candidato_vistoria": true,
+        "cusum_step_change": null,
+        "plot_file": "case_06_721xxx08.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 7: Falha / Quarentena de Telecomunicação",
+        "uc_id": "255***30",
+        "n_nios_history": 2,
+        "feeder": "Campestre",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.0,
+        "median_kwh": 0.0,
+        "mad_kwh": 0.0,
+        "cv_window": 0.0,
+        "slope_kwh_day": 0.0,
+        "current_imbalance_max": 0.0,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.3058,
+        "dias_anomalia_seguidos": 0,
+        "categoria_hipotese": "TELECOM_QUARANTINE",
+        "is_candidato_vistoria": false,
+        "cusum_step_change": null,
+        "plot_file": "case_07_255xxx30.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      },
+      {
+        "title": "Caso 8: Alta Dispersão com Consumo Médio Normal (116781157)",
+        "uc_id": "116****57",
+        "n_nios_history": 2,
+        "feeder": "CSN",
+        "cutoff_date": "2026-11-04",
+        "avg_coverage": 0.9944,
+        "median_kwh": 19.224,
+        "mad_kwh": 16.564,
+        "cv_window": 0.8572,
+        "slope_kwh_day": 1.1269,
+        "current_imbalance_max": 1.0,
+        "ra_reversal_ratio_max": 0.0,
+        "anomaly_score": 0.4963,
+        "dias_anomalia_seguidos": 0,
+        "categoria_hipotese": "REGULAR",
+        "is_candidato_vistoria": false,
+        "cusum_step_change": null,
+        "plot_file": "case_08_116xxxx57.png",
+        "nota_epistemologica": "Hipótese diagnóstica automática baseada em telemetria; não constitui confirmação de irregularidade sem inspeção física."
+      }
+    ]
+  },
+  "operations_economics": {
+    "operations": {
+      "cutoffs": [
+        {
+          "cutoff_date": "2026-08-31",
+          "total_candidates": 330,
+          "new_candidates": 330,
+          "persistent_candidates": 0,
+          "reincident_candidates": 0,
+          "resolved_since_prev": 0
+        },
+        {
+          "cutoff_date": "2026-09-30",
+          "total_candidates": 126,
+          "new_candidates": 25,
+          "persistent_candidates": 101,
+          "reincident_candidates": 0,
+          "resolved_since_prev": 229
+        },
+        {
+          "cutoff_date": "2026-10-31",
+          "total_candidates": 242,
+          "new_candidates": 87,
+          "persistent_candidates": 87,
+          "reincident_candidates": 68,
+          "resolved_since_prev": 39
+        },
+        {
+          "cutoff_date": "2026-11-04",
+          "total_candidates": 271,
+          "new_candidates": 43,
+          "persistent_candidates": 207,
+          "reincident_candidates": 21,
+          "resolved_since_prev": 35
+        }
+      ],
+      "capacity_scenarios": [
+        {
+          "monthly_inspection_capacity": 50,
+          "current_candidate_backlog": 274,
+          "months_to_clear_backlog": 5.48,
+          "selectivity_needed_pct": 18.2
+        },
+        {
+          "monthly_inspection_capacity": 100,
+          "current_candidate_backlog": 274,
+          "months_to_clear_backlog": 2.74,
+          "selectivity_needed_pct": 36.5
+        },
+        {
+          "monthly_inspection_capacity": 150,
+          "current_candidate_backlog": 274,
+          "months_to_clear_backlog": 1.83,
+          "selectivity_needed_pct": 54.7
+        },
+        {
+          "monthly_inspection_capacity": 250,
+          "current_candidate_backlog": 274,
+          "months_to_clear_backlog": 1.1,
+          "selectivity_needed_pct": 91.2
+        },
+        {
+          "monthly_inspection_capacity": 500,
+          "current_candidate_backlog": 274,
+          "months_to_clear_backlog": 0.55,
+          "selectivity_needed_pct": 100.0
+        }
+      ]
+    },
+    "economics_scenarios_generated": 27,
+    "pilot_target_note": "40% slot substitution and +5pp yield are strictly pilot targets, not measured outcomes."
+  }
+}

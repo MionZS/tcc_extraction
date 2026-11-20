@@ -30,6 +30,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.eda.cockpit_metrics import (
+    compute_reconciled_kpis,
+    deduplicate_latest_uc,
+    filter_cockpit_dataframe,
+)
 from src.eda.uc_timeseries import load_uc_daily_timeseries, load_uc_hourly_timeseries
 
 BASE_DIR = PROJECT_ROOT / "output"
@@ -130,10 +135,7 @@ def _build_dashboard_stats(df: pl.DataFrame) -> dict:
             if c is not None
         ]
         work = df.select(needed_cols) if needed_cols else df
-        if uc_col and cutoff_col:
-            work = work.sort(cutoff_col).unique(subset=[uc_col], keep="last")
-        elif uc_col:
-            work = work.unique(subset=[uc_col], keep="last")
+        work = deduplicate_latest_uc(work)
         total_unique_ucs = int(work.height)
 
         total_anomalies = (
@@ -243,11 +245,13 @@ def _build_dashboard_stats(df: pl.DataFrame) -> dict:
                     "rate_pct": round((an_f / max(tot_f, 1)) * 100.0, 2),
                 })
 
+        reconciled = compute_reconciled_kpis(df)
         _CACHED_DASHBOARD = {
             "total_rows": total_rows,
             "total_unique_ucs": total_unique_ucs,
             "total_anomalies": total_anomalies,
             "anomaly_rate_pct": round((total_anomalies / max(total_unique_ucs, 1)) * 100.0, 3),
+            "reconciled_kpis": reconciled,
             "signal_breakdown": {
                 "candidatos_vistoria": cand_cnt,
                 "drop_slope_neg_anomalies": drop_signal_cnt,
@@ -758,27 +762,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </header>
 
   <div class="container">
-    <!-- Top KPI Cards -->
+    <!-- Top KPI Cards (Reconciled by Granularity) -->
     <div class="metrics-grid" id="kpiGrid">
       <div class="metric-card">
-        <span class="metric-label">Total UCs Analisadas</span>
+        <span class="metric-label">UCs Únicas Analisadas</span>
         <span class="metric-value" id="kpiTotal">-</span>
-        <span class="metric-sub">Araucária Completa</span>
+        <span class="metric-sub" id="kpiTotalSub">Carregando janelas...</span>
       </div>
       <div class="metric-card">
-        <span class="metric-label">Anomalias Confirmadas</span>
+        <span class="metric-label">UCs c/ Anomalia Detectada</span>
         <span class="metric-value" style="color: var(--danger)" id="kpiAnom">-</span>
         <span class="metric-sub" id="kpiAnomRate">-</span>
       </div>
       <div class="metric-card">
-        <span class="metric-label">Possível GD Clandestina</span>
+        <span class="metric-label">UCs c/ Possível GD</span>
         <span class="metric-value" style="color: var(--solar)" id="kpiSolar">-</span>
-        <span class="metric-sub">Fluxo Reverso s/ Cadastro</span>
+        <span class="metric-sub" id="kpiSolarSub">Fluxo Reverso s/ Cadastro</span>
       </div>
       <div class="metric-card">
-        <span class="metric-label">Quarentena Telecom</span>
+        <span class="metric-label">UCs em Quarentena Telecom</span>
         <span class="metric-value" style="color: var(--text-dim)" id="kpiTelecom">-</span>
-        <span class="metric-sub">Pacotes Mesh Degradados</span>
+        <span class="metric-sub" id="kpiTelecomSub">Pacotes Mesh Degradados</span>
       </div>
     </div>
 
@@ -1270,7 +1274,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         "meta__cutoff_date": "Data Cutoff",
         "ANOMALY_SCORE": "Score Anomalia",
         "FINAL_MOE_SCORE": "Score MoE",
-        "CATEGORIA_DIAGNOSTICA": "Diagnóstico Causal",
+        "CATEGORIA_DIAGNOSTICA": "Hipótese Diagnóstica",
         "IS_CANDIDATO_VISTORIA": "Candidato Vistoria?",
         "DIAS_ANOMALIA_SEGUIDOS": "Dias Seguidos Anomalia",
         "x__hist_fa_sum_median": "Consumo Mediano (kWh)",
@@ -1302,7 +1306,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         currentCategories = json.categories;
         populateCategories(currentCategories);
       }
-      updateKPIs(json.summary || {}, json.total_all || totalRecords);
+      updateKPIs(json.reconciled_kpis || json.summary || {}, json.total_all || totalRecords);
       renderTable(json.data || []);
     }
 
@@ -1399,22 +1403,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       if (cur) sel.value = cur;
     }
 
-    function updateKPIs(sum, totalAll) {
-      document.getElementById('kpiTotal').innerText = (totalAll || sum.total_ucs || 0).toLocaleString();
-      document.getElementById('kpiAnom').innerText = (sum.anomalies_detected || 0).toLocaleString();
-      const rate = totalAll > 0 ? ((sum.anomalies_detected || 0) / totalAll * 100).toFixed(2) : 0;
-      document.getElementById('kpiAnomRate').innerText = `${rate}% da população`;
-
-      let gdCount = 0;
-      let telecomCount = 0;
-      if (sum.categories_distribution) {
-        sum.categories_distribution.forEach(c => {
-          if (c.CATEGORIA_DIAGNOSTICA === 'POSSIVEL_GD_NAO_CADASTRADA') gdCount += c.count;
-          if (c.CATEGORIA_DIAGNOSTICA === 'TELECOM_QUARANTINE' || c.CATEGORIA_DIAGNOSTICA === 'ANOMALIA_COMUNICACAO_ISOLADA' || c.CATEGORIA_DIAGNOSTICA === 'GARGALO_COLETIVO_RF_MESH') telecomCount += c.count;
-        });
+    function updateKPIs(rk, totalAll) {
+      if (rk && rk.total_unique_ucs !== undefined) {
+        document.getElementById('kpiTotal').innerText = Number(rk.total_unique_ucs || 0).toLocaleString();
+        document.getElementById('kpiTotalSub').innerText = `${Number(rk.total_windows || 0).toLocaleString()} janelas (UC × cutoff)`;
+        document.getElementById('kpiAnom').innerText = Number(rk.ucs_with_anomaly || 0).toLocaleString();
+        document.getElementById('kpiAnomRate').innerText = `${rk.anomaly_rate_ucs_pct || 0}% das UCs (${Number(rk.windows_with_anomaly || 0).toLocaleString()} ocorrências)`;
+        document.getElementById('kpiSolar').innerText = Number(rk.possivel_gd_ucs || 0).toLocaleString();
+        document.getElementById('kpiSolarSub').innerText = `${Number(rk.possivel_gd_windows || 0).toLocaleString()} ocorrências em janelas`;
+        document.getElementById('kpiTelecom').innerText = Number(rk.quarentena_telecom_ucs || 0).toLocaleString();
+        document.getElementById('kpiTelecomSub').innerText = `${Number(rk.quarentena_telecom_windows || 0).toLocaleString()} ocorrências em janelas`;
+        return;
       }
-      document.getElementById('kpiSolar').innerText = gdCount.toLocaleString();
-      document.getElementById('kpiTelecom').innerText = telecomCount.toLocaleString();
+      document.getElementById('kpiTotal').innerText = (totalAll || rk.total_ucs || 0).toLocaleString();
+      document.getElementById('kpiAnom').innerText = (rk.anomalies_detected || 0).toLocaleString();
+      const rate = totalAll > 0 ? ((rk.anomalies_detected || 0) / totalAll * 100).toFixed(2) : 0;
+      document.getElementById('kpiAnomRate').innerText = `${rate}% da população`;
     }
 
     function setCategorySelectValue(cat) {
@@ -1700,15 +1704,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       fetchData();
     }
 
-    async function loadUcChart(uc, cutoff, granularity, days) {
+    let activeChartOffsetDays = 0;
+    let lastLoadedChartData = null;
+
+    async function loadUcChart(uc, cutoff, granularity, days, offsetDays) {
       activeChartGranularity = granularity || 'hourly';
       activeChartDays = days || (activeChartGranularity === 'hourly' ? 7 : 30);
+      if (typeof offsetDays === 'number') {
+        activeChartOffsetDays = offsetDays;
+      } else if (granularity !== activeChartGranularity || days !== activeChartDays) {
+        activeChartOffsetDays = 0;
+      }
       const box = document.getElementById('ucChartBody');
       if (!box) return;
 
       document.getElementById('btnPeriod7h')?.classList.toggle('active', activeChartGranularity === 'hourly' && activeChartDays === 7);
       document.getElementById('btnPeriod14h')?.classList.toggle('active', activeChartGranularity === 'hourly' && activeChartDays === 14);
+      document.getElementById('btnPeriod30h')?.classList.toggle('active', activeChartGranularity === 'hourly' && activeChartDays === 30);
       document.getElementById('btnPeriod30d')?.classList.toggle('active', activeChartGranularity === 'daily');
+
+      const slideControls = document.getElementById('slideControls');
+      if (slideControls) {
+        slideControls.style.display = (activeChartGranularity === 'hourly' && activeChartDays < 30) ? 'inline-flex' : 'none';
+      }
 
       box.innerHTML = '<div style="padding:28px;text-align:center;color:#94a3b8;font-size:12px;">Consultando telemetria real no Data Lake (ami_interval / uc_day_features)...</div>';
 
@@ -1718,12 +1736,80 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           days: activeChartDays
         });
         if (cutoff) params.set('cutoff', cutoff);
+        if (activeChartOffsetDays !== 0) params.set('offset', activeChartOffsetDays);
         const res = await fetch(`/api/v1/meter/${encodeURIComponent(uc)}/timeseries?${params.toString()}`);
         const data = await res.json();
+        lastLoadedChartData = data;
         renderUcChartSvg(data);
       } catch (err) {
         box.innerHTML = `<div style="padding:18px;color:#fca5a5;font-size:12px;">Erro ao carregar gráfico da UC: ${err.message}</div>`;
       }
+    }
+
+    function slideChartWindow(stepDays) {
+      activeChartOffsetDays += stepDays;
+      loadUcChart(activeDrawerUc, activeDrawerCutoff, activeChartGranularity, activeChartDays, activeChartOffsetDays);
+    }
+
+    function exportCurrentChartCsv() {
+      if (!lastLoadedChartData || !lastLoadedChartData.points || lastLoadedChartData.points.length === 0) {
+        alert('Nenhum dado temporal carregado para exportar.');
+        return;
+      }
+      const pts = lastLoadedChartData.points;
+      const headers = ['label', 'timestamp', 'value', 'coverage', 'baseline', 'upper_band', 'lower_band', 'z_score', 'flag'];
+      const rows = [headers.join(';')];
+      pts.forEach(p => {
+        const row = [
+          `"${p.label || ''}"`,
+          `"${p.timestamp || ''}"`,
+          p.value !== undefined ? p.value : '',
+          p.coverage !== undefined ? p.coverage : '',
+          p.baseline_hod !== undefined ? p.baseline_hod : (lastLoadedChartData.baseline_median || ''),
+          p.upper_hod !== undefined ? p.upper_hod : (lastLoadedChartData.upper_band || ''),
+          p.lower_hod !== undefined ? p.lower_hod : (lastLoadedChartData.lower_band || ''),
+          p.z_self !== undefined ? p.z_self : '',
+          `"${p.flag || ''}"`
+        ];
+        rows.push(row.join(';'));
+      });
+      const csvContent = '\\uFEFF' + rows.join('\\r\\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const ucName = activeDrawerUc || 'UC';
+      const gran = activeChartGranularity === 'hourly' ? `${activeChartDays}h` : '30d';
+      link.setAttribute('href', url);
+      link.setAttribute('download', `UC_${ucName}_${gran}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function exportCurrentChartSvg() {
+      const box = document.getElementById('ucChartBody');
+      if (!box) return;
+      const svgs = box.querySelectorAll('svg');
+      if (!svgs || svgs.length === 0) {
+        alert('Nenhum gráfico SVG disponível para exportar.');
+        return;
+      }
+      const svg1 = svgs[0];
+      const serializer = new XMLSerializer();
+      let source = serializer.serializeToString(svg1);
+      if (!source.match(/^<svg[^>]+xmlns="http\\:\\/\\/www\\.w3\\.org\\/2000\\/svg"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+      const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const ucName = activeDrawerUc || 'UC';
+      const gran = activeChartGranularity === 'hourly' ? `${activeChartDays}h` : '30d';
+      link.setAttribute('href', url);
+      link.setAttribute('download', `UC_${ucName}_${gran}.svg`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     function renderUcChartSvg(data) {
@@ -1767,10 +1853,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
       });
 
-      // Step-down CUSUM shading
+      // Step-down CUSUM shading & change-point marker
       let stepOverlay = '';
-      if (data.step_change && data.step_change.index >= 0) {
-        const sx = xOf(data.step_change.index);
+      let stepIdx = null;
+      if (data.step_change) {
+        if (data.step_change.date) {
+          const targetD = String(data.step_change.date).slice(0, 10);
+          const found = pts.findIndex(p => {
+            const ptDate = (p.timestamp || p.label || '').slice(0, 10);
+            return ptDate === targetD || (p.timestamp && p.timestamp.startsWith(targetD));
+          });
+          if (found >= 0) stepIdx = found;
+        }
+        if (stepIdx === null && typeof data.step_change.index === 'number' && data.step_change.index >= 0 && data.step_change.index < pts.length && !data.step_change.outside_window) {
+          stepIdx = data.step_change.index;
+        }
+      }
+
+      if (stepIdx !== null && stepIdx >= 0 && stepIdx < pts.length) {
+        const sx = xOf(stepIdx);
         const wStep = Math.max(0, padL + plotW - sx);
         stepOverlay = `
           <rect x="${sx.toFixed(1)}" y="${padT}" width="${wStep.toFixed(1)}" height="${plotH1}" fill="#f59e0b" opacity="0.11" />
@@ -1918,6 +2019,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       activeDrawerUc = uc;
       activeDrawerCutoff = d.meta__cutoff_date || d.CUTOFF_DATE || '';
+      activeChartOffsetDays = 0;
       document.getElementById('drawerUc').innerText = `UC ${maskUcText(uc)}`;
       const catEl = document.getElementById('drawerCat');
       catEl.innerText = formatCat(d.CATEGORIA_DIAGNOSTICA || 'OPERACAO_REGULAR');
@@ -1970,9 +2072,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="detail-title" style="margin:0">📈 Acompanhamento Temporal & Diagnóstico</div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
               <span style="font-size:11px;color:#94a3b8">Período:</span>
-              <button class="chart-btn active" id="btnPeriod7h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 7)">7d Horário</button>
-              <button class="chart-btn" id="btnPeriod14h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 14)">14d Horário</button>
+              <button class="chart-btn active" id="btnPeriod7h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 7, 0)">7d Horário</button>
+              <button class="chart-btn" id="btnPeriod14h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 14, 0)">14d Horário</button>
+              <button class="chart-btn" id="btnPeriod30h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 30, 0)">30d Horário</button>
               <button class="chart-btn" id="btnPeriod30d" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'daily', 30)">30d Diário</button>
+              <span id="slideControls" style="display:none;gap:3px;align-items:center;">
+                <button class="chart-btn" style="padding:4px 8px;" title="Deslizar janela 7 dias para o passado" onclick="slideChartWindow(-7)">◀ -7d</button>
+                <button class="chart-btn" style="padding:4px 8px;" title="Deslizar janela 7 dias para o futuro" onclick="slideChartWindow(7)">+7d ▶</button>
+              </span>
+              <button class="chart-btn" id="btnExportCsv" style="background:#1e293b;border-color:#38bdf8;color:#38bdf8;" title="Exportar série temporal atual para CSV" onclick="exportCurrentChartCsv()">📥 CSV</button>
+              <button class="chart-btn" id="btnExportSvg" style="background:#1e293b;border-color:#818cf8;color:#818cf8;" title="Exportar gráfico vetorial atual para SVG" onclick="exportCurrentChartSvg()">🖼️ SVG</button>
               <button class="chart-btn" id="btnLgpdToggle" onclick="toggleLgpdMode()">${lgpdMaskMode ? '🔒 LGPD: Censurado' : '🔓 LGPD: Visível'}</button>
             </div>
           </div>
@@ -2098,13 +2207,14 @@ class CockpitHandler(BaseHTTPRequestHandler):
             cat_filter = query.get("category", [""])[0]
             feeder_filter = query.get("feeder", [""])[0]
             q_filter = query.get("q", [""])[0].strip().lower()
+            granularity = query.get("granularity", ["unique_ucs"])[0].strip().lower()
             limit = int(query.get("limit", [50])[0])
             offset = int(query.get("offset", [0])[0])
             filter_col = query.get("filter_col", [""])[0].strip()
             filter_op = query.get("filter_op", ["eq"])[0].strip()
             filter_val = query.get("filter_val", [""])[0].strip()
 
-            cache_key = (cat_filter, feeder_filter, q_filter, filter_col, filter_op, filter_val, offset, limit)
+            cache_key = (granularity, cat_filter, feeder_filter, q_filter, filter_col, filter_op, filter_val, offset, limit)
             with _DATA_LOCK:
                 cached_bytes = _ANOMALIES_CACHE.get(cache_key)
                 if cached_bytes is not None:
@@ -2115,7 +2225,7 @@ class CockpitHandler(BaseHTTPRequestHandler):
             df = _load_data()
             summary = _load_summary()
             if df.is_empty():
-                payload = {"data": [], "total": 0, "summary": summary, "feeders": [], "categories": []}
+                payload = {"data": [], "total": 0, "summary": summary, "reconciled_kpis": compute_reconciled_kpis(df), "feeders": [], "categories": []}
                 raw_bytes = self._encode_json(payload)
             else:
                 with _DATA_LOCK:
@@ -2139,76 +2249,19 @@ class CockpitHandler(BaseHTTPRequestHandler):
                             if c and str(c).strip()
                         ])
 
-                filtered_df = df
-                sort_candidates = False
-                if cat_filter:
-                    if cat_filter == "CANDIDATOS_A_VISTORIA":
-                        sort_candidates = True
-                        if "IS_CANDIDATO_VISTORIA" in filtered_df.columns:
-                            filtered_df = filtered_df.filter(pl.col("IS_CANDIDATO_VISTORIA") == True)
-                        elif "IS_ANOMALY" in filtered_df.columns:
-                            filtered_df = filtered_df.filter(pl.col("IS_ANOMALY") == True)
-                            if "CATEGORIA_DIAGNOSTICA" in filtered_df.columns:
-                                filtered_df = filtered_df.filter(
-                                    ~pl.col("CATEGORIA_DIAGNOSTICA").is_in([
-                                        "NORMAL",
-                                        "QUEDA_TELECOM_ISOLADA",
-                                        "QUARENTENA_TELECOM",
-                                        "MEDIDOR_NOVO_QUARENTENA",
-                                    ])
-                                )
-                    elif "CATEGORIA_DIAGNOSTICA" in filtered_df.columns:
-                        filtered_df = filtered_df.filter(
-                            (pl.col("CATEGORIA_DIAGNOSTICA") == cat_filter) |
-                            (pl.col("CATEGORIA_DIAGNOSTICA").cast(pl.String).str.contains(cat_filter))
-                        )
-                if feeder_filter:
-                    if "meta__feeder" in filtered_df.columns:
-                        filtered_df = filtered_df.filter(pl.col("meta__feeder") == feeder_filter)
-                    elif "ALIMENTADOR" in filtered_df.columns:
-                        filtered_df = filtered_df.filter(pl.col("ALIMENTADOR") == feeder_filter)
-                if q_filter:
-                    uc_col = "id__uc_id" if "id__uc_id" in filtered_df.columns else "UC"
-                    filtered_df = filtered_df.filter(pl.col(uc_col).cast(pl.String).str.to_lowercase().str.contains(q_filter))
-
-                # Arbitrary dynamic filter on any field
-                if filter_col and filter_col in filtered_df.columns and filter_val != "":
-                    try:
-                        col_type = str(filtered_df.schema[filter_col]).lower()
-                        if "int" in col_type or "float" in col_type:
-                            f_val = float(filter_val)
-                            if filter_op == "eq":
-                                filtered_df = filtered_df.filter(pl.col(filter_col) == f_val)
-                            elif filter_op == "gt":
-                                filtered_df = filtered_df.filter(pl.col(filter_col) > f_val)
-                            elif filter_op == "gte":
-                                filtered_df = filtered_df.filter(pl.col(filter_col) >= f_val)
-                            elif filter_op == "lt":
-                                filtered_df = filtered_df.filter(pl.col(filter_col) < f_val)
-                            elif filter_op == "lte":
-                                filtered_df = filtered_df.filter(pl.col(filter_col) <= f_val)
-                            elif filter_op == "ne":
-                                filtered_df = filtered_df.filter(pl.col(filter_col) != f_val)
-                        elif "bool" in col_type:
-                            b_val = filter_val.lower() in ("true", "1", "t", "sim", "yes")
-                            filtered_df = filtered_df.filter(pl.col(filter_col) == b_val)
-                        else:
-                            if filter_op == "eq":
-                                filtered_df = filtered_df.filter(pl.col(filter_col).cast(pl.String) == filter_val)
-                            elif filter_op == "contains":
-                                filtered_df = filtered_df.filter(pl.col(filter_col).cast(pl.String).str.to_lowercase().str.contains(filter_val.lower()))
-                            elif filter_op == "ne":
-                                filtered_df = filtered_df.filter(pl.col(filter_col).cast(pl.String) != filter_val)
-                    except Exception as ef:
-                        print(f"Erro ao aplicar filtro dinâmico {filter_col} {filter_op} {filter_val}: {ef}")
-
-                if sort_candidates:
-                    if "DIAS_ANOMALIA_SEGUIDOS" in filtered_df.columns:
-                        filtered_df = filtered_df.sort(["DIAS_ANOMALIA_SEGUIDOS", "ANOMALY_SCORE"], descending=[True, True])
-                    elif "ANOMALY_SCORE" in filtered_df.columns:
-                        filtered_df = filtered_df.sort("ANOMALY_SCORE", descending=True)
+                filtered_df, _ = filter_cockpit_dataframe(
+                    df,
+                    granularity=granularity,
+                    category=cat_filter,
+                    feeder=feeder_filter,
+                    search_q=q_filter,
+                    filter_col=filter_col,
+                    filter_op=filter_op,
+                    filter_val=filter_val,
+                )
 
                 total_matched = filtered_df.height
+                reconciled_kpis = compute_reconciled_kpis(df)
 
                 # Fast slice
                 paged_slice = filtered_df.slice(offset, limit)
@@ -2216,12 +2269,14 @@ class CockpitHandler(BaseHTTPRequestHandler):
                 payload = {
                     "data": records,
                     "total": total_matched,
-                    "total_all": df.height,
+                    "total_all": reconciled_kpis["total_unique_ucs"] if granularity == "unique_ucs" else df.height,
+                    "granularity": granularity,
                     "offset": offset,
                     "limit": limit,
                     "feeders": _CACHED_FEEDERS,
                     "categories": _CACHED_CATEGORIES,
                     "summary": summary,
+                    "reconciled_kpis": reconciled_kpis,
                 }
                 raw_bytes = self._encode_json(payload)
                 with _DATA_LOCK:
@@ -2232,22 +2287,26 @@ class CockpitHandler(BaseHTTPRequestHandler):
             self._send_json_bytes(raw_bytes)
             return
 
-        # 3. API: Export Data
+        # 3b. API: Export Data (respects granularity & active filters)
         if path == "/api/v1/export":
-            if CLASSIFIED_CSV.exists():
+            df = _load_data()
+            if not df.is_empty():
+                cat_filter = query.get("category", [""])[0]
+                feeder_filter = query.get("feeder", [""])[0]
+                q_filter = query.get("q", [""])[0].strip().lower()
+                granularity = query.get("granularity", ["unique_ucs"])[0].strip().lower()
+                filtered_df, _ = filter_cockpit_dataframe(
+                    df,
+                    granularity=granularity,
+                    category=cat_filter,
+                    feeder=feeder_filter,
+                    search_q=q_filter,
+                )
                 self.send_response(200)
                 self.send_header("Content-Type", "text/csv; charset=utf-8")
-                self.send_header("Content-Disposition", "attachment; filename=classified_ucs_latest.csv")
+                self.send_header("Content-Disposition", f"attachment; filename=cockpit_export_{granularity}.csv")
                 self.end_headers()
-                with open(CLASSIFIED_CSV, "rb") as f:
-                    self.wfile.write(f.read())
-            elif CLASSIFIED_PARQUET.exists():
-                df = pl.read_parquet(CLASSIFIED_PARQUET)
-                self.send_response(200)
-                self.send_header("Content-Type", "text/csv; charset=utf-8")
-                self.send_header("Content-Disposition", "attachment; filename=classified_ucs_latest.csv")
-                self.end_headers()
-                self.wfile.write(df.write_csv(separator=";").encode("utf-8"))
+                self.wfile.write(filtered_df.write_csv(separator=";").encode("utf-8"))
             else:
                 self.send_error(404, "Arquivo de exportação não encontrado.")
             return
@@ -2279,10 +2338,17 @@ class CockpitHandler(BaseHTTPRequestHandler):
             granularity = (qs.get("granularity") or ["daily"])[0].strip().lower()
             days_str = (qs.get("days") or [""])[0].strip()
             days = int(days_str) if days_str.isdigit() else (7 if granularity == "hourly" else 30)
+            offset_str = (qs.get("offset") or ["0"])[0].strip()
+            offset_days = int(offset_str) if (offset_str.isdigit() or (offset_str.startswith("-") and offset_str[1:].isdigit())) else 0
             try:
                 if granularity == "hourly":
                     payload = load_uc_hourly_timeseries(
-                        uc_decoded, base_dir=BASE_DIR, cutoff_date=cutoff, week_days=days, baseline_days=max(28, days + 7)
+                        uc_decoded,
+                        base_dir=BASE_DIR,
+                        cutoff_date=cutoff,
+                        week_days=days,
+                        baseline_days=max(28, days + 7),
+                        offset_days=offset_days,
                     )
                 else:
                     payload = load_uc_daily_timeseries(

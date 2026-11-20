@@ -13,6 +13,7 @@ uc_day_features) e decomposição estatística dos sinais de anomalia por UC:
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from datetime import date, datetime, timedelta
@@ -27,6 +28,34 @@ from src.utils.censorship import censor_uc_id
 _DATE_DIR_RE = re.compile(
     r"report_year=(\d{4})[/\\]report_month=(\d{2})(?:[/\\]report_day=(\d{2}))?"
 )
+
+
+def _get_cache_path(base_dir: Path, key: str) -> Path:
+    cache_dir = base_dir / "cache" / "timeseries_uc"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / f"{key}.json"
+
+
+def _read_from_cache(base_dir: Path, key: str) -> dict[str, Any] | None:
+    cache_file = _get_cache_path(base_dir, key)
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+
+def _write_to_cache(base_dir: Path, key: str, payload: dict[str, Any]) -> None:
+    if payload.get("status") != "ok":
+        return
+    cache_file = _get_cache_path(base_dir, key)
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except Exception:
+        pass
 
 
 def parse_partition_date(path: Path) -> date | None:
@@ -225,6 +254,7 @@ def load_uc_daily_timeseries(
     base_dir: Path | str = "output",
     cutoff_date: str | date | None = None,
     days: int = 30,
+    use_cache: bool = True,
 ) -> dict[str, Any]:
     """Query real daily telemetry for a UC from uc_day_features and annotate anomalies."""
     base = Path(base_dir)
@@ -236,6 +266,12 @@ def load_uc_daily_timeseries(
             parsed_cutoff = date.fromisoformat(cutoff_date.strip()[:10])
         except ValueError:
             parsed_cutoff = None
+
+    cache_key = f"daily_{str(uc_id).strip()}_{days}d_{str(parsed_cutoff or 'latest')}"
+    if use_cache:
+        cached = _read_from_cache(base, cache_key)
+        if cached is not None:
+            return cached
 
     day_files = _list_dated_parquets(base / "features" / "uc_day_features")
     selected_files = _select_window_files(day_files, cutoff_date=parsed_cutoff, days=days)
@@ -253,8 +289,8 @@ def load_uc_daily_timeseries(
     uc_variants = _normalize_id_variants(uc_id)
     frames: list[pl.DataFrame] = []
     wanted_cols = [
-        "UC", "NIO", "REPORT_DAY", "INTERVAL_COVERAGE",
-        "FA_INTERVAL_SUM", "RA_INTERVAL_SUM", "LOAD_FACTOR",
+        "UC", "NIO", "REPORT_DAY", "INTERVAL_COVERAGE", "REGISTER_COVERAGE",
+        "FA_INTERVAL_SUM", "RA_INTERVAL_SUM", "FA_MD_MAX", "LOAD_FACTOR",
         "CURRENT_IMBALANCE_MAX", "VOLTAGE_IMBALANCE_MAX",
         "FA_INTERVAL_MEDIAN", "FA_INTERVAL_IQR", "FA_RAMP_MAX",
         "U_L1_MEDIAN",
@@ -425,7 +461,7 @@ def load_uc_daily_timeseries(
         else []
     )
 
-    return {
+    res = {
         "status": "ok",
         "uc": str(uc_id),
         "uc_censored": censor_uc_id(uc_id),
@@ -445,6 +481,9 @@ def load_uc_daily_timeseries(
         "points": points,
         "anomalies": anomalies,
     }
+    if use_cache:
+        _write_to_cache(base, cache_key, res)
+    return res
 
 
 def load_uc_hourly_timeseries(
@@ -453,17 +492,15 @@ def load_uc_hourly_timeseries(
     cutoff_date: str | date | None = None,
     week_days: int = 7,
     baseline_days: int = 21,
+    offset_days: int = 0,
+    use_cache: bool = True,
 ) -> dict[str, Any]:
     """
-    Build real hourly (e.g. 168h = 7 days) series from raw 5-min ami_interval,
-    anchoring on the week with the strongest anomaly (or latest week up to cutoff)
+    Build real hourly (e.g. 168h = 7 days, 336h = 14 days, 720h = 30 days) series from raw 5-min ami_interval,
+    anchoring on the week with the strongest anomaly (or latest week up to cutoff) with sliding offset support,
     and computing per-hour-of-day robust MAD baselines across baseline_days.
     """
     base = Path(base_dir)
-    daily_res = load_uc_daily_timeseries(
-        uc_id, base_dir=base, cutoff_date=cutoff_date, days=max(baseline_days, week_days, 30)
-    )
-
     parsed_cutoff: date | None = None
     if isinstance(cutoff_date, date):
         parsed_cutoff = cutoff_date
@@ -473,35 +510,54 @@ def load_uc_hourly_timeseries(
         except ValueError:
             parsed_cutoff = None
 
-    # Choose best 7-day anchor date: centered around strongest daily anomaly/step if present
+    cache_key = f"hourly_{str(uc_id).strip()}_{week_days}w_off{offset_days}_b{baseline_days}_{str(parsed_cutoff or 'latest')}"
+    if use_cache:
+        cached = _read_from_cache(base, cache_key)
+        if cached is not None:
+            return cached
+
+    daily_res = load_uc_daily_timeseries(
+        uc_id, base_dir=base, cutoff_date=cutoff_date, days=max(baseline_days, week_days + abs(offset_days), 35), use_cache=use_cache
+    )
+
+    # Choose best anchor date: full 30 days if week_days >= 30, else centered on anomaly with offset support
     anchor_end: date | None = parsed_cutoff
     if daily_res.get("status") == "ok" and daily_res["points"]:
         pts = daily_res["points"]
         all_dates = [date.fromisoformat(p["label"]) for p in pts]
         last_dt = all_dates[-1]
-        best_anom_dt: date | None = None
-        anoms = daily_res.get("anomalies", [])
-        # Prefer showing both step change and spike in the same 7-day window if possible
-        step_dt = None
-        spike_dts: list[date] = []
-        for a in anoms:
-            dt = date.fromisoformat(a["label"])
-            if a["type"] in ("QUEDA_DEGRAU", "DEGRAU_QUEDA"):
-                step_dt = dt
-            elif "PICO" in a["type"]:
-                spike_dts.append(dt)
-        if step_dt and spike_dts:
-            # Find midpoint window covering step & closest spike
-            nearest_spike = min(spike_dts, key=lambda d: abs((d - step_dt).days))
-            if abs((nearest_spike - step_dt).days) <= week_days - 1:
-                best_anom_dt = min(last_dt, max(step_dt, nearest_spike) + timedelta(days=1))
+        first_dt = all_dates[0]
+        if week_days >= 30:
+            anchor_end = last_dt
+        else:
+            best_anom_dt: date | None = None
+            anoms = daily_res.get("anomalies", [])
+            # Prefer showing both step change and spike in the same window if possible
+            step_dt = None
+            spike_dts: list[date] = []
+            for a in anoms:
+                dt = date.fromisoformat(a["label"])
+                if a["type"] in ("QUEDA_DEGRAU", "DEGRAU_QUEDA"):
+                    step_dt = dt
+                elif "PICO" in a["type"]:
+                    spike_dts.append(dt)
+            if step_dt and spike_dts:
+                nearest_spike = min(spike_dts, key=lambda d: abs((d - step_dt).days))
+                if abs((nearest_spike - step_dt).days) <= week_days - 1:
+                    best_anom_dt = min(last_dt, max(step_dt, nearest_spike) + timedelta(days=1))
+                else:
+                    best_anom_dt = min(last_dt, nearest_spike + timedelta(days=2))
+            elif spike_dts:
+                best_anom_dt = min(last_dt, spike_dts[-1] + timedelta(days=2))
+            elif step_dt:
+                best_anom_dt = min(last_dt, step_dt + timedelta(days=3))
+            base_anchor = best_anom_dt or last_dt
+            if offset_days != 0:
+                shifted = base_anchor + timedelta(days=offset_days)
+                # Clamp within available daily date range
+                anchor_end = max(first_dt + timedelta(days=week_days - 1), min(last_dt, shifted))
             else:
-                best_anom_dt = min(last_dt, nearest_spike + timedelta(days=2))
-        elif spike_dts:
-            best_anom_dt = min(last_dt, spike_dts[-1] + timedelta(days=2))
-        elif step_dt:
-            best_anom_dt = min(last_dt, step_dt + timedelta(days=3))
-        anchor_end = best_anom_dt or last_dt
+                anchor_end = base_anchor
 
     interval_files = _list_dated_parquets(base / "measurements" / "ami_interval")
     if not interval_files:
@@ -723,13 +779,30 @@ def load_uc_hourly_timeseries(
         else:
             profile_24h.append({"hour": h, "median": 0.0, "p10": 0.0, "p90": 0.0, "n_days": 0})
 
-    return {
+    # Reconcile step_change: ensure index correctly references this hourly points array
+    step_final = step_hourly
+    if step_final is None and daily_res.get("step_change"):
+        d_step = dict(daily_res["step_change"])
+        step_dt_str = str(d_step.get("date", ""))[:10]
+        matched_idx = None
+        if step_dt_str:
+            for idx, pt in enumerate(points):
+                pt_ts = pt.get("timestamp", "")
+                if pt_ts.startswith(step_dt_str):
+                    matched_idx = idx
+                    break
+        d_step["index"] = matched_idx
+        d_step["outside_window"] = (matched_idx is None)
+        step_final = d_step
+
+    res = {
         "status": "ok",
         "uc": str(uc_id),
         "uc_censored": censor_uc_id(uc_id),
         "nios": sorted(nios),
         "granularity": "hourly",
         "window_days": week_days,
+        "offset_days": offset_days,
         "window_start": target_start_ts.strftime("%Y-%m-%d %H:%M"),
         "window_end": target_end_ts.strftime("%Y-%m-%d %H:%M"),
         "baseline_median": round(global_med, 4),
@@ -738,7 +811,7 @@ def load_uc_hourly_timeseries(
         "upper_band": round(global_med + 3.5 * global_scale, 4),
         "lower_band": round(max(0.0, global_med - 3.5 * global_scale), 4),
         "slope_kwh_day": daily_res.get("slope_kwh_day"),
-        "step_change": step_hourly or daily_res.get("step_change"),
+        "step_change": step_final,
         "dias_anomalia_seguidos": daily_res.get("dias_anomalia_seguidos", 0),
         "active_streak_days": daily_res.get("active_streak_days", 0),
         "profile_24h": profile_24h,
@@ -746,6 +819,9 @@ def load_uc_hourly_timeseries(
         "anomalies": anomalies,
         "daily_fallback": daily_res if daily_res.get("status") == "ok" else None,
     }
+    if use_cache:
+        _write_to_cache(base, cache_key, res)
+    return res
 
 
 def load_uc_24h_profile(

@@ -1,0 +1,12 @@
+{
+  "n_run_manifests_found": 7,
+  "controlled_benchmark": {
+    "benchmark_executed": true,
+    "dataset_rows": 262849,
+    "source_mb": 7.86,
+    "eager_read_write_sec": 0.1487,
+    "lazy_sink_parquet_sec": 0.1232,
+    "eager_throughput_rows_sec": 1767748,
+    "lazy_throughput_rows_sec": 2133447
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "total_windows": 262849,
+  "total_unique_ucs": 66099,
+  "windows_with_anomaly": 2629,
+  "ucs_with_anomaly": 932,
+  "anomaly_rate_ucs_pct": 1.41,
+  "anomaly_rate_windows_pct": 1.0,
+  "candidatos_vistoria_ucs": 274,
+  "candidatos_vistoria_windows": 969,
+  "possivel_gd_ucs": 201,
+  "possivel_gd_windows": 704,
+  "quarentena_telecom_ucs": 2939,
+  "quarentena_telecom_windows": 10422,
+  "reference_cutoff_min": "2026-08-31",
+  "reference_cutoff_max": "2026-11-04"
+}

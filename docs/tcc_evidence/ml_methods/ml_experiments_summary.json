@@ -1,0 +1,76 @@
+{
+  "eval_cohort_size": 66099,
+  "clean_train_size": 62766,
+  "n_pure_electrical_features": 16,
+  "feature_cols": [
+    "x__hist_fa_sum_median",
+    "x__hist_fa_sum_mad",
+    "x__hist_ra_reversal_days",
+    "x__hist_ra_reversal_ratio_max",
+    "x__hist_load_factor_mean",
+    "x__hist_voltage_imbalance_max",
+    "x__hist_current_imbalance_max",
+    "x__trend_fa_slope",
+    "x__fa_cv_window",
+    "x__zero_consumption_flag",
+    "x__tensao_base",
+    "x__demanda",
+    "x__consumo_estm",
+    "x__pot_inst_kva",
+    "x__tensao_alimentador",
+    "x__tensao_se"
+  ],
+  "fit_runtime_ms": 5868.55,
+  "peak_ram_mb": 57.163,
+  "stability": {
+    "batch_minmax_mean_abs_shift_after_1pct_trim": 0.0569,
+    "batch_minmax_max_abs_shift_after_1pct_trim": 0.3253,
+    "frozen_reference_shift": 0.0,
+    "interpretation": "A normalização min-max dependente do lote desloca scores quando extremos saem do lote; ancoragem congelada P01-P99 elimina essa dependência."
+  },
+  "traceable_uc": {
+    "uc_id": "973***76",
+    "feeder": "Chapada",
+    "cutoff_date": "2026-11-04",
+    "pure_electrical_features": {
+      "x__hist_fa_sum_median": 351.5725,
+      "x__hist_fa_sum_mad": 19.8475,
+      "x__hist_ra_reversal_days": 1.0,
+      "x__hist_ra_reversal_ratio_max": 1.0,
+      "x__hist_load_factor_mean": 0.6717,
+      "x__hist_voltage_imbalance_max": 1.0625,
+      "x__hist_current_imbalance_max": 1.2548,
+      "x__trend_fa_slope": 3.3907,
+      "x__fa_cv_window": 0.0564,
+      "x__zero_consumption_flag": 0.0,
+      "x__tensao_base": 127.0,
+      "x__demanda": 0.0,
+      "x__consumo_estm": 0.0,
+      "x__pot_inst_kva": 225.0,
+      "x__tensao_alimentador": 13.8,
+      "x__tensao_se": 69.0
+    },
+    "individual_detector_scores": {
+      "iso_forest": 0.9371,
+      "lof": 0.0,
+      "ecod": 0.96,
+      "copod": 0.9168,
+      "hbos": 0.8232,
+      "pca": 0.654
+    },
+    "weights_applied": {
+      "iso_forest": 0.22,
+      "lof": 0.2,
+      "ecod": 0.18,
+      "copod": 0.18,
+      "hbos": 0.1,
+      "pca": 0.12
+    },
+    "prodist_rule_violation_flag": true,
+    "composite_consensus_score": 0.8548,
+    "coverage_gate_passed": true,
+    "assigned_category_in_lake": "POSSIVEL_GD_NAO_CADASTRADA",
+    "rank_in_evaluated_cohort": 1,
+    "cohort_size": 66099
+  }
+}

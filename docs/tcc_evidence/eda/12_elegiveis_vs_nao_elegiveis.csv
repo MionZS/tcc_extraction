@@ -1,0 +1,3 @@
+grupo_elegibilidade;ucs;mediana_kwh;mediana_cv;mediana_score
+Elegivel (>=70%);62766;5.03;0.141;0.2321
+Inelegivel (<70%);3333;0.89;0.183;0.4245

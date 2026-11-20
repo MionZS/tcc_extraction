@@ -1,0 +1,7 @@
+stage;count;pct_of_m1;gap_rate_pct
+M0: Janelas Brutas (UC × Cutoff);262849;397.66;-
+M1: Saneamento Temporal (UCs Únicas);66099;100.0;5.04
+M2: Gating Telecom (Cobertura >= 70%);62766;94.96;0
+M3: Contextualização Topológica (Alimentador);58632;88.7;0
+M4: Anomalias Elétricas Ativas;242;0.37;74.03
+M5: Candidatos Prioritários (Persistência + Regras);274;0.41;11.68

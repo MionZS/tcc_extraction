@@ -1,0 +1,12 @@
+{
+  "data_quality": true,
+  "pipeline": true,
+  "cockpit": true,
+  "ml_methods": true,
+  "eda": true,
+  "gating": true,
+  "behavior": true,
+  "ablation": true,
+  "case_studies": true,
+  "operations_economics": true
+}
