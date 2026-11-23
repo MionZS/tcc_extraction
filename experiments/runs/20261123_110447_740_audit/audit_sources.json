@@ -1,0 +1,120 @@
+{
+  "execution_cutoff_guard": "2026-11-20",
+  "future_violations": 0,
+  "sources": [
+    {
+      "source": "ami_interval",
+      "path": "output\\measurements\\ami_interval",
+      "exists": true,
+      "partitions": 111,
+      "rows": 0,
+      "distinct_ucs": 0,
+      "distinct_meters": 0,
+      "min_date": "2026-08-01",
+      "max_date": "2026-11-19",
+      "future_records_gt_2026_11_20": 0,
+      "sample_last_day_rows": 8985688
+    },
+    {
+      "source": "ami_registers",
+      "path": "output\\measurements\\ami_registers",
+      "exists": true,
+      "partitions": 111,
+      "rows": 0,
+      "distinct_ucs": 0,
+      "distinct_meters": 0,
+      "min_date": "2026-08-01",
+      "max_date": "2026-11-19",
+      "future_records_gt_2026_11_20": 0,
+      "sample_last_day_rows": 240945
+    },
+    {
+      "source": "ami_instantaneous",
+      "path": "output\\measurements\\ami_instantaneous",
+      "exists": true,
+      "partitions": 111,
+      "rows": 0,
+      "distinct_ucs": 0,
+      "distinct_meters": 0,
+      "min_date": "2026-08-01",
+      "max_date": "2026-11-19",
+      "future_records_gt_2026_11_20": 0,
+      "sample_last_day_rows": 1488362
+    },
+    {
+      "source": "uc_day_features",
+      "path": "output\\features\\uc_day_features\\feature_set_version=v1",
+      "exists": true,
+      "partitions": 109,
+      "rows": 0,
+      "distinct_ucs": 0,
+      "distinct_meters": 0,
+      "min_date": "2026-08-02",
+      "max_date": "2026-11-19",
+      "future_records_gt_2026_11_20": 0,
+      "sample_last_day_rows": 64594
+    },
+    {
+      "source": "meter_installation_history",
+      "path": "output\\context\\meter_installation_history.parquet",
+      "exists": true,
+      "partitions": 0,
+      "rows": 72707,
+      "distinct_ucs": 69895,
+      "distinct_meters": 72661,
+      "min_date": "2026-01-02",
+      "max_date": "2026-11-19",
+      "future_records_gt_2026_11_20": 0
+    },
+    {
+      "source": "uc_context",
+      "path": "output\\context\\uc_context.parquet",
+      "exists": true,
+      "partitions": 0,
+      "rows": 69895,
+      "distinct_ucs": 69895,
+      "distinct_meters": 0,
+      "min_date": null,
+      "max_date": null,
+      "future_records_gt_2026_11_20": 0
+    },
+    {
+      "source": "electrical_hierarchy",
+      "path": "output\\context\\electrical_hierarchy.parquet",
+      "exists": true,
+      "partitions": 0,
+      "rows": 69895,
+      "distinct_ucs": 69895,
+      "distinct_meters": 69887,
+      "min_date": null,
+      "max_date": null,
+      "future_records_gt_2026_11_20": 0
+    },
+    {
+      "source": "training_dataset",
+      "path": "output\\model_input\\v1\\training_dataset.parquet",
+      "exists": true,
+      "partitions": 0,
+      "rows": 262769,
+      "distinct_ucs": 66192,
+      "distinct_meters": 0,
+      "min_date": "2026-08-31",
+      "max_date": "2026-11-19",
+      "future_records_gt_2026_11_20": 0
+    }
+  ],
+  "prior_divergences_audit": [
+    {
+      "artifact": "docs\\tcc_evidence\\november_experiment\\metricas_diarias_populacao_nov2026.csv",
+      "metric": "CANDIDATOS_VISTORIA (19/11 & Mean)",
+      "recorded_value": "19/11=29,966; mean=30359.5",
+      "cause": "Regra simplificada (current_imb_max >= 0.45) sem materialidade nem score ML rotulou ~45% da rede; or True ocultava balanço de fila."
+    },
+    {
+      "artifact": "docs\\tcc_evidence\\november_experiment\\metricas_diarias_populacao_nov2026.csv",
+      "metric": "Total UC x Cutoff windows",
+      "recorded_value": "sum(POPULACAO_TOTAL)=1,248,501",
+      "cause": "Texto de método embutia literal hardcoded '1.226.702' enquanto soma real do CSV era 1.247.742."
+    }
+  ]
+}

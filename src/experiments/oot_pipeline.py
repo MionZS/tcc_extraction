@@ -537,14 +537,18 @@ def run_gating_sensitivity(config: ExperimentConfig, run_dir: Path, *, oot_decis
         top_t = set(elig_idx[np.argsort(-sc_t[elig_idx])[:top_n]].tolist()) if len(elig_idx) > 0 else set()
         jacc = len(top_t & top0) / float(max(1, len(top_t | top0)))
         rho, _ = spearmanr(sc_t, sc0)
+        is_anom_t = (sc_t >= 0.5226)
+        cands_retained = int(np.sum(is_anom_t & mask))
+        cands_intercepted = int(np.sum(is_anom_t & (~mask)))
         rows.append({
             "coverage_threshold": thr,
             "total_ucs": int(oot_df.height),
             "eligible_ucs": int(np.sum(mask)),
             "eligible_pct": round(float(np.mean(mask) * 100.0), 2),
             "excluded_ucs": int(np.sum(~mask)),
-            "candidates_retained": int(np.sum(cand_arr & mask)),
-            "candidates_excluded": int(np.sum(cand_arr & (~mask))),
+            "raw_anomalies_common_cohort": int(np.sum(is_anom_t)),
+            "candidates_retained": cands_retained,
+            "candidates_intercepted_quarantine": cands_intercepted,
             "spearman_vs_unfiltered": round(float(0.0 if np.isnan(rho) else rho), 4),
             "top5pct_jaccard_vs_unfiltered": round(jacc, 4),
         })

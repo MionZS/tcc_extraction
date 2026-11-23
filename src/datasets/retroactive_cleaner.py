@@ -789,8 +789,9 @@ def build_sanitized_window_features_vectorized(
                 (pl.lit(cutoff_date) - pl.col("_LATEST_INST")).dt.total_days().clip(lower_bound=0).cast(pl.Int32).alias("METER_AGE_DAYS")
             )
             .with_columns([
-                (pl.col("METER_AGE_DAYS") <= 30).alias("METER_CHANGED_30D"),
-                (pl.col("METER_AGE_DAYS") <= 90).alias("METER_CHANGED_90D"),
+                # A true meter change strictly requires at least 2 distinct meters in history
+                ((pl.col("N_METERS_HISTORICAL") >= 2) & (pl.col("METER_AGE_DAYS") <= 30)).alias("METER_CHANGED_30D"),
+                ((pl.col("N_METERS_HISTORICAL") >= 2) & (pl.col("METER_AGE_DAYS") <= 90)).alias("METER_CHANGED_90D"),
             ])
             .select(["UC", "METER_AGE_DAYS", "METER_CHANGED_30D", "METER_CHANGED_90D", "N_METERS_HISTORICAL"])
         )
@@ -858,7 +859,12 @@ def build_sanitized_window_features_vectorized(
             & (pl.col("AVG_INTERVAL_COVERAGE") >= min_window_coverage)
         ).alias("IS_CLEAN_FOR_TRAIN"),
     ]).with_columns([
-        pl.when(pl.col("METER_CHANGED_30D") & (pl.col("METER_AGE_DAYS") > 0) & (pl.col("N_METERS_HISTORICAL") <= 1))
+        pl.when(
+            (pl.col("N_METERS_HISTORICAL") <= 1)
+            & (pl.col("METER_AGE_DAYS") > 0)
+            & (pl.col("METER_AGE_DAYS") <= 30)
+            & (pl.col("COVERAGE_RELIABLE_DAYS") < 15)
+        )
         .then(pl.lit("PROFILE_INITIATION_NEW_UC"))
         .when(pl.col("METER_CHANGED_30D") & (pl.col("METER_AGE_DAYS") > 0) & (pl.col("N_METERS_HISTORICAL") >= 2))
         .then(pl.lit("METER_REPLACEMENT_TRANSITION"))

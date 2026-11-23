@@ -183,8 +183,9 @@ def build_uc_window_features(
             if install_dates:
                 latest_install = max(install_dates)
                 meter_age_days = max(0, (cutoff_date - latest_install).days)
-                meter_changed_30d = meter_age_days <= 30
-                meter_changed_90d = meter_age_days <= 90
+                distinct_meters = len({str(n).strip().lstrip("0") for n in uc_meters["NIO"].drop_nulls().to_list()}) if "NIO" in uc_meters.columns else 1
+                meter_changed_30d = (distinct_meters >= 2) and (meter_age_days <= 30)
+                meter_changed_90d = (distinct_meters >= 2) and (meter_age_days <= 90)
 
         # ── Alarm events over window (Handles meter replacements & Datetime)
         alarm_count = 0

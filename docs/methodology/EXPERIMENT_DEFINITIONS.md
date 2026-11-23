@@ -6,7 +6,7 @@ Os três produtos experimentais do projeto possuem objetivos, grãos, populaçõ
 - **Papel no Artigo:** Avaliação central *out-of-time* do pipeline especializado multi-visão (`S_comm`, `S_elec`, `S_tamper`) com normalização e limiares congelados no treino.
 - **Treino Congelado:** Cortes limpos `2026-08-31, 2026-09-30, 2026-10-31` (`189,341` amostras limpas).
 - **Inferência OOT:** `2026-11-19` (`65,686` UCs; `62,857` elegíveis; `2,829` em quarentena).
-- **Saída:** `6,333` anomalias elétricas; `6,304` candidatos prioritários à vistoria.
+- **Saída:** `6,333` anomalias elétricas; `6,333` candidatos prioritários à vistoria.
 
 ## 2. `DAILY_RULES` (Série Diária de Monitoramento e Regras)
 - **Papel no Artigo:** Monitoramento diário da carteira, dinâmica de filas (`I_t`, `O_t`, `P_t`), evolução de cobertura e comparação frente à política não calibrada anterior.

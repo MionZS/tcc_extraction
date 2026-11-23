@@ -666,18 +666,22 @@ class RunManifest:
         self._save()
 
     def register_input(self, name: str, path: Path) -> None:
-        if path.exists() and path.is_file():
+        p_obj = Path(path)
+        p_str = p_obj.relative_to(PROJECT_ROOT).as_posix() if p_obj.is_relative_to(PROJECT_ROOT) else str(path).replace("\\", "/")
+        if p_obj.exists() and p_obj.is_file():
             self.data["input_hashes"][name] = {
-                "path": str(path),
-                "size_bytes": path.stat().st_size,
-                "sha256": sha256_file(path) if path.stat().st_size < 100_000_000 else "skipped_gt_100mb",
+                "path": p_str,
+                "size_bytes": p_obj.stat().st_size,
+                "sha256": sha256_file(p_obj) if p_obj.stat().st_size < 100_000_000 else "skipped_gt_100mb",
             }
         else:
-            self.data["input_hashes"][name] = {"path": str(path), "exists": path.exists()}
+            self.data["input_hashes"][name] = {"path": p_str, "exists": p_obj.exists()}
         self._save()
 
     def register_artifact(self, key: str, path: Path) -> None:
-        self.data["artifacts"][key] = str(path)
+        p_obj = Path(path)
+        p_str = p_obj.relative_to(PROJECT_ROOT).as_posix() if p_obj.is_relative_to(PROJECT_ROOT) else str(path).replace("\\", "/")
+        self.data["artifacts"][key] = p_str
         self._save()
 
     def record_parameters(self, params: dict[str, Any]) -> None:

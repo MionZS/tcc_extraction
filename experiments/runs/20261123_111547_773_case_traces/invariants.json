@@ -1,0 +1,26 @@
+{
+  "invariants_verified": true,
+  "total_checks": 2,
+  "passed_checks": 2,
+  "failed_checks": 0,
+  "checks": [
+    {
+      "name": "temporal_no_future_leakage",
+      "passed": true,
+      "details": {
+        "train_max_date": null,
+        "eval_start_date": "2026-11-01"
+      },
+      "errors": []
+    },
+    {
+      "name": "case_traces_present",
+      "passed": true,
+      "details": {
+        "trace_rows": 176,
+        "cases": 8
+      },
+      "errors": []
+    }
+  ]
+}

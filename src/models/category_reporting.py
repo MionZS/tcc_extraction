@@ -593,13 +593,19 @@ def apply_delimited_isolation_and_categories(
     else:
         is_recent_uc_cadastre = pl.lit(False)
 
-    is_recent_hardware = (meter_changed_30d & (meter_age > 0) & (meter_age <= 30)) | is_recent_uc_cadastre
-    is_new_uc_initiation = is_recent_hardware & (n_meters_hist <= 1)
-    is_meter_replacement = is_recent_hardware & (n_meters_hist >= 2)
+    # Meter replacement strictly requires N_METERS_HISTORICAL >= 2
+    is_meter_replacement = (n_meters_hist >= 2) & (meter_changed_30d | ((meter_age > 0) & (meter_age <= 30)))
+
+    # A genuine new UC initiation requires 1st meter, recent installation/cadastre, AND lack of mature telemetry history (< 15 reliable days)
+    is_new_uc_initiation = (
+        (n_meters_hist <= 1)
+        & (is_recent_uc_cadastre | ((meter_age > 0) & (meter_age <= 30)))
+        & (rel_days < 15)
+    )
 
     is_poor_comm = (~is_clean) | (cov < 0.60)
-    is_isolated_comm_anomaly = is_poor_comm & (~is_recent_hardware) & (peer_cov >= 0.80) & (cov_deficit >= 0.30)
-    is_collective_mesh_bottleneck = is_poor_comm & (~is_recent_hardware) & (~is_isolated_comm_anomaly)
+    is_isolated_comm_anomaly = is_poor_comm & (~is_meter_replacement) & (peer_cov >= 0.80) & (cov_deficit >= 0.30)
+    is_collective_mesh_bottleneck = is_poor_comm & (~is_meter_replacement) & (~is_isolated_comm_anomaly)
 
     # Electrical categories evaluated on clean, mature telemetry windows
     is_gd_reversal = (~is_poor_comm) & (ra_ratio >= 0.08) & ((ra_days >= 2) | is_anom)
@@ -613,20 +619,20 @@ def apply_delimited_isolation_and_categories(
     )
 
     categoria_expr = (
-        pl.when(is_new_uc_initiation)
-        .then(pl.lit("INICIACAO_PERFIL_UC_NOVA"))
-        .when(is_meter_replacement)
-        .then(pl.lit("TRANSICAO_TROCA_MEDIDOR"))
-        .when(is_isolated_comm_anomaly)
-        .then(pl.lit("ANOMALIA_COMUNICACAO_ISOLADA"))
-        .when(is_collective_mesh_bottleneck)
-        .then(pl.lit("GARGALO_COLETIVO_RF_MESH"))
-        .when(is_gd_reversal)
+        pl.when(is_gd_reversal)
         .then(pl.lit("POSSIVEL_GD_NAO_CADASTRADA"))
         .when(is_stuck_meter)
         .then(pl.lit("FALHA_METROLOGICA_MEDIDOR_TRAVADO"))
         .when(is_elec_fraud_pnt)
         .then(pl.lit("ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT"))
+        .when(is_meter_replacement)
+        .then(pl.lit("TRANSICAO_TROCA_MEDIDOR"))
+        .when(is_new_uc_initiation)
+        .then(pl.lit("INICIACAO_PERFIL_UC_NOVA"))
+        .when(is_isolated_comm_anomaly)
+        .then(pl.lit("ANOMALIA_COMUNICACAO_ISOLADA"))
+        .when(is_collective_mesh_bottleneck)
+        .then(pl.lit("GARGALO_COLETIVO_RF_MESH"))
         .when(pl.col("MUDOU_CLASSE_TEMPORAL"))
         .then(pl.lit("MUDANCA_CLASSE_COMPORTAMENTAL"))
         .otherwise(pl.lit("OPERACAO_REGULAR"))
@@ -672,6 +678,8 @@ def apply_delimited_isolation_and_categories(
         .otherwise(pl.lit("BASELINE_NORMAL"))
     )
 
+    # Separation of Operational Queues:
+    # 1. Commercial / Electrical Field Inspection (Fraude, GD, Falha Metrologica)
     is_candidato_vistoria = (
         is_anom
         & (~is_poor_comm)
@@ -682,8 +690,22 @@ def apply_delimited_isolation_and_categories(
             | (categoria_expr == "FALHA_METROLOGICA_MEDIDOR_TRAVADO")
             | (categoria_expr == "DESEQUILIBRIO_CARGA_OU_BYPASS")
             | (categoria_expr == "DEGRAU_DESCENDENTE_CONSUMO")
-            | (categoria_expr == "ANOMALIA_COMUNICACAO_ISOLADA")
         )
+    )
+
+    # 2. Technical Telecom Work Order (Manutenção individual ou coletiva de RF Mesh)
+    is_candidato_manutencao_telecom = (
+        is_isolated_comm_anomaly | is_collective_mesh_bottleneck
+    )
+
+    destino_operacional_expr = (
+        pl.when(is_candidato_vistoria)
+        .then(pl.lit("VISTORIA_CAMPO_PERDAS"))
+        .when(is_isolated_comm_anomaly)
+        .then(pl.lit("MANUTENCAO_TECNICA_TELECOM_INDIVIDUAL"))
+        .when(is_collective_mesh_bottleneck)
+        .then(pl.lit("MANUTENCAO_TECNICA_TELECOM_COLETIVA"))
+        .otherwise(pl.lit("NENHUM"))
     )
 
     if "DIAS_ANOMALIA_SEGUIDOS" not in work.columns:
@@ -704,6 +726,8 @@ def apply_delimited_isolation_and_categories(
         subtipo_eletrico_expr.alias("SUBTIPO_DIAGNOSTICO"),
         metodo_deteccao_expr.alias("METODO_DETECCAO_APLICADO"),
         is_candidato_vistoria.alias("IS_CANDIDATO_VISTORIA"),
+        is_candidato_manutencao_telecom.alias("IS_CANDIDATO_MANUTENCAO_TELECOM"),
+        destino_operacional_expr.alias("DESTINO_OPERACIONAL"),
         dias_anom_expr.alias("DIAS_ANOMALIA_SEGUIDOS"),
     ])
 

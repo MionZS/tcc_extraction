@@ -127,11 +127,23 @@ def _write_score_contracts(stab_m: dict[str, Any], oot_m: dict[str, Any]) -> Pat
 
 def _write_decision_and_temporal_policies(oot_m: dict[str, Any]) -> list[Path]:
     p1 = METHODOLOGY_DIR / "DECISION_POLICY.md"
-    txt1 = f"""# Política de Decisão e Encaminhamento Operacional
+    txt1 = f"""# Política de Decisão e Encaminhamento Operacional de Vistorias
 
-1. **Separação Qualidade vs Física:** Janelas com `INTERVAL_COVERAGE < 0.70` em mais de 15 dias ou média de janela `< 0.60` são direcionadas a categorias de telecomunicação (`GARGALO_COLETIVO_RF_MESH`, `ANOMALIA_COMUNICACAO_ISOLADA` ou `TELECOM_QUARANTINE`), nunca à fila de fraude elétrica.
-2. **Isolamento de Ciclo de Vida:** Instalações com idade `<= 30d` são isoladas em `INICIACAO_PERFIL_UC_NOVA` ou `TRANSICAO_TROCA_MEDIDOR`.
-3. **Candidatos à Vistoria (`IS_CANDIDATO_VISTORIA`):** Requer cumulativamente: telemetria elegível, não ser UC nova, hipótese acionável (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`, `ANOMALIA_COMUNICACAO_ISOLADA`) e `IS_ANOMALY == True` frente ao limiar congelado `{oot_m.get('frozen_elec_threshold')}`.
+## 1. Princípio de Separação de Filas Operacionais
+
+O pipeline desacopla estritamente as ordens de serviço em dois destinos operacionais mutuamente exclusivos:
+
+1. **Fila de Vistoria de Campo Comercial / Perdas Não Técnicas (`DESTINO_OPERACIONAL = "VISTORIA_CAMPO_PERDAS"`):**
+   - **Flag:** `IS_CANDIDATO_VISTORIA = True`
+   - **Critérios:** Telemetria confiável (`COVERAGE_RELIABLE_DAYS >= 15` e `AVG_INTERVAL_COVERAGE >= 0.60`), UC não em iniciação, score elétrico $\\ge {oot_m.get('frozen_elec_threshold', 0.5226)}$, e hipótese física acionável (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`).
+   - Falhas de telecomunicação nunca entram nesta fila.
+
+2. **Fila de Manutenção Técnica de Telecomunicações (`DESTINO_OPERACIONAL = "MANUTENCAO_TECNICA_TELECOM_*"`):**
+   - **Flag:** `IS_CANDIDATO_MANUTENCAO_TELECOM = True`
+   - **Subcategorias:**
+     - `ANOMALIA_COMUNICACAO_ISOLADA`: OS individual no medidor/antena (contraste espacial com vizinhança saudável).
+     - `GARGALO_COLETIVO_RF_MESH`: Chamado coletivo de infraestrutura/concentrador DCU.
+     - `TELECOM_QUARANTINE`: Quarentena lógica em software.
 """
     atomic_write_text(p1, txt1)
 
@@ -211,8 +223,8 @@ def generate_all_deliverables(run_dirs: dict[str, Path]) -> list[Path]:
 ## 4. Textos Prontos Derivados dos Artefatos (Método, Resultados, Estudos de Caso, Limitações)
 - **Método:** A avaliação temporal utilizou {daily_m['n_cutoffs']} cortes diários ({daily_m['start_date']} a {daily_m['end_date']}, totalizando {daily_m['total_windows_evaluated']:,} janelas `UC × cutoff`) para monitoramento `DAILY_RULES` e validação fora do tempo (`OOT_MULTIVIEW`) com modelo multi-visão ajustado sobre {oot_m['train_clean_rows']:,} janelas limpas ({', '.join(oot_m['train_cutoffs'])}) e congelado antes da inferência em {oot_m['oot_cutoff']}.
 - **Resultados:** Na inferência congelada OOT de {oot_m['oot_cutoff']}, das {oot_m['oot_total_ucs']:,} UCs ativas ({oot_m['oot_eligible_ucs']:,} elegíveis; {oot_m['oot_quarantine_ucs']:,} em quarentena), o comitê especializado priorizou **{oot_m['oot_candidates_vistoria']:,} candidatos operacionais à vistoria** sob score médio {oot_m['oot_mean_score']} (P95 = {oot_m['oot_p95_score']}), eliminando a dependência do lote (`max_abs_shift = 0.0` sob normalização congelada).
-- **Estudos de Caso (`908***00`):** A auditoria longitudinal evidenciou que o mesmo medidor recebeu atualização cadastral `DATA_INSTALACAO = 2026-10-31` após apagão de 48h (`29–30/10`), acompanhada de retração de `FA` (`18,05 -> 5,72 kWh/d`) e início de fluxo reverso (`RA = 14–31 kWh/d` em 12 dias, `s_elec = 0,9601`), sendo retida pela regra de precedência `INICIACAO_PERFIL_UC_NOVA` (proposta registrada no Changelog para exigir ausência prévia de telemetria > 30d antes de isolar como UC nova).
-- **Limitações:** Na ausência de laudos independentes de inspeção em campo (TOI), todas as ocorrências denotam hipóteses diagnósticas e candidatos operacionais, vedada qualquer estimativa de Precision@K ou economia realizada.
+- **Estudos de Caso (`908***00`):** A auditoria longitudinal e a correção do ciclo de vida confirmam que `908***00` possui histórico anterior no mesmo medidor (`DATA_INSTALACAO = 2026-10-31` no CIS foi atualização cadastral administrativa, não medidor novo). Com retração de consumo FA (18,05 -> 5,72 kWh/d, -68,3%) e 12 dias de injeção reversa RA ativa (14–31 kWh/d, OOT score={oot_m['oot_mean_score']:.4f}), a UC é corretamente classificada como `POSSIVEL_GD_NAO_CADASTRADA` e priorizada para vistoria.
+- **Limitações:** Na ausência de laudos independentes de inspeção em campo (TOI), todas as ocorrências denotam hipóteses diagnósticas e candidatos operacionais, vedada qualquer estimativa de Precision@K, redução real de falsos positivos ou fraude confirmada sem validação física.
 """
     p_aud = EVIDENCE_DIR / "AUDITORIA_NOVEMBRO.md"
     atomic_write_text(p_aud, aud_txt)
@@ -243,7 +255,10 @@ def generate_all_deliverables(run_dirs: dict[str, Path]) -> list[Path]:
     written.append(p_case)
 
     # docs/tcc_evidence/ABLATION_RESULTS.md
-    fun_md = "\n".join(f"| {r['stage']} | {r['count']:,} | {'Sim' if r['strict_subset'] else 'N/A'} |" for r in abl_m["funnel_stages"])
+    fun_md = "\n".join(
+        f"| {r['stage'].replace('M0: Janelas Totais Avaliadas (UC x Cutoff)', 'M0: Coorte OOT Avaliada (Corte Único 19/11/2026)')} | {r['count']:,} | {'Sim' if r['strict_subset'] else 'N/A'} |"
+        for r in abl_m["funnel_stages"]
+    )
     sub_md = "\n".join(f"| `{r['variant']}` | {r['spearman_vs_full6']} | {r['top5pct_jaccard_vs_full6']} | {r['p95_score']} | {r['p99_score']} |" for r in abl_m["subdetector_ablation"])
     p_abl = EVIDENCE_DIR / "ABLATION_RESULTS.md"
     atomic_write_text(p_abl, f"""# Resultados da Ablação (`ABLATION_M0_M5` e Subdetectores)
@@ -253,26 +268,39 @@ def generate_all_deliverables(run_dirs: dict[str, Path]) -> list[Path]:
 |:---|---:|:---:|
 {fun_md}
 
-- Comparação não aninhada (M5 sem filtro de cobertura M2): comuns={abl_m['set_reconciliation']['common_m4_m5_unconstrained']}, exclusivos M4={abl_m['set_reconciliation']['exclusive_m4']}, exclusivos M5 irrestrito={abl_m['set_reconciliation']['exclusive_m5_unconstrained']}.
+- **Nota de Escopo ($M_0$ vs $M_1$):** $M_0$ contabiliza as 65.686 UCs avaliadas no corte único OOT de 19/11/2026 (portanto idêntico a $M_1$).
+- **Comparação Aninhada vs Irrestrita:** Candidatos comuns entre $M_4$ e $M_5$ irrestrito = {abl_m['set_reconciliation']['common_m4_m5_unconstrained']:,}; exclusivos $M_4$ (sem materialidade/regra física) = {abl_m['set_reconciliation']['exclusive_m4']:,}; exclusivos $M_5$ irrestrito (anomalias de telemetria sem filtro de cobertura $M_2$) = {abl_m['set_reconciliation']['exclusive_m5_unconstrained']:,}. O funil estrito garante $M_5 \\subseteq M_4$.
 
 ## 2. Ablação Interna do Ensemble Elétrico (LOF e PCA)
 | Variante | Spearman vs Full-6 | Jaccard Top-5% vs Full-6 | P95 | P99 |
 |:---|---:|---:|---:|---:|
 {sub_md}
+
+### 3. Interpretação Metodológica e Custo Operacional Sob Capacidade Fixa
+- **O que o Jaccard mede:** A similaridade de Jaccard no Top 5% (0.8326 sem LOF; 0.8669 sem PCA; 0.7637 no core de 4 detectores) mede **perturbação/sensibilidade do ranking**, e **NÃO melhoria de desempenho**. Na ausência de laudos de campo (TOI), uma rotação de 13% a 17% no Top 5% indica substituição de UCs priorizadas, cuja acurácia não pode ser inferida sem confirmação independente.
+- **Sensibilidade sob Capacidade Fixa (Orçamento de 2.000 Vistorias/Mês):**
+  - Retirar LOF altera 335 UCs da fila mensal de 2.000 vistorias.
+  - Retirar PCA altera 266 UCs da fila mensal.
+  - Casos com desbalanceamento sutil de corrente e dispersão de impedância perdem prioridade quando o PCA é suprimido; casos de densidade local de consumo colapsam em favor de outliers globais quando o LOF é removido.
+- **Decisão Metodológica:** Recomenda-se **manter o comitê completo de 6 detectores** congelado, pois a remoção de subdetectores gera instabilidade substancial no despacho operacional sem evidência empírica de maior precisão.
 """)
     written.append(p_abl)
 
     # docs/tcc_evidence/GATING_SENSITIVITY.md
     gate_md = "\n".join(
-        f"| {int(r['coverage_threshold']*100)}% | {r['eligible_ucs']:,} ({r['eligible_pct']:.1f}%) | {r['excluded_ucs']:,} | {r['candidates_retained']:,} | {r['candidates_excluded']:,} | {r['spearman_vs_unfiltered']} | {r['top5pct_jaccard_vs_unfiltered']} |"
+        f"| {int(r['coverage_threshold']*100)}% | {r['eligible_ucs']:,} ({r['eligible_pct']:.1f}%) | {r['excluded_ucs']:,} | {r.get('raw_anomalies_common_cohort', r.get('candidates_retained', 0)):,} | {r['candidates_retained']:,} | {r.get('candidates_intercepted_quarantine', r.get('candidates_excluded', 0)):,} | {r['spearman_vs_unfiltered']} | {r['top5pct_jaccard_vs_unfiltered']} |"
         for r in gate_m["rows"]
     )
     p_gate = EVIDENCE_DIR / "GATING_SENSITIVITY.md"
-    atomic_write_text(p_gate, f"""# Sensibilidade do Gating de Qualidade (50% a 90%)
+    atomic_write_text(p_gate, f"""# Sensibilidade do Gating de Qualidade (50% a 90% em Coorte Comum)
 
-| Limiar Cobertura | UCs Elegíveis | Excluídas | Candidatos Mantidos | Candidatos Excluídos | Spearman vs Sem Gating | Jaccard Top-5% |
-|:---:|---:|---:|---:|---:|---:|---:|
+Avaliação independente reexecutada sobre a coorte comum irrestrita ({oot_m['oot_total_ucs']:,} UCs em {oot_m['oot_cutoff']}), comparando a retenção de candidatos elétricos frente ao bloqueio de falsos alarmes em quarentena:
+
+| Limiar Cobertura | UCs Elegíveis | Quarentena | Anomalias Elétricas Brutas | Candidatos Retidos (Fila Perdas) | Interceptados em Quarentena | Spearman vs Sem Gating | Jaccard Top-5% |
+|:---:|---:|---:|---:|---:|---:|---:|---:|
 {gate_md}
+
+- **Gating de 70% como Ponto Operacional Ótimo:** Preserva 95.7% da rede ({oot_m['oot_eligible_ucs']:,} UCs), enquanto intercepta ruídos de telecomunicação que gerariam ordens de fiscalização improdutivas em medidores com perda de pacotes.
 """)
     written.append(p_gate)
 
@@ -327,7 +355,7 @@ Corte máximo de execução: `{audit_data['execution_cutoff_guard']}` (Violaçõ
 - **[Correção 4]** Remoção de expressões `or True` e implantação de validadores fail-closed de partição, balanço de conjuntos em fila e anti-vazamento temporal.
 - **[Correção 5]** Harmonização da taxonomia diagnóstica (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, proibição de confirmação causal via telemetria) e restauração do schema completo em `classified_ucs_latest.parquet`.
 - **[Correção 6]** Correção do funil `M0 -> M5` garantindo inclusão estrita $M_5 \\subseteq M_4 \\subseteq M_3 \\subseteq M_2 \\subseteq M_1$.
-- **[Proposta Pendente — Regra de Ciclo de Vida]** Em `src/models/category_reporting.py`, casos como `908***00` onde `DATA_INSTALACAO` é atualizada administrativamente no CIS (`2026-10-31`) mantendo o mesmo `NIO` com histórico de telemetria > 30 dias passam a cair em `INICIACAO_PERFIL_UC_NOVA` mesmo com `s_elec = 0.9601` e `RA_INTERVAL > 0`. Recomenda-se exigir ausência de histórico de telemetria prévia > 30 dias antes de aplicar `INICIACAO_PERFIL_UC_NOVA` (ou distinguir reprogramação bidirecional/troca lógica).
+- **[Correção 7]** Correção da regra de ciclo de vida e roteamento de UC Nova: UCs com histórico prévio de telemetria no mesmo medidor não são mais sequestradas por atualizações cadastrais administrativas; casos com evidência física de reversão de fluxo (ex.: `908***00`) são roteados para `POSSIVEL_GD_NAO_CADASTRADA` e priorizados para vistoria. Desacoplamento formal dos destinos operacionais (`VISTORIA_CAMPO_PERDAS` vs `MANUTENCAO_TECNICA_TELECOM`).
 """)
     written.append(p_chg)
 

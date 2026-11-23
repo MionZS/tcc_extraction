@@ -208,8 +208,12 @@ def main() -> int:
         cmp_res = run_comparator(run_dirs["daily_rules"], run_dirs["oot_multiview"], COMPARISONS_DIR)
         print(f"[+] Comparação salva: Jaccard={cmp_res['jaccard_candidates']} (comuns={cmp_res['candidates_common']})")
 
-        # 9. Save latest suite index & generate all 15 deliverables
-        atomic_write_json(SUITE_INDEX_PATH, {k: str(v) for k, v in run_dirs.items()})
+        # 9. Save latest suite index (relative portable POSIX paths) & generate all 15 deliverables
+        suite_idx = {
+            k: (v.relative_to(PROJECT_ROOT).as_posix() if v.is_relative_to(PROJECT_ROOT) else str(v).replace("\\", "/"))
+            for k, v in run_dirs.items()
+        }
+        atomic_write_json(SUITE_INDEX_PATH, suite_idx)
         written = generate_all_deliverables(run_dirs)
         print(f"[+] {len(written)} documentos canônicos gerados a partir de runs validadas em {time.time() - t0:.1f}s!")
         return 0

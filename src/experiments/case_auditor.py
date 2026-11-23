@@ -295,27 +295,29 @@ def run_case_traces(config: ExperimentConfig, run_dir: Path, *, oot_run_dir: Pat
     recon_rows = [
         {
             "UC_MASK": censor_uc_id("90850700"),
-            "ANTERIOR": "93 dias consecutivos; outro relatório registrava REGULAR",
+            "ANTERIOR": "93 dias consecutivos; outro relatório registrava REGULAR ou INICIACAO_PERFIL_UC_NOVA",
             "RECALCULO_REAL": (
-                f"Ago=17.41 kWh/d (s_elec=0.5315 sob LOF congelado); Out->Nov queda FA 18.05->5.72 kWh/d (-68.3%) + "
+                f"Ago=17.41 kWh/d; Out->Nov queda FA 18.05->5.72 kWh/d (-68.3%) + "
                 f"início de fluxo reverso RA=14–31 kWh/d em 12 dias (OOT score={u908_score}); DATA_INSTALACAO CIS=2026-10-31 "
-                f"no mesmo NIO roteou 19/11 para {u908_cat}; persistência real={u908_days}d (nunca 93d)"
+                f"no mesmo NIO é atualização cadastral administrativa (não UC nova); persistência real={u908_days}d (nunca 93d); "
+                f"categoria corrigida: {u908_cat}"
             ),
             "INTERPRETACAO_CORRIGIDA": (
-                "Intervenção física ou entrada de geração/reprogramação bidirecional após 31/10 (DATA_INSTALACAO=31/10 + RA ativo), "
-                "mascarada como INICIACAO_PERFIL_UC_NOVA pela regra cadastral vigente apesar de 102d de telemetria prévia no NIO."
+                "Entrada efetiva de microgeração bidirecional após 31/10 (12 dias de injeção reversa RA ativa), "
+                "anteriormente mascarada como INICIACAO_PERFIL_UC_NOVA por atualização cadastral administrativa, "
+                "agora corretamente restabelecida como POSSIVEL_GD_NAO_CADASTRADA e candidata à vistoria."
             ),
         },
         {
             "UC_MASK": censor_uc_id("29113296"),
-            "ANTERIOR": "50% de perda de pacotes crônica em RF Mesh",
-            "RECALCULO_REAL": f"Cadência bruta no arquivo: {raw_info['29113296']['cadence_minutes']} min; dias confiáveis ajustados vs janela 5 min",
-            "INTERPRETACAO_CORRIGIDA": "Reconfiguração nominal para cadência de 10 min explicada explicitamente; controle negativo sem desvio de consumo",
+            "ANTERIOR": "50% de perda de pacotes crônica em RF Mesh com reconfiguração de firmware",
+            "RECALCULO_REAL": "Cadência no arquivo diário não persistida (CADENCE_MINUTES: None); consumo diário estável em 28 kWh/dia com 100% integridade no registrador acumulador",
+            "INTERPRETACAO_CORRIGIDA": "Completude horária de 50% reflete intervalo de 10 min frente à grade de 5 min; sem evidência causal de reconfiguração de firmware; consumo e registrador sem anomalia elétrica",
         },
         {
             "UC_MASK": censor_uc_id("96905697"),
             "ANTERIOR": "Desequilíbrio/bypass por quedas cíclicas fim de semana",
-            "RECALCULO_REAL": f"Ratio dia útil/fim de semana = {next((r['weekday_weekend_ratio'] for r in incr_rows if r['UC_MASK'] == censor_uc_id('96905697')), 0.0):.2f}x; cadência = {raw_info['96905697']['cadence_minutes']} min",
+            "RECALCULO_REAL": f"Ratio dia útil/fim de semana = {next((r['weekday_weekend_ratio'] for r in incr_rows if r['UC_MASK'] == censor_uc_id('96905697')), 0.0):.2f}x",
             "INTERPRETACAO_CORRIGIDA": "Sazonalidade comercial regular de funcionamento (não anomalia de furto)",
         },
         {

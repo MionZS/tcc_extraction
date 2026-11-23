@@ -320,8 +320,9 @@ def test_real_november_suite_artifacts_and_uc_90850700_reconciled() -> None:
     assert int(nov_row["x__hist_ra_reversal_days"]) == 12
     assert float(nov_row["s_elec"]) > 0.90
     assert int(nov_row["x__meter_age_days"]) == 19
-    assert nov_row["CATEGORIA_DIAGNOSTICA"] == "INICIACAO_PERFIL_UC_NOVA"
-    assert "C6_PROSUMIDOR_INJECAO_REVERSA" in str(nov_row["SUBTIPO_DIAGNOSTICO"])
+    assert nov_row["CATEGORIA_DIAGNOSTICA"] == "POSSIVEL_GD_NAO_CADASTRADA"
+    assert nov_row["IS_CANDIDATO_VISTORIA"] is True
+    assert "INJECAO_ATIVA_REVERSA_RA" in str(nov_row["SUBTIPO_DIAGNOSTICO"])
 
     # In all cutoffs, persistence is strictly bounded inside the 30-day window (never the legacy 93-day bug)
     for row in u_df.to_dicts():

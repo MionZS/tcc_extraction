@@ -1,0 +1,23 @@
+{
+  "invariants_verified": true,
+  "total_checks": 1,
+  "passed_checks": 1,
+  "failed_checks": 0,
+  "checks": [
+    {
+      "name": "strict_funnel_inclusion_m1_to_m5",
+      "passed": true,
+      "details": {
+        "strict_m5_subset_of_m4": true,
+        "strict_funnel_monotone_m1_to_m5": true,
+        "m4_count": 4390,
+        "m5_sequential_count": 4390,
+        "m5_unconstrained_count": 6333,
+        "common_m4_m5_unconstrained": 4390,
+        "exclusive_m4": 0,
+        "exclusive_m5_unconstrained": 1943
+      },
+      "errors": []
+    }
+  ]
+}
