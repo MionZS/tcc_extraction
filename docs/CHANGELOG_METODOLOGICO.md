@@ -1,6 +1,6 @@
 # Changelog Metodológico
 
-- **[Correção 1]** Congelamento de normalização P01–P99, ECDF e limiares em `CompositeAnomalyDetector.fit()` e `MultiViewAnomalyPipeline.fit()`, eliminando vazamento OOT e deslocamento de lote.
+- **[Correção 1]** Congelamento de normalização P01-P99, ECDF e limiares em `CompositeAnomalyDetector.fit()` e `MultiViewAnomalyPipeline.fit()`, eliminando vazamento OOT e deslocamento de lote.
 - **[Correção 2]** Separação explícita de `DAILY_RULES`, `OOT_MULTIVIEW` e `ABLATION_M0_M5` em runs versionadas sob `experiments/runs/<run_id>/`.
 - **[Correção 3]** Cobertura horária ajustada à `CADENCE_MINUTES` em `src/eda/uc_timeseries.py`.
 - **[Correção 4]** Remoção de expressões `or True` e implantação de validadores fail-closed de partição, balanço de conjuntos em fila e anti-vazamento temporal.

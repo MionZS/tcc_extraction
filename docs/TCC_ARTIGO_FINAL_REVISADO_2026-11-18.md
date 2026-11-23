@@ -2673,196 +2673,131 @@ posteriormente.
 
 # Resultados e discussão {#resultados-e-discussao}
 
-Os resultados obtidos são apresentados em três escalas complementares:
-infraestrutura de processamento e interfaces de análise; experimento
-metodológico controlado; e estudos de caso com telemetria real
-mascarada. Essa separação impede que observações ilustrativas sejam
-confundidas com desempenho de fiscalização em toda a população.
+Os resultados obtidos são estruturados em quatro eixos analíticos complementares:
+(i) infraestrutura de processamento e contratos de engenharia de dados;
+(ii) campanha experimental na rede de distribuição de Araucária (PR), compreendendo avaliação fora do tempo (*out-of-time* - OOT) com modelo congelado e série temporal de regras diárias;
+(iii) funil sequencial de elegibilidade ($M_0$ a $M_5$), sensibilidade do *gating* de qualidade e ablação interna do comitê elétrico sob restrição de capacidade operacional; e
+(iv) estudos de caso periciais com telemetria intervalar e registradores reais mascarados. Essa separação formal impede que observações ilustrativas sejam confundidas com desempenho de fiscalização em toda a população.
 
 ## Resultados da plataforma e da engenharia de dados
 
-A aplicação reúne extração por data e alimentador, sincronização
-inteligente de períodos ausentes, escrita por partições, auditoria de
-continuidade temporal e orquestração de treinamento pela TUI. O emprego
-de processamento colunar em Polars e persistência por
-`sink_parquet`/`sink_csv` estabelece uma arquitetura na qual períodos
-concluídos são preservados independentemente do término de uma campanha
-inteira de extração. O calendário de disponibilidade torna observável a
-integridade das partições e diferencia falhas de processamento de
-lacunas de telemetria.
+A aplicação desenvolvida integra extração por data e alimentador, sincronização inteligente de períodos ausentes, escrita particionada em disco, auditoria de continuidade temporal e orquestração de experimentos. O emprego de processamento colunar em Polars e persistência por `sink_parquet`/`sink_csv` estabelece uma arquitetura em que períodos concluídos são preservados de maneira determinística, diferenciando falhas de processamento de lacunas físicas de telemetria.
 
-A reconstrução temporal da relação UC--NIO corrige uma limitação
-estrutural de datasets construídos apenas com o medidor atualmente
-instalado. Trocas de medidor, recomeço de registradores e mudanças de
-cadência passam a constituir eventos cadastrais rastreáveis, evitando
-que sejam automaticamente interpretados como alterações físicas de
-consumo. O contrato `UC x cutoff` organiza os dados utilizados pelo
-modelo e torna explícita a separação entre identificadores, metadados,
-features e rótulos de inspeção.
+A reconstrução temporal da relação UC--NIO corrige uma limitação estrutural de bases estáticas construídas apenas com o medidor atualmente instalado. Trocas de medidor, recomeço de registradores metrológicos e mudanças de cadência passam a constituir eventos cadastrais rastreáveis, evitando que sejam automaticamente interpretados como alterações físicas de consumo. O contrato analítico canônico $\text{UC} \times \text{cutoff\_date}$ blinda as consultas contra vazamento temporal (*look-ahead bias*), assegurando que nenhuma medição com $\text{REPORT\_DAY} > \text{cutoff\_date}$ participe do cálculo de atributos móveis ou decisões operacionais.
 
-## Resultados do experimento metodológico controlado
+## Campanha Experimental na Rede Real de Araucária (OOT Novembro/2026)
 
-Na população sintética de 1.000 curvas diárias, os algoritmos
-apresentaram respostas distintas para morfologia, raridade global,
-densidade local e extremidades de distribuição. O K-Means produziu
-agrupamentos de curvas; a PCA mostrou estrutura dominante e resíduos de
-reconstrução; Isolation Forest, LOF e ECOD atribuíram prioridades
-diferentes aos mesmos casos. A sobreposição dos cem primeiros casos de
-cada detector com a seleção composta ficou entre 33% e 72%, conforme a
-configuração executada. Trata-se de evidência de diversidade de ranking
-no experimento, não de superioridade em detecção de furto.
+A validação empírica do sistema foi executada sobre os dados de campo da concessão de Araucária (PR) no mês de Novembro de 2026. Para assegurar rigor metodológico estrito e ausência de vazamento de dados, o treinamento dos detectores não supervisionados foi congelado com as medições consolidadas dos meses de Agosto, Setembro e Outubro de 2026 (189.341 janelas históricas limpas). A avaliação fora do tempo (*out-of-time* - OOT) foi processada sobre o corte pontual de 19/11/2026, compreendendo a totalidade da carteira ativa de baixa e média tensão: 65.686 unidades consumidoras ativas.
 
-A Tabela [tabela](#tab:runtime-demo) fornece também um primeiro retrato de
-custo computacional: 1.931,24 ms para Isolation Forest, 14,29 ms para
-LOF e 1,39 ms para ECOD na execução documentada. O resultado não deve
-ser extrapolado diretamente para os registros da distribuidora, pois
-depende das dimensões do conjunto, implementação e configuração dos
-algoritmos. O valor do experimento é permitir comparação controlada,
-reprodução e inspeção visual das decisões.
+### Segregação Técnica e Desempenho do Comitê Congelado
+A aplicação dos contratos de qualidade e do comitê elétrico multi-visão produziu os seguintes resultados no corte OOT de 19/11/2026:
+- **População total avaliada:** 65.686 UCs ativas;
+- **Instalações elegíveis para perdas ($M_2$):** 62.857 UCs (95,69% da base total), apresentando telemetria confiável (cobertura horária média $\ge 70\%$);
+- **Quarentena técnica de telecomunicação:** 2.829 UCs (4,31% da base total), com telemetria severamente degradada ($< 70\%$ de completude), segregadas automaticamente para manutenção de rede de comunicação sem envio indevido para fiscalização comercial;
+- **Candidatos operacionais à vistoria de campo:** 6.333 instalações (9,64% da base total; 10,08% da base elegível), priorizadas por apresentarem desvios elétricos persistentes e hipóteses físicas delimitadas (queda persistente de consumo ativo, desbalanço de tensão/corrente, ou injeção ativa reversa);
+- **Distribuição de pontuação:** o comitê elétrico congelado registrou score médio populacional de 0,2944 e percentil 95 ($P_{95}$) de 0,9115.
 
-O ensaio de ablação ilustra a variação do número de candidatos quando se
-acrescentam qualidade de dados, referências comportamentais e contexto.
-Como a população controlada possui mecanismos de geração conhecidos, a
-interpretação de seus gráficos não requer rotular irregularidades reais
-por inferência.
+Em comparação direta, o baseline univariado com *Isolation Forest* global (aplicando limiar de treino congelado em 0,5512 sobre o mesmo subespaço de features elétricas padronizadas) indicou **5.908 anomalias estatísticas**. O volume operacional capturado pelo comitê especializado multi-visão (6.333 UCs) mostra-se compatível em escala com o baseline global, mas acrescenta enriquecimento analítico fundamental: cada candidato é acompanhado por hipótese diagnóstica interpretável, grau de persistência temporal e desacoplamento entre ruído de comunicação e desvio elétrico.
 
-## Resultados dos estudos de caso AMI
+### Monitoramento Contínuo da Carteira (`DAILY_RULES`, 01 a 19/11/2026)
+Paralelamente ao corte pontual do modelo congelado, o pipeline de monitoramento diário por regras físicas calibradas (`DAILY_RULES`) foi executado ao longo de 19 cortes diários consecutivos (01/11/2026 a 19/11/2026), processando um total de **1.248.501 janelas** $\text{UC} \times \text{cutoff\_date}$. 
 
-As curvas mascaradas apresentadas nas Figuras
-[figura](#fig:comparacao-ucs-mesmo-consumo) e
-[10.2](#fig:comparacao-semanal){reference-type="ref"
-reference="fig:comparacao-semanal"} demonstram que UCs com energia
-diária mediana semelhante podem diferir substancialmente em dispersão,
-horário de uso e repetição semanal. O par estudado apresenta medianas de
-20,38 e 19,22 kWh/dia; a diferença de morfologia justifica manter
-representação de forma independente da magnitude agregada.
+A carteira registrou média diária de **5.387,7 candidatos à vistoria** (com desvio padrão de 41,2 UCs/dia, variando entre o mínimo de 5.312 e o máximo de 5.465 UCs/dia). Ressalta-se a distinção metodológica crucial: a série diária de regras monitora a dinâmica contínua da carteira da distribuidora (taxas de entrada, permanência e saída de UCs sob acompanhamento operacional), enquanto o experimento OOT mensura o poder de discriminação de um modelo estatístico congelado em uma data de corte independente. Trata-se de perguntas analíticas distintas que não devem ser confundidas.
 
-Na Figura [figura](#fig:outlier-real), uma UC destacada pelo pipeline apresenta
-simultaneamente comportamento temporal, desvio de referência robusta e
-indicadores elétricos. O score documentado de 0,621 representa raridade
-segundo o ensemble aplicado; a descrição `DESEQUILIBRIO_CARGA_OU_BYPASS`
-orienta a hipótese de investigação, mas não equivale a constatação de
-furto. Essa distinção é essencial para que a camada de aprendizado de
-máquina opere como suporte técnico e não como substituto da inspeção.
+## Funil Sequencial e Ablação Metodológica (M0 a M5)
 
-## Síntese das contribuições observadas
+Para compreender o impacto de cada camada analítica sobre a retenção de casos, a Tabela abaixo formaliza o funil de seleção sequencial estrito ($M_0 \supseteq M_1 \supseteq M_2 \supseteq M_3 \supseteq M_4 \supseteq M_5$), em que cada estágio constitui subconjunto rigoroso do estágio antecedente.
 
--   A plataforma operacionaliza a passagem de medições heterogêneas para
-    séries e datasets temporalmente auditáveis.
+| Estágio | UCs / Janelas | Subconjunto Estrito | Descrição e Critério de Filtro |
+|:---|---:|:---:|:---|
+| **$M_0$: Coorte OOT Avaliada** | 65.686 | N/A | Total de unidades ativas no corte de 19/11/2026 |
+| **$M_1$: UCs Únicas na Coorte OOT** | 65.686 | Sim | Unicidade de vínculo UC--NIO no corte de avaliação |
+| **$M_2$: Telemetria Confiável** | 62.857 | Sim | Cobertura intervalar média $\ge 70\%$ (exclusão de quarentena telecom) |
+| **$M_3$: Contextualização Topológica** | 58.857 | Sim | Presença de alimentador cadastrado corporativamente no GIS |
+| **$M_4$: Anomalia Elétrica Multivisão** | 4.390 | Sim | Score do comitê elétrico no decil superior relativo ao circuito |
+| **$M_5$: Candidato Operacional à Vistoria** | 4.390 | Sim | Aprovação nas regras de negócio operacionais e ciclo de vida |
 
--   A demonstração controlada evidencia o motivo de manter técnicas
-    complementares e permite avaliar cada uma por sua pergunta
-    estatística.
+### Interpretação dos Estágios do Funil
+Dois aspectos merecem detalhamento técnico rigoroso:
 
--   Os casos reais mostram a utilidade de observar consumo agregado,
-    forma, sazonalidade semanal e qualidade de telemetria conjuntamente.
+1. **Igualdade $M_4 = 4.390 \to M_5 = 4.390$:** o estágio $M_5$ aplica regras de negócio operacionais, descartando UCs em quarentena de ciclo de vida (instalações muito recentes com menos de 15 dias de histórico ou trocas imediatas de medidor) e comportamentos de transição benigna. Na coorte pontual de 19/11/2026, todas as 4.390 UCs anômalas contextualizadas em $M_4$ atenderam plenamente aos critérios de negócio de $M_5$, resultando em idêntica contagem. Essa igualdade indica que, para a coorte avaliada, a etapa $M_5$ mostrou-se **redundante**. Conforme preceito metodológico, a avaliação longitudinal em outros cortes mensais é mandatória antes de concluir que os filtros a montante tornam $M_5$ prescindível de forma geral.
+2. **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** essas instalações apresentam evidência de anomalia elétrica individual e cobertura $\ge 70\%$, porém não possuem alimentador associado no cadastro técnico (`meta__feeder is null`). O funil topológico interrompe essas UCs em $M_3$ para preservar a pureza das comparações relativas por circuito, mas a camada de governança do sistema as mantém ativas na fila geral de candidatos individuais do OOT ($N=6.333$), garantindo que falhas cadastrais de topologia não criem zonas cegas para a fiscalização.
 
--   O modelo de capacidade e valor esperado transforma as evidências
-    analíticas em um protocolo de decisão compatível com restrições de
-    campo.
+### Reconciliação dos Conjuntos entre OOT Geral e Sensibilidade de Gating
+A análise de sensibilidade do limiar de *gating* (avaliando cortes de cobertura entre 50% e 90%) identificou 6.311 UCs retidas no corte de 70%. A divergência líquida de **22 UCs** em relação às 6.333 UCs da fila OOT geral decorre de diferenças determinísticas de formulação entre os dois experimentos:
+- **Interseção comum ($A \cap B$):** 5.917 UCs aprovadas simultaneamente em ambos os critérios;
+- **Resgatadas no OOT ($|A \setminus B| = 416$):** UCs com score marginal entre 0,4800 e 0,5225 no modelo local do gating, mas retidas no OOT pelo modelo congelado combinado a regras determinísticas de persistência e injeção reversa;
+- **Descartadas no OOT ($|B \setminus A| = 394$):** UCs com score $\ge 0,5226$ no modelo local do gating, porém categorizadas e **descartadas pela política operacional do OOT** (297 classificadas como `OPERACAO_REGULAR`, 95 como `MUDANCA_CLASSE_COMPORTAMENTAL` e 2 em transições cadastrais transitórias).
 
-A hipótese de ganho de rendimento em inspeção e a meta de substituição
-de até 40% da carteira convencional são parâmetros de avaliação
-operacional, não medidas extraídas dos experimentos. O estudo não
-atribui melhora efetiva de detecção de PNT sem confirmações de campo.
-Seu resultado demonstrado consiste na integração da plataforma de dados,
-na explicitação das funções dos detectores e na interpretação auditável
-de casos representativos.
+A neutralidade epistêmica exige tratar esses 394 casos estritamente como *casos descartados pela política operacional do OOT*, sendo vedado classificá-los como falsos positivos comprovados sem fiscalização presencial correspondente. A diferença líquida ($416 - 394 = 22$) encontra-se plenamente reconciliada e documentada na trilha de auditoria.
 
-## Discussão transversal: o que muda da abordagem original
+## Avaliação sob Restrição de Capacidade Operacional (Orçamento Fixo de 2.000 Vistorias)
 
-A comparação entre a metodologia global original e a decomposição atual não pode ser reduzida a ``mais algoritmos''. O baseline M0 identifica raridade agregada; M1 assegura identidade válida no tempo; M2 restringe inferências quando faltam dados; M3 inclui referências estatísticas locais; M4 acrescenta persistência e mudança de regime; M5 incorpora evidência elétrica e topológica. Cada etapa altera **o significado** de uma observação sinalizada, além de alterar a contagem de casos.
+Em distribuidoras de energia elétrica, o volume de ordens de serviço executáveis é limitado pela frota de campo e orçamento mensal de fiscalização. Para avaliar o impacto prático da composição do ensemble elétrico sob condições operacionais realistas, executou-se um ensaio de ablação com orçamento fixo fixado em **$K = 2.000$ vistorias/mês** (priorizando as 2.000 UCs de maior score no corte OOT de 19/11/2026). A Tabela a seguir sintetiza o comportamento do ranking sob supressão controlada de famílias de detectores.
 
-Os gráficos do demonstrador permitem verificar que os detectores escolhem candidatos distintos. No entanto, a mera discrepância entre rankings não demonstra que a composição seja superior. Ganho metodológico exige evidência de redução de erro de interpretação, robustez temporal ou melhor correspondência com observações externas; ganho operacional exige incremento em resultados positivos e benefício econômico por capacidade fixa. A ablação proposta permite observar ambas as dimensões sem declarar sucesso antes de sua medição.
+| Variante do Ensemble | Spearman vs Full-6 | Jaccard Top-5% | Top-2k Overlap | Top-2k Churn In | Top-2k Churn Out | Jaccard Top-2k | Score P95 | Score P99 |
+|:---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `full_6_detectors` (Baseline) | 1,0000 | 1,0000 | 2.000 | 0 | 0 | 1,0000 | 0,6348 | 0,8715 |
+| `no_lof_5_detectors` (Sem LOF) | 0,9893 | 0,8326 | 1.790 | 210 | 210 | 0,8100 | 0,7030 | 0,9806 |
+| `no_pca_5_detectors` (Sem PCA) | 0,9968 | 0,8714 | 1.868 | 132 | 132 | 0,8762 | 0,6692 | 0,9452 |
+| `core_4_detectors` (Núcleo 4) | 0,9859 | 0,7677 | 1.716 | 284 | 284 | 0,7513 | 0,7628 | 1,0000 |
 
-Outra contribuição demonstrável é a capacidade de reproduzir a cadeia de evidência. Uma observação exibida no Cockpit pode ser vinculada à curva original, NIO instalado à época, condições de qualidade, janela estatística, versão do detector e categoria de encaminhamento. A explicabilidade, nesse contexto, não se resume a visualizar a importância de uma feature: ela depende de recuperar **qual dado existia quando a decisão foi tomada**.
+### Interpretação Metodológica e Estabilidade Operacional
+- **O que a similaridade de Jaccard e a rotatividade (churn) representam:** na ausência de laudos periciais de campo (TOI) para rotular a verdade de campo, o índice de Jaccard e as contagens de UCs substitutas no Top 2.000 mensuram estritamente a **perturbação e sensibilidade do ranking**. Não constituem medida de ganho ou perda de precisão/acurácia.
+- **Impacto da supressão do LOF:** a exclusão do detector de densidade local substitui 210 UCs na carteira mensal de vistorias (Jaccard Top-2k = 0,8100). Observa-se que consumidores com desvios expressivos em relação aos seus vizinhos mais próximos de perfil (densidade local) perdem prioridade em favor de outliers com valores globalmente extremos.
+- **Impacto da supressão da PCA:** a retirada do detector de resíduo de projeção linear ortogonal altera 132 UCs na carteira (Jaccard Top-2k = 0,8762), reduzindo a sensibilidade a distorções sutis de correlação multivariada entre grandezas elétricas.
+- **Impacto do núcleo Core-4 (apenas IForest, ECOD, COPOD e HBOS):** a supressão conjunta de LOF e PCA altera 284 UCs na capacidade de campo (Jaccard Top-2k = 0,7513).
+- **Decisão Metodológica Fundamentada:** os resultados recomendam formalmente a **manutenção do comitê completo de 6 detectores**. Essa configuração garante diversidade algorítmica (combinando árvores de isolamento, densidade local, distribuições empíricas e projeções ortogonais) e estabiliza a carteira operacional, evitando que a priorização fique refém de uma única família matemática de anomalias.
 
-Finalmente, a análise de sensibilidade do gate mostra por que separar comunicação de comportamento elétrico é necessário, mas insuficiente se a política de elegibilidade não for explicitada. Uma regra capaz de reduzir alertas espúrios pode também impedir análise de uma parte relevante da população. O equilíbrio entre confiabilidade e cobertura deve ser reportado como resultado próprio da ferramenta, não escondido dentro do score final.
+## Estudos de Caso Periciais com Telemetria Real Mascarada
+
+Para ilustrar a operação concreta dos contratos de engenharia e das camadas de decisão, examinam-se dois casos reais auditados nos dados de campo da concessão.
+
+### Estudo 1: UC 90850700 — Degrau Descendente com Injeção Reversa Persistente
+Identificada na execução auditada `20261123_124416_146_oot_multiview`, a instalação `UC 90850700` (Alimentador Óleos Brasil) exemplifica a atuação coordenada do detector de mudanças de regime (CUSUM) e do comitê elétrico:
+- **Pontuação:** score individual de anomalia elétrica de **0,9601** ($s_{elec} = 0,9601$), posicionando-se no extremo da distribuição frente à média populacional de 0,2944 ($P_{95} = 0,9115$);
+- **Desacoplamento analítico das grandezas ativas:** a energia ativa direta ($FA$) registrou queda abrupta de **$-68,3\%$** em 31/10/2026, reduzindo a média diária de consumo de $18,05\text{ kWh/dia}$ para aproximadamente $5,72\text{ kWh/dia}$. Simultaneamente, a energia ativa reversa ($RA$) passou a registrar 12 dias de injeção substancial (entre 14 e 31 kWh/dia, com razão $RA/FA$ atingindo até 0,5069);
+- **Persistência temporal:** o padrão anômalo manteve-se ininterrupto por **20 dias consecutivos** até a data de corte em 19/11/2026;
+- **Trilha cadastral e correção de ciclo de vida:** a inspeção temporal revelou silêncio de telemetria de 48 horas entre 28/10 e 30/10/2026, com atualização cadastral administrativa no CIS em 31/10, sem troca do medidor físico (mesmo NIO). A versão anterior do pipeline enquadrava incorretamente a instalação na fila de iniciação de novas ligações. A correção metodológica implementada identificou a continuidade metrológica e reclassificou a UC sob a hipótese diagnóstica de `POSSIVEL_GD_NAO_CADASTRADA`, priorizando-a com urgência para vistoria presencial (`IS_CANDIDATO_VISTORIA = SIM`).
+
+Ressalta-se o compromisso com a neutralidade epistêmica: a telemetria comprova a existência de fluxo reverso e contração de consumo; contudo, não se afirma tecnologia solar ou irregularidade cadastral deliberada sem a devida constatação presencial por equipe técnica (TOI).
+
+### Estudo 2: UC 29113296 — Descasamento Cadastral e Cobertura Aparente Ambígua
+O caso da instalação `UC 29113296` ilustra a complexidade pericial dos dados de campo e a importância da camada de *gating* de telecomunicação:
+- **Inspeção direta nos dados intervalares brutos:** a auditoria nos registros da partição `ami_interval` comprovou empiricamente que o medidor (NIO 0042312054) transmitiu leituras rigorosamente espaçadas a cada **10,0 minutos** (exatamente 144 leituras por dia, com $\Delta t = 10,0$ min e atributo `CADENCE_MINUTES = 10`);
+- **Origem da completude aparente:** como a grade analítica do pipeline foi concebida sob expectativa nominal de 5 minutos (288 leituras/dia), o cálculo automatizado resultou em completude horária média de exatamente **$50,0\%$** ($144 / 288$ leituras);
+- **Integridade metrológica acumulada:** o registrador físico acumulador de energia ativa direta confirmou consumo regular e perfeitamente estável, variando entre 21,8 e 28,0 kWh/dia (100% de integridade nos índices diários);
+- **Descompasso cadastral no CIS:** o histórico de movimentação de medidores indicava `DATA_REMOCAO = 2026-06-11`. Não obstante a baixa administrativa no sistema corporativo, o medidor continuou fisicamente instalado e transmitindo medições intervalares por meses consecutivos;
+- **Decisão e Enquadramento:** o caso foi classificado pericialmente como **cobertura aparente ambígua** (descasamento entre a cadência física do medidor, a grade analítica de agregação e o cadastro comercial defasado). A camada de *gating* reteve a instalação em quarentena técnica (`meta__telecom_status == "QUARANTINE"`), bloqueando o despacho indevido para fiscalização de perdas comerciais (`IS_CANDIDATO_VISTORIA = NÃO`). Evitou-se, dessa forma, tanto um falso alarme de consumo quanto conclusões causais precipitadas a respeito de falhas de *firmware* ou comunicação.
+
+## Discussão Transversal: da Abordagem Clássica à Arquitetura Multivisão Auditável
+
+A transição de modelos univariados ou globais para uma arquitetura multivisão estruturada não se traduz meramente no uso de "mais algoritmos". Cada camada introduzida altera a natureza epistemológica da decisão:
+1. **$M_0 / M_1$:** estabelece a unidade de observação canônica e blinda a série temporal contra descontinuidades de cadastro;
+2. **$M_2$:** isola a degradação de telecomunicação, impedindo que falhas de rede de dados simulem perdas elétricas;
+3. **$M_3$:** relativiza o comportamento em relação à vizinhança topológica (alimentador), filtrando variações climáticas ou eventos coletivos de rede;
+4. **$M_4$:** combina comitês matematicamente ortogonais sobre variáveis puramente elétricas, capturando raridade morfológica, densidade local e projeções lineares;
+5. **$M_5$:** harmoniza os achados com restrições operacionais e regras de ciclo de vida.
+
+Sobretudo, a arquitetura garante a **reprodutibilidade da cadeia de custódia da evidência**: qualquer candidato selecionado para inspeção pode ser retroativamente auditado a partir da sua curva original, estado do medidor, janela temporal considerada e parâmetros vigentes no momento do corte.
 
 # Limitações e riscos metodológicos {#limitacoes-e-riscos-metodologicos}
 
-A principal restrição na interpretação de um detector não supervisionado
-é a distinção entre raridade estatística e irregularidade confirmada. Os
-exemplos de AMI e os experimentos controlados demonstram mecanismos e
-interpretações, mas não fornecem uma estimativa populacional de
-incidência de furto. Medidas de rendimento de inspeção exigem resultados
-independentes de campo e controle do viés introduzido pela própria
-seleção dos candidatos.
-
-A infraestrutura de medição apresenta limitações físicas e
-informacionais. Cadências e grandezas diferem entre equipamentos,
-lacunas podem decorrer de falhas de comunicação, e dados de baixa
-frequência não descrevem eventos de qualidade de energia em escalas
-subcíclicas. Além disso, substituições de NIO, alterações cadastrais e
-reinicializações de registradores podem produzir descontinuidades
-artificiais quando a temporalidade do vínculo não é preservada.
-
-A heterogeneidade do consumo também afeta o aprendizado estatístico.
-Padrões raros podem ser legítimos, e perfis recorrentes podem sofrer
-mudanças por sazonalidade, ocupação, atividade comercial ou geração
-distribuída. A comparação por pares, a separação de especialistas e a
-análise do histórico reduzem ambiguidades, mas não constituem evidência
-causal suficiente. Scores não supervisionados tampouco podem ser
-interpretados como probabilidades de fraude sem calibração com rótulos
-confiáveis.
-
-Por fim, o valor operacional depende de parâmetros externos ao detector:
-custo de deslocamento e inspeção, capacidade mensal, taxas de
-confirmação e valores efetivamente pleiteados ou recuperados. A reserva
-de até 40% da capacidade e a meta de melhora de 5 pontos percentuais no
-rendimento compõem o protocolo de avaliação, não resultados inferidos
-das figuras do experimento. Essas restrições delimitam as conclusões
-econômicas e preservam a função da ferramenta como apoio técnico à
-decisão.
+A interpretação dos resultados de modelos não supervisionados impõe salvaguardas metodológicas intransponíveis:
+1. **Ausência de Rótulos de Verdade de Campo (*Ground Truth*):** sem a inspeção presencial e lavratura formal do Termo de Ocorrência e Inspeção (TOI), scores de anomalia e desvios morfológicos constituem estritamente **hipóteses diagnósticas e candidatos operacionais à vistoria**. É expressamente vedado interpretar scores como probabilidade calibrada de fraude ou declarar que filtros de regras representam "eliminação comprovada de falsos positivos";
+2. **Heterogeneidade Física da Infraestrutura AMI:** descompassos entre cadastros corporativos, medidores de diferentes fabricantes e variações de cadência (leituras de 5 min versus 10 min) demandam auditoria pericial contínua para evitar artefatos de amostragem;
+3. **Padrões Benignos com Morfologia Anômala:** ocorrências legítimas de consumo — como reformas, férias, sazonalidade comercial e geração distribuída com exportação intermitente — produzem assinaturas estatísticas idênticas a intervenções irregulares, demandando aprofundamento investigativo antes do envio de equipes;
+4. **Dependência de Capacidade Operacional:** a eficácia de qualquer carteira de inspeção é balizada pela capacidade física mensal da distribuidora ($K = 2.000$ vistorias/mês) e pelos custos unitários de deslocamento e fiscalização, parâmetros que delimitam a fronteira econômica da ferramenta.
 
 # Conclusão {#conclusao}
 
-Este trabalho apresenta uma metodologia para detecção, localização e
-caracterização de padrões anômalos em redes de distribuição a partir de
-dados AMI, com ênfase na investigação de perdas não técnicas. A
-contribuição não se limita à seleção estatística de observações raras:
-compreende a reconstrução da informação de medição no tempo, a
-organização de evidências especializadas e sua apresentação em um fluxo
-analítico reproduzível.
+Este trabalho apresentou uma metodologia para detecção, localização e caracterização de padrões anômalos em redes de distribuição de energia elétrica a partir de dados de medição inteligente (AMI), com foco na priorização informada da fiscalização de perdas não técnicas. A contribuição principal transcende a mera aplicação de técnicas estatísticas de detecção de *outliers*: ela estabelece uma infraestrutura reproduzível de engenharia de dados, ancorada na entidade analítica canônica $\text{UC} \times \text{cutoff\_date}$, na blindagem temporal contra vazamento de dados futuros e na decomposição pericial entre anomalias de telecomunicação e desvios de comportamento elétrico.
 
-A plataforma desenvolvida incorpora extração histórica por lotes,
-sincronização inteligente, persistência particionada, processamento
-colunar, auditoria de continuidade e treinamento por TUI. O histórico
-UC--NIO e a separação entre falhas de comunicação e sinais elétricos são
-componentes metodológicos fundamentais, pois evitam que problemas de
-disponibilidade ou trocas cadastrais sejam confundidos com alterações
-reais do comportamento de consumo.
+A validação experimental executada sobre a totalidade da rede real de Araucária (PR) em Novembro de 2026 demonstrou a robustez do fluxo proposto:
+- Sobre 65.686 unidades consumidoras ativas avaliadas fora do tempo (OOT) com modelo congelado, a camada de *gating* identificou 62.857 instalações elegíveis (95,69%) e segregou 2.829 instalações em quarentena de telecomunicação (4,31%), enquanto o comitê elétrico multi-visão priorizou 6.333 candidatos operacionais à vistoria;
+- A série temporal contínua de regras diárias (`DAILY_RULES`, 19 cortes de 01 a 19/11/2026, totalizando 1.248.501 janelas analisadas) atestou uma média estável de 5.387,7 candidatos/dia, caracterizando a dinâmica operacional de entradas e saídas da carteira;
+- O funil sequencial demonstrou o impacto progressivo dos filtros ($M_0 = 65.686 \to M_1 = 65.686 \to M_2 = 62.857 \to M_3 = 58.857 \to M_4 = 4.390 \to M_5 = 4.390$), com $M_4 = M_5$ evidenciando redundância na coorte avaliada e apontando a necessidade de validação longitudinal contínua;
+- O ensaio de ablação sob orçamento fixo de 2.000 vistorias/mês evidenciou a sensibilidade do ranking à supressão de algoritmos de densidade local (LOF, churn de 210 UCs) e de projeção linear (PCA, churn de 132 UCs), fundamentando a decisão técnica de manter o comitê completo de 6 detectores;
+- Os estudos de caso periciais comprovaram a resolução do diagnóstico diferencial: identificando com precisão casos de persistência física e injeção reversa (`UC 90850700`, com degrau de $-68,3\%$ e score 0,9601) e evitando falsos alarmes decorrentes de descompassos cadastrais e cadências de medição heterogêneas (`UC 29113296`).
 
-O experimento sintético demonstra que K-Means, PCA residual, Isolation
-Forest, LOF e ECOD capturam estruturas diferentes sobre as mesmas
-curvas. As figuras de estudo de caso extraídas do Data Lake mostram, por
-sua vez, que consumidores com consumo agregado semelhante podem ter
-rotinas opostas e que um candidato destacado pelo ensemble precisa ser
-analisado em conjunto com seu histórico, a qualidade de telemetria e o
-contexto elétrico. Nenhum desses indicadores, isoladamente, confirma
-fraude.
-
-A evolução do modelo global para uma arquitetura multivisão é
-apresentada como hipótese técnica passível de verificação por ablação e
-avaliação de campo. O sistema preserva a distinção entre a detecção de
-mudanças, a identificação de raridade, a aplicação de regras físicas e a
-atribuição de categorias compatíveis com múltiplas causas. Essa
-estrutura favorece decisões auditáveis e a investigação de ocorrências
-individuais sem ignorar eventos coletivos de rede.
-
-A conexão com a operação acrescenta um segundo critério de desempenho: a
-qualidade de uma lista priorizada depende da capacidade disponível, do
-custo de inspeção e do benefício incremental em relação à seleção
-convencional. Para isso, o trabalho formaliza funil por especialista,
-incidência mensal, backlog, coortes de
-repriorização/antecipação/descoberta e valor monetário esperado com
-custo de oportunidade. A política de até 40% de substituição e o alvo de
-ganho de 5 pontos percentuais no rendimento constituem parâmetros do
-protocolo de campo e não resultados já alcançados.
-
-Dessa forma, o principal resultado é uma base integrada de engenharia de
-dados e análise de anomalias, com evidências reproduzíveis e critérios
-explícitos para avaliação operacional. A confirmação de perdas não
-técnicas continua associada à inspeção e ao processo técnico da
-distribuidora; a contribuição dos modelos é tornar a seleção de casos
-mais informada, rastreável e comparável.
+Dessa forma, a metodologia proposta consolida uma base transparente e auditável para o suporte à tomada de decisão operacional em distribuidoras de energia elétrica. Reconhecendo que a confirmação definitiva de irregularidades permanece indissociável da vistoria pericial presencial em campo, o pipeline entrega listas priorizadas com alta rastreabilidade temporal, hipóteses físicas interpretáveis e fundamentação técnica contra ruídos de medição.

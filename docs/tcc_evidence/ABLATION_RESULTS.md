@@ -11,8 +11,8 @@
 | M5: M4 & Candidato Operacional Vistoria | 4,390 | Sim |
 
 - **Nota de Escopo ($M_0$ vs $M_1$):** $M_0$ contabiliza as 65.686 UCs avaliadas no corte único OOT de 19/11/2026 (portanto idêntico a $M_1$).
-- **Por que $M_4 = 4.390 \to M_5 = 4.390$:** O estágio $M_5$ aplica regras de negócio operacionais (exclusão de quarentena de ciclo de vida e classes benignas). Na coorte de 19/11, todas as 4.390 UCs anômalas em $M_4$ atenderam plenamente a esses requisitos (instalações maduras com hipótese física comprovada), demonstrando que nessa data os filtros prévios de qualidade já haviam saneado a base.
-- **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** São candidatas elétricas válidas com cobertura $\ge 70\%$, score anômalo e hipótese física (1.385 PNT, 344 medidor travado, 214 GD reversa), porém sem alimentador cadastrado corporativamente (`meta__feeder is null`). São interrompidas em $M_3$ para não corromper agrupamentos por alimentador, mas continuam ativas para fiscalização individual no OOT geral.
+- **Por que $M_4 = 4.390 \to M_5 = 4.390$:** O estágio $M_5$ aplica regras de negócio operacionais (exclusão de quarentena de ciclo de vida e classes benignas). Na coorte pontual de 19/11/2026, todas as 4.390 UCs anômalas em $M_4$ atenderam à política de negócio, tornando $M_5$ redundante nesta coorte específica. A avaliação longitudinal em outros cortes mensais é necessária antes de inferir suficiência geral dos filtros a montante.
+- **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** São instalações com hipótese diagnóstica de desvio elétrico baseada em grandezas medidas e cobertura $\ge 70\%$, porém sem alimentador cadastrado corporativamente (`meta__feeder is null`). São interrompidas em $M_3$ para preservar agrupamentos por alimentador, mas continuam ativas para fiscalização individual no OOT geral.
 
 ## 2. Ablação Interna do Ensemble Elétrico sob Orçamento Fixo de Vistorias
 | Variante | Spearman vs Full-6 | Jaccard Top-5% | Top-2k Overlap | Top-2k Churn In | Top-2k Churn Out | Jaccard Top-2k | P95 | P99 |

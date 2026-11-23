@@ -5,7 +5,7 @@
 - **`S_elec`**: Comitê de 6 detectores PyOD sobre features puramente elétricas (`select_pure_electrical_features`), ponderado por:
   - `iso_forest` (0.22), `lof` (0.20), `ecod` (0.18), `copod` (0.18), `hbos` (0.10), `pca` (0.12) + boost condicional PRODIST (+0.15 quando violação crítica de tensão/desbalanço/reversão).
 - **`S_tamper`**: `0.70 * clip(alarms / 3, 0, 1) + 0.30 * clip(-slope / 5, 0, 1)` + elevação condicional por troca recente (`+0.15`).
-- **Normalização Congelada:** Quantis P01–P99 capturados em `.fit()` sobre a coorte de treino limpa.
+- **Normalização Congelada:** Quantis P01-P99 capturados em `.fit()` sobre a coorte de treino limpa.
 - **Limiar Congelado (`OOT_MULTIVIEW`):** `0.5226` (Percentil 95 da distribuição de treino).
 
 ## 2. Auditoria Individual dos 6 Subdetectores (Coorte OOT)

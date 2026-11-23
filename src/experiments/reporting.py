@@ -98,10 +98,10 @@ Os três produtos experimentais do projeto possuem objetivos, grãos, populaçõ
 ## 4. Reconciliação Contratual Entre Métodos
 | Relação Analítica | Quantitativo | Causa Metodológica e Destino Operacional |
 |:---|---:|:---|
-| `OOT_MULTIVIEW` (6.333) vs Gating 70% (6.311) | +22 UCs | OOT aplica modelo congelado em treino + regras físicas delimitadas (descarta 394 falsos positivos estatísticos benignos e mantém 416 anomalias físicas com score $s \\in [0,48, 0,5225]$). Gating 70% é sensibilidade exploratória com corte estatístico cego ($s \\ge 0,5226$). |
+| `OOT_MULTIVIEW` (6.333) vs Gating 70% (6.311) | +22 UCs | OOT aplica modelo congelado em treino + regras operacionais de negócio (descarta 394 casos não priorizados pela política e mantém 416 casos com sinais elétricos na cauda marginal com $s \\in [0,48, 0,5225]$). Gating 70% é sensibilidade exploratória com corte estatístico cego ($s \\ge 0,5226$). |
 | Limiar 60% (`DAILY_RULES`) vs 70% (`OOT_MULTIVIEW` / $M_2$) | N/A | 70% é a política operacional mandatória para despacho de campo e funil $M_2$. 60% era tolerância usada em monitoramento diário rápido para oscilações transitórias de fim de semana. |
-| Candidatas OOT fora do funil topológico | 1.943 UCs | Possuem cobertura $\\ge 70\\%$, score anômalo e hipótese física, mas `meta__feeder` é nulo em `electrical_hierarchy.parquet`. São interrompidas em $M_3$ (análise topológica), mas permanecem ativas para vistoria individual em OOT. |
-| Estágio $M_4$ (4.390) $\\to$ $M_5$ (4.390) | 0 exclusões | Em 19/11/2026, todas as UCs anômalas contextualizadas atenderam aos critérios de elegibilidade de negócio de $M_5$ (instalações maduras sem quarentena de ciclo de vida). |
+| Candidatas OOT fora do funil topológico | 1.943 UCs | Possuem cobertura $\\ge 70\\%$, score anômalo e hipótese de desvio elétrico, mas `meta__feeder` é nulo em `electrical_hierarchy.parquet`. São interrompidas em $M_3$ (análise topológica), mas permanecem ativas para vistoria individual em OOT. |
+| Estágio $M_4$ (4.390) $\\to$ $M_5$ (4.390) | 0 exclusões | Redundante na coorte avaliada de 19/11/2026. A suficiência dos filtros a montante deve ser avaliada longitudinalmente em outros cortes mensais antes de conclusões definitivas. |
 """
     p = METHODOLOGY_DIR / "EXPERIMENT_DEFINITIONS.md"
     atomic_write_text(p, txt)
@@ -120,7 +120,7 @@ def _write_score_contracts(stab_m: dict[str, Any], oot_m: dict[str, Any]) -> Pat
 - **`S_elec`**: Comitê de 6 detectores PyOD sobre features puramente elétricas (`select_pure_electrical_features`), ponderado por:
   - `iso_forest` (0.22), `lof` (0.20), `ecod` (0.18), `copod` (0.18), `hbos` (0.10), `pca` (0.12) + boost condicional PRODIST (+0.15 quando violação crítica de tensão/desbalanço/reversão).
 - **`S_tamper`**: `0.70 * clip(alarms / 3, 0, 1) + 0.30 * clip(-slope / 5, 0, 1)` + elevação condicional por troca recente (`+0.15`).
-- **Normalização Congelada:** Quantis P01–P99 capturados em `.fit()` sobre a coorte de treino limpa.
+- **Normalização Congelada:** Quantis P01-P99 capturados em `.fit()` sobre a coorte de treino limpa.
 - **Limiar Congelado (`OOT_MULTIVIEW`):** `{oot_m.get('frozen_elec_threshold')}` (Percentil 95 da distribuição de treino).
 
 ## 2. Auditoria Individual dos 6 Subdetectores (Coorte OOT)
@@ -143,7 +143,7 @@ O pipeline desacopla estritamente as ordens de serviço em dois destinos operaci
 
 1. **Fila de Vistoria de Campo Comercial / Perdas Não Técnicas (`DESTINO_OPERACIONAL = "VISTORIA_CAMPO_PERDAS"`):**
    - **Flag:** `IS_CANDIDATO_VISTORIA = True`
-   - **Critérios:** Telemetria confiável (`COVERAGE_RELIABLE_DAYS >= 15` e `AVG_INTERVAL_COVERAGE >= 0.70`), UC não em iniciação de ciclo de vida (`is_new_uc_initiation = False`), score elétrico $\\ge {oot_m.get('frozen_elec_threshold', 0.5226)}$, e hipótese física acionável (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`).
+   - **Critérios:** Telemetria com qualidade de dados suficiente (`COVERAGE_RELIABLE_DAYS >= 15` e `AVG_INTERVAL_COVERAGE >= 0.70`), UC não em iniciação de ciclo de vida (`is_new_uc_initiation = False`), score elétrico $\\ge {oot_m.get('frozen_elec_threshold', 0.5226)}$, e enquadramento em hipótese diagnóstica de desvio elétrico (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`).
    - Falhas de telecomunicação nunca entram nesta fila.
 
 2. **Fila de Manutenção Técnica de Telecomunicações (`DESTINO_OPERACIONAL = "MANUTENCAO_TECNICA_TELECOM_*"`):**
@@ -156,16 +156,16 @@ O pipeline desacopla estritamente as ordens de serviço em dois destinos operaci
 ## 2. Reconciliação Contratual de Limiares e Populações
 
 - **Elegibilidade de Cobertura: 70% (Produção / OOT) vs 60% (Série Diária):** O despacho de campo e o funil de ablação $M_2$ operam com limiar estrito de **70% de cobertura** no intervalo (`x__avg_interval_coverage >= 0.70`), retendo {oot_m.get('oot_eligible_ucs', 62857):,} UCs ({oot_m.get('oot_eligible_ucs', 62857)/65686*100:.1f}%) e enviando {oot_m.get('oot_quarantine_ucs', 2829):,} UCs para quarentena técnica. O limiar de 60% é tolerância exploratória aplicada exclusivamente na série diária (`DAILY_RULES`) para amortecer quedas de fim de semana.
-- **Diferença de 22 UCs (6.333 OOT vs 6.311 Gating 70%):** O pipeline `OOT_MULTIVIEW` emprega modelo congelado e pós-processamento por regras físicas e de negócio (`apply_delimited_isolation_and_categories`), descartando 394 falsos positivos estatísticos benignos e resgatando 416 anomalias físicas com score em cauda marginal ($416 - 394 = +22$).
-- **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** São instalações com anomalia física confirmada e cobertura $\\ge 70\\%$, porém sem alimentador cadastrado corporativamente (`meta__feeder is null`). São interrompidas em $M_3$ (análise topológica), mas permanecem ativas na fila geral de vistorias individuais.
-- **Igualdade $M_4 = M_5$ (4.390 UCs):** Na coorte de 19/11/2026, todas as UCs anômalas contextualizadas atenderam à elegibilidade de negócio de $M_5$ (sem instalações em quarentena cadastral de início de ciclo de vida).
+- **Diferença de 22 UCs (6.333 OOT vs 6.311 Gating 70%):** O pipeline `OOT_MULTIVIEW` emprega modelo congelado e pós-processamento por regras operacionais de negócio (`apply_delimited_isolation_and_categories`), descartando 394 casos não priorizados pela política operacional e retendo 416 casos com sinais elétricos na cauda marginal sob o modelo congelado ($416 - 394 = +22$).
+- **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** São instalações com hipótese diagnóstica de desvio elétrico e cobertura $\\ge 70\\%$, porém sem alimentador cadastrado corporativamente (`meta__feeder is null`). São interrompidas em $M_3$ (análise topológica), mas permanecem ativas na fila geral de vistorias individuais.
+- **Igualdade $M_4 = M_5$ (4.390 UCs):** Na coorte de 19/11/2026, todas as UCs anômalas contextualizadas atenderam à política de negócio de $M_5$ (sem instalações em quarentena cadastral de início de ciclo de vida), mostrando-se uma etapa redundante neste corte específico. A generalização dessa suficiência deve ser avaliada longitudinalmente em novos cortes antes de conclusões definitivas.
 """
     atomic_write_text(p1, txt1)
 
     p2 = METHODOLOGY_DIR / "TEMPORAL_VALIDATION.md"
     txt2 = f"""# Protocolo de Validação Temporal e Anti-Vazamento
 
-1. **Separação Estrita Treino vs OOT:** Treino restrito a `{', '.join(oot_m.get('train_cutoffs', []))}` (`<= 2026-10-31`). Inferência em `{oot_m.get('oot_cutoff')}` realizada exclusivamente via `.score()` usando `SimpleImputer`, `RobustScaler`, subdetectores, limites P01–P99 e threshold congelados.
+1. **Separação Estrita Treino vs OOT:** Treino restrito a `{', '.join(oot_m.get('train_cutoffs', []))}` (`<= 2026-10-31`). Inferência em `{oot_m.get('oot_cutoff')}` realizada exclusivamente via `.score()` usando `SimpleImputer`, `RobustScaler`, subdetectores, limites P01-P99 e threshold congelados.
 2. **Construção de Janelas:** Todo corte `T` utiliza estritamente `REPORT_DAY in (T - 30d, T]` e `DATA_INSTALACAO <= T`.
 3. **Invariante Fail-Closed:** `validate_temporal_no_leakage` bloqueia publicação caso exista qualquer registro futuro ao corte ou data de execução.
 """
@@ -237,8 +237,8 @@ def generate_all_deliverables(run_dirs: dict[str, Path]) -> list[Path]:
 
 ## 4. Textos Prontos Derivados dos Artefatos (Método, Resultados, Estudos de Caso, Limitações)
 - **Método:** A avaliação temporal utilizou {daily_m['n_cutoffs']} cortes diários ({daily_m['start_date']} a {daily_m['end_date']}, totalizando {daily_m['total_windows_evaluated']:,} janelas `UC × cutoff`) para monitoramento `DAILY_RULES` e validação fora do tempo (`OOT_MULTIVIEW`) com modelo multi-visão ajustado sobre {oot_m['train_clean_rows']:,} janelas limpas ({', '.join(oot_m['train_cutoffs'])}) e congelado antes da inferência em {oot_m['oot_cutoff']}.
-- **Resultados:** Na inferência congelada OOT de {oot_m['oot_cutoff']}, das {oot_m['oot_total_ucs']:,} UCs ativas ({oot_m['oot_eligible_ucs']:,} elegíveis; {oot_m['oot_quarantine_ucs']:,} em quarentena), o comitê especializado priorizou **{oot_m['oot_candidates_vistoria']:,} candidatos operacionais à vistoria** sob score médio {oot_m['oot_mean_score']} (P95 = {oot_m['oot_p95_score']}), eliminando a dependência do lote (`max_abs_shift = 0.0` sob normalização congelada).
-- **Estudos de Caso (`908***00`):** A auditoria longitudinal e a correção do ciclo de vida confirmam que `908***00` possui histórico anterior no mesmo medidor (`DATA_INSTALACAO = 2026-10-31` no CIS foi atualização cadastral administrativa, não medidor novo). Com retração de consumo FA (18,05 -> 5,72 kWh/d, -68,3%), 12 dias de injeção reversa RA ativa (14–31 kWh/d) e **score OOT elétrico individual de 0.9601** (em contraste com a média populacional de {oot_m['oot_mean_score']:.4f}), a instalação é classificada sob a **hipótese diagnóstica de possível GD não cadastrada / intervenção física no medidor**, sendo priorizada para vistoria de campo sem atribuição causal prematura de fraude antes do laudo físico.
+- **Resultados:** Na inferência congelada OOT de {oot_m['oot_cutoff']}, das {oot_m['oot_total_ucs']:,} UCs ativas ({oot_m['oot_eligible_ucs']:,} elegíveis; {oot_m['oot_quarantine_ucs']:,} em quarentena), o comitê especializado priorizou **{oot_m['oot_candidates_vistoria']:,} candidatos operacionais à vistoria** sob score médio populacional de {oot_m['oot_mean_score']} (P95 = {oot_m['oot_p95_score']}), eliminando a dependência do lote (`max_abs_shift = 0.0` sob normalização congelada).
+- **Estudos de Caso (`908***00`):** A auditoria longitudinal e a correção do ciclo de vida confirmam que `908***00` possui histórico anterior no mesmo medidor (`DATA_INSTALACAO = 2026-10-31` no CIS foi atualização cadastral administrativa, não medidor novo). Sob o Run ID `{run_dirs['oot_multiview'].name}`, seu score elétrico individual foi de $s_{{elec}} = 0.9601$ (`ANOMALY_SCORE = 0.9601`), em contraste com a média populacional OOT de {oot_m['oot_mean_score']:.4f}. O consumo ativo direto $FA$ retraiu de 18,05 para 5,72 kWh/d (-68,3%) e a injeção reversa $RA$ registrou fluxo em 12 dias pós-evento (14 a 31 kWh/d), caracterizando a hipótese diagnóstica de possível GD não cadastrada / intervenção no medidor e priorizando-a para vistoria de campo, sem inferir tecnologia solar ou confirmação causal de fraude apenas pela telemetria.
 - **Limitações:** Na ausência de laudos independentes de inspeção em campo (TOI), todas as ocorrências denotam hipóteses diagnósticas e candidatos operacionais, vedada qualquer estimativa de Precision@K, redução real de falsos positivos ou fraude confirmada sem validação física.
 """
     p_aud = EVIDENCE_DIR / "AUDITORIA_NOVEMBRO.md"
@@ -287,8 +287,8 @@ def generate_all_deliverables(run_dirs: dict[str, Path]) -> list[Path]:
 {fun_md}
 
 - **Nota de Escopo ($M_0$ vs $M_1$):** $M_0$ contabiliza as 65.686 UCs avaliadas no corte único OOT de 19/11/2026 (portanto idêntico a $M_1$).
-- **Por que $M_4 = 4.390 \\to M_5 = 4.390$:** O estágio $M_5$ aplica regras de negócio operacionais (exclusão de quarentena de ciclo de vida e classes benignas). Na coorte de 19/11, todas as 4.390 UCs anômalas em $M_4$ atenderam plenamente a esses requisitos (instalações maduras com hipótese física comprovada), demonstrando que nessa data os filtros prévios de qualidade já haviam saneado a base.
-- **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** São candidatas elétricas válidas com cobertura $\\ge 70\\%$, score anômalo e hipótese física (1.385 PNT, 344 medidor travado, 214 GD reversa), porém sem alimentador cadastrado corporativamente (`meta__feeder is null`). São interrompidas em $M_3$ para não corromper agrupamentos por alimentador, mas continuam ativas para fiscalização individual no OOT geral.
+- **Por que $M_4 = 4.390 \\to M_5 = 4.390$:** O estágio $M_5$ aplica regras de negócio operacionais (exclusão de quarentena de ciclo de vida e classes benignas). Na coorte pontual de 19/11/2026, todas as 4.390 UCs anômalas em $M_4$ atenderam à política de negócio, tornando $M_5$ redundante nesta coorte específica. A avaliação longitudinal em outros cortes mensais é necessária antes de inferir suficiência geral dos filtros a montante.
+- **Destino das 1.943 UCs fora do Funil Topológico ($6.333 - 4.390 = 1.943$):** São instalações com hipótese diagnóstica de desvio elétrico baseada em grandezas medidas e cobertura $\\ge 70\\%$, porém sem alimentador cadastrado corporativamente (`meta__feeder is null`). São interrompidas em $M_3$ para preservar agrupamentos por alimentador, mas continuam ativas para fiscalização individual no OOT geral.
 
 ## 2. Ablação Interna do Ensemble Elétrico sob Orçamento Fixo de Vistorias
 | Variante | Spearman vs Full-6 | Jaccard Top-5% | Top-2k Overlap | Top-2k Churn In | Top-2k Churn Out | Jaccard Top-2k | P95 | P99 |
@@ -335,7 +335,7 @@ Avaliação independente executada sobre a coorte comum irrestrita ({oot_m['oot_
 |:---|---:|---:|---:|---:|
 {stab_md}
 
-Justificativa experimental: `frozen_quantile` (P01–P99 capturados exclusivamente no treino) e `frozen_ecdf` eliminam integralmente o deslocamento de lote (`0.0`).
+Justificativa experimental: `frozen_quantile` (P01-P99 capturados exclusivamente no treino) e `frozen_ecdf` eliminam integralmente o deslocamento de lote (`0.0`).
 """)
     written.append(p_stab)
 
@@ -368,7 +368,7 @@ Corte máximo de execução: `{audit_data['execution_cutoff_guard']}` (Violaçõ
     p_chg = DOCS_DIR / "CHANGELOG_METODOLOGICO.md"
     atomic_write_text(p_chg, """# Changelog Metodológico
 
-- **[Correção 1]** Congelamento de normalização P01–P99, ECDF e limiares em `CompositeAnomalyDetector.fit()` e `MultiViewAnomalyPipeline.fit()`, eliminando vazamento OOT e deslocamento de lote.
+- **[Correção 1]** Congelamento de normalização P01-P99, ECDF e limiares em `CompositeAnomalyDetector.fit()` e `MultiViewAnomalyPipeline.fit()`, eliminando vazamento OOT e deslocamento de lote.
 - **[Correção 2]** Separação explícita de `DAILY_RULES`, `OOT_MULTIVIEW` e `ABLATION_M0_M5` em runs versionadas sob `experiments/runs/<run_id>/`.
 - **[Correção 3]** Cobertura horária ajustada à `CADENCE_MINUTES` em `src/eda/uc_timeseries.py`.
 - **[Correção 4]** Remoção de expressões `or True` e implantação de validadores fail-closed de partição, balanço de conjuntos em fila e anti-vazamento temporal.
@@ -399,7 +399,7 @@ uv run python scripts/run_tcc_experiments.py all --config configs/experiments/no
 - Auditoria de fontes: `uv run python scripts/run_tcc_experiments.py audit --config configs/experiments/november_2026.yaml`
 - Série diária (`DAILY_RULES`): `uv run python scripts/run_tcc_experiments.py daily-rules --config configs/experiments/november_2026.yaml`
 - Modelo congelado OOT (`OOT_MULTIVIEW`): `uv run python scripts/run_tcc_experiments.py oot-multiview --config configs/experiments/november_2026.yaml`
-- Ablação M0–M5 e Subdetectores: `uv run python scripts/run_tcc_experiments.py ablation --config configs/experiments/november_2026.yaml`
+- Ablação M0-M5 e Subdetectores: `uv run python scripts/run_tcc_experiments.py ablation --config configs/experiments/november_2026.yaml`
 - Comparar duas execuções: `uv run python scripts/run_tcc_experiments.py compare-runs --baseline <RUN_ID_A> --candidate <RUN_ID_B>`
 """)
     written.append(p_guia)

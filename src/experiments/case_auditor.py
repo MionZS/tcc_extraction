@@ -312,11 +312,14 @@ def run_case_traces(config: ExperimentConfig, run_dir: Path, *, oot_run_dir: Pat
         {
             "UC_MASK": censor_uc_id("29113296"),
             "ANTERIOR": "50% de perda de pacotes crônica em RF Mesh com reconfiguração de firmware",
-            "RECALCULO_REAL": "Cadência no arquivo diário não persistida (CADENCE_MINUTES: None); consumo diário estável em 28 kWh/dia com 100% integridade no registrador acumulador",
+            "RECALCULO_REAL": (
+                "Registros intervalares em ami_interval confirmam timestamps a cada 10,0 min (CADENCE_MINUTES: 10, 144 reg/dia, NIO 0042312054). "
+                "Cadastro CIS registra DATA_REMOCAO=2026-06-11 enquanto a transmissão perdura ativa. Consumo estável em 28 kWh/dia com 100% integridade no registrador."
+            ),
             "INTERPRETACAO_CORRIGIDA": (
-                "Completude horária de 50% é compatível com cadência de 10 min (6 leituras/h frente ao divisor nominal de 12), "
-                "mas arquivos diários registram CADENCE_MINUTES: None. Sem evidência causal de reconfiguração de firmware "
-                "sem demonstração nos timestamps intervalares brutos; consumo e registrador sem anomalia elétrica."
+                "A completude horária de 50% decorre do divisor fixo de 5 min (6 leituras/h frente a 12 esperadas). "
+                "O caso ilustra cobertura aparente ambígua gerada pelo descasamento entre cadência de telemetria (10 min), "
+                "expectativa da grade e defasagem cadastral administrativa do CIS, não devendo ser afirmado como controle negativo comprovado."
             ),
         },
         {
