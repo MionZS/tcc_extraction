@@ -1,0 +1,69 @@
+{
+  "run_id": "20261123_124344_687_daily_rules",
+  "experiment_id": "november_2026",
+  "pipeline_id": "daily_rules",
+  "status": "validated",
+  "invariants_verified": true,
+  "git_commit": "f1bd47a",
+  "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+  "config": {
+    "experiment_id": "november_2026",
+    "data_source": "local_lake",
+    "scope": "study_area",
+    "start_date": "2026-11-01",
+    "end_date": "2026-11-19",
+    "timezone": "America/Sao_Paulo",
+    "unit_of_analysis": "uc_cutoff",
+    "pipeline_id": "daily_rules",
+    "train": {
+      "end_date": "2026-10-31",
+      "artifact_id": "train_aug_sep_oct_2026_v1"
+    },
+    "inference": {
+      "frozen_preprocessing": true,
+      "frozen_model": true,
+      "frozen_thresholds": true,
+      "normalization_mode": "frozen_quantile"
+    },
+    "quality": {
+      "coverage_threshold": 0.7,
+      "min_window_coverage": 0.6,
+      "min_reliable_days": 15
+    },
+    "execution": {
+      "seed": 42,
+      "resume": true,
+      "overwrite": false
+    }
+  },
+  "environment": {
+    "python": "3.14.7",
+    "os": "Windows-11-10.0.26300-SP0",
+    "polars": "1.41.2",
+    "numpy": "2.5.3",
+    "sklearn": "1.9.1"
+  },
+  "input_hashes": {
+    "meter_installation_history": {
+      "path": "output/context/meter_installation_history.parquet",
+      "size_bytes": 763829,
+      "sha256": "fef07f26a5d7803a7cf9467aa59d149fd7d36036b81b0aab70929979e7990933"
+    }
+  },
+  "parameters": {
+    "rule_definition": "Calibrated deterministic physical rules (no ML fit)",
+    "coverage_threshold": 0.7,
+    "min_window_coverage": 0.6,
+    "min_reliable_days": 15
+  },
+  "artifacts": {
+    "daily_metrics": "experiments/runs/20261123_124344_687_daily_rules/daily_metrics.csv",
+    "decisions": "experiments/runs/20261123_124344_687_daily_rules/decisions.parquet",
+    "metrics": "experiments/runs/20261123_124344_687_daily_rules/metrics.json",
+    "invariants": "experiments/runs/20261123_124344_687_daily_rules/invariants.json"
+  },
+  "errors": [],
+  "created_at": "2026-11-23T12:43:44.891638",
+  "updated_at": "2026-11-23T12:44:16.057903",
+  "completed_at": "2026-11-23T12:44:16.057896"
+}

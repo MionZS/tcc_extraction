@@ -1,8 +1,8 @@
 # Auditoria Reconciliada de Novembro/2026 (Fontes Únicas Verificadas)
 
-- **Execução `DAILY_RULES`:** `20261123_110449_017_daily_rules` (Status: `validated`)
-- **Execução `OOT_MULTIVIEW`:** `20261123_110515_695_oot_multiview` (Status: `validated`)
-- **Git Commit:** `d13d8f8`
+- **Execução `DAILY_RULES`:** `20261123_124344_687_daily_rules` (Status: `validated`)
+- **Execução `OOT_MULTIVIEW`:** `20261123_124416_146_oot_multiview` (Status: `validated`)
+- **Git Commit:** `f1bd47a`
 
 ## 1. Reconciliação das 7 Divergências Históricas
 | Divergência Anterior | Valor Anterior | Valor Auditado Reproduzido | Causa-Raiz Comprovada |
@@ -20,12 +20,12 @@
 
 | Categoria Diagnóstica OOT | UCs |
 |:---|---:|
-| `OPERACAO_REGULAR` | 44,560 |
-| `MUDANCA_CLASSE_COMPORTAMENTAL` | 12,100 |
+| `OPERACAO_REGULAR` | 44,403 |
+| `MUDANCA_CLASSE_COMPORTAMENTAL` | 12,056 |
 | `ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT` | 4,155 |
-| `GARGALO_COLETIVO_RF_MESH` | 1,740 |
-| `POSSIVEL_GD_NAO_CADASTRADA` | 1,485 |
-| `ANOMALIA_COMUNICACAO_ISOLADA` | 764 |
+| `GARGALO_COLETIVO_RF_MESH` | 1,829 |
+| `POSSIVEL_GD_NAO_CADASTRADA` | 1,451 |
+| `ANOMALIA_COMUNICACAO_ISOLADA` | 910 |
 | `FALHA_METROLOGICA_MEDIDOR_TRAVADO` | 748 |
 | `INICIACAO_PERFIL_UC_NOVA` | 71 |
 | `TRANSICAO_TROCA_MEDIDOR` | 63 |
@@ -56,5 +56,5 @@
 ## 4. Textos Prontos Derivados dos Artefatos (Método, Resultados, Estudos de Caso, Limitações)
 - **Método:** A avaliação temporal utilizou 19 cortes diários (2026-11-01 a 2026-11-19, totalizando 1,248,501 janelas `UC × cutoff`) para monitoramento `DAILY_RULES` e validação fora do tempo (`OOT_MULTIVIEW`) com modelo multi-visão ajustado sobre 189,341 janelas limpas (2026-08-31, 2026-09-30, 2026-10-31) e congelado antes da inferência em 2026-11-19.
 - **Resultados:** Na inferência congelada OOT de 2026-11-19, das 65,686 UCs ativas (62,857 elegíveis; 2,829 em quarentena), o comitê especializado priorizou **6,333 candidatos operacionais à vistoria** sob score médio 0.2944 (P95 = 0.9115), eliminando a dependência do lote (`max_abs_shift = 0.0` sob normalização congelada).
-- **Estudos de Caso (`908***00`):** A auditoria longitudinal e a correção do ciclo de vida confirmam que `908***00` possui histórico anterior no mesmo medidor (`DATA_INSTALACAO = 2026-10-31` no CIS foi atualização cadastral administrativa, não medidor novo). Com retração de consumo FA (18,05 -> 5,72 kWh/d, -68,3%) e 12 dias de injeção reversa RA ativa (14–31 kWh/d, OOT score=0.2944), a UC é corretamente classificada como `POSSIVEL_GD_NAO_CADASTRADA` e priorizada para vistoria.
+- **Estudos de Caso (`908***00`):** A auditoria longitudinal e a correção do ciclo de vida confirmam que `908***00` possui histórico anterior no mesmo medidor (`DATA_INSTALACAO = 2026-10-31` no CIS foi atualização cadastral administrativa, não medidor novo). Com retração de consumo FA (18,05 -> 5,72 kWh/d, -68,3%), 12 dias de injeção reversa RA ativa (14–31 kWh/d) e **score OOT elétrico individual de 0.9601** (em contraste com a média populacional de 0.2944), a instalação é classificada sob a **hipótese diagnóstica de possível GD não cadastrada / intervenção física no medidor**, sendo priorizada para vistoria de campo sem atribuição causal prematura de fraude antes do laudo físico.
 - **Limitações:** Na ausência de laudos independentes de inspeção em campo (TOI), todas as ocorrências denotam hipóteses diagnósticas e candidatos operacionais, vedada qualquer estimativa de Precision@K, redução real de falsos positivos ou fraude confirmada sem validação física.

@@ -21,8 +21,8 @@
 ## Caso 4: Fraude Clássica PNT com Apagão Precursor de Telecom (`908***00` / UC 90850700)
 - **Alimentador:** Oleos Brasil | **Cutoff:** 2026-11-04 | **Cobertura Diária:** 91.1% | **NIOs mapeados:** 2
 - **Métricas:** Mediana=17.160 kWh/dia | MAD=4.576 | CV=0.2651 | Slope=-0.1961 kWh/dia | Desb.I=1.4035 | Reversão RA=0.4298
-- **Modelo:** Score=0.5412 | Streak=**93 dias seguidos** | Hipótese=`POSSIVEL_GD_NAO_CADASTRADA` / `ANOMALIA_ELETRICA` | **Candidato=SIM (Prioritário)**
-- **Rastro Pericial AMI:** Apagão absoluto de 48h na telemetria (28/10 21h a 30/10 21h com cobertura 0%), seguido imediatamente de degrau descendente CUSUM de **-68.54%** em 31/10/2026, onde o consumo desaba de 17.16 para 5.10 kWh/dia e permanece deprimido indefinidamente. Padrão físico compatível com desenergização do padrão para implantação de by-pass clandestino / shunt de corrente em 2 fases.
+- **Modelo:** Score OOT=**0.9601** | Streak=**20 dias seguidos** (12 dias com injeção reversa RA ativa de 14–31 kWh/d) | Hipótese=`POSSIVEL_GD_NAO_CADASTRADA` | **Candidato=SIM (Prioritário)**
+- **Rastro Pericial AMI:** Apagão de 48h na telemetria (28/10 21h a 30/10 21h com cobertura 0%), seguido de atualização cadastral administrativa em 31/10/2026 no mesmo medidor físico, e degrau descendente CUSUM de **-68.3%** onde o consumo forward desaba de 18.05 para 5.72 kWh/dia e surge injeção reversa massiva (14 a 31 kWh/dia). Padrão físico compatível com entrada de geração distribuída não cadastrada ou inversão/intervenção física no padrão de medição.
 - **Documentação Aprofundada:** Ver estudo pericial completo em [ESTUDO_DE_CASO_FRAUDE_VS_TELECOM.md](../ESTUDO_DE_CASO_FRAUDE_VS_TELECOM.md).
 - **Ressalva:** Hipótese diagnóstica automática baseada em telemetria; priorização de campo fundamentada em evidência física e estatística.
 

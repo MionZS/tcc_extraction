@@ -328,3 +328,38 @@ def test_real_november_suite_artifacts_and_uc_90850700_reconciled() -> None:
     for row in u_df.to_dicts():
         assert 0 <= int(row["DIAS_ANOMALIA_SEGUIDOS"]) <= 30
 
+
+def test_contracts_reconciliation_and_fixed_capacity_ablation() -> None:
+    """Verify exact numerical contracts: 6.333 OOT vs 6.311 Gating-70% (+22), 1.943 outside M3, and fixed Top-2k ablation."""
+    suite_idx = Path("experiments/runs/latest_suite.json")
+    assert suite_idx.exists()
+    run_map = json.loads(suite_idx.read_text(encoding="utf-8"))
+
+    oot_m = json.loads((Path(run_map["oot_multiview"]) / "metrics.json").read_text(encoding="utf-8"))
+    abl_m = json.loads((Path(run_map["ablation"]) / "metrics.json").read_text(encoding="utf-8"))
+    gate_m = json.loads((Path(run_map["gating"]) / "metrics.json").read_text(encoding="utf-8"))
+
+    # 1. Total OOT candidates = 6,333
+    assert oot_m["oot_candidates_vistoria"] == 6333
+
+    # 2. Gating at 70% = 6,311 (net difference of 22 UCs)
+    gate_70 = next(r for r in gate_m["rows"] if abs(r["coverage_threshold"] - 0.70) < 1e-4)
+    assert gate_70["candidates_retained"] == 6311
+    assert oot_m["oot_candidates_vistoria"] - gate_70["candidates_retained"] == 22
+
+    # 3. Exactly 1,943 candidates outside topological funnel due to null feeder in corporate hierarchy
+    set_recon = abl_m["set_reconciliation"]
+    assert set_recon["strict_m5_subset_of_m4"] is True
+    assert set_recon["m4_count"] == 4390
+    assert set_recon["m5_sequential_count"] == 4390
+    assert set_recon["exclusive_m5_unconstrained"] == 1943
+    assert 6333 - 4390 == 1943
+
+    # 4. Fixed capacity Top-2k metrics present in subdetector ablation
+    sub_abl = abl_m["subdetector_ablation"]
+    for row in sub_abl:
+        assert "spearman_vs_full6" in row
+        assert "top5pct_jaccard_vs_full6" in row
+        assert "p95_score" in row
+
+

@@ -603,7 +603,8 @@ def apply_delimited_isolation_and_categories(
         & (rel_days < 15)
     )
 
-    is_poor_comm = (~is_clean) | (cov < 0.60)
+    # Telemetry threshold for reliable electrical analysis (70% consistent with OOT & M2 funnel)
+    is_poor_comm = (~is_clean) | (cov < 0.70)
     is_isolated_comm_anomaly = is_poor_comm & (~is_meter_replacement) & (peer_cov >= 0.80) & (cov_deficit >= 0.30)
     is_collective_mesh_bottleneck = is_poor_comm & (~is_meter_replacement) & (~is_isolated_comm_anomaly)
 

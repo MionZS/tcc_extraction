@@ -1,0 +1,7 @@
+stage;count;strict_subset
+M0: Janelas Totais Avaliadas (UC x Cutoff);65686;false
+M1: UCs Unicas na Coorte OOT;65686;true
+M2: M1 & Cobertura >= 70%;62857;true
+M3: M2 & Contextualizacao Topologica;58857;true
+M4: M3 & Anomalia Estatistica/Eletrica;4390;true
+M5: M4 & Candidato Operacional Vistoria;4390;true

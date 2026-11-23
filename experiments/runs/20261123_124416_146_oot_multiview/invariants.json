@@ -1,0 +1,34 @@
+{
+  "invariants_verified": true,
+  "total_checks": 3,
+  "passed_checks": 3,
+  "failed_checks": 0,
+  "checks": [
+    {
+      "name": "population_partition_conservation",
+      "passed": true,
+      "details": {
+        "cutoffs_checked": 1
+      },
+      "errors": []
+    },
+    {
+      "name": "temporal_no_future_leakage",
+      "passed": true,
+      "details": {
+        "train_max_date": "2026-10-31",
+        "eval_start_date": "2026-11-01"
+      },
+      "errors": []
+    },
+    {
+      "name": "score_bounds_and_kpi_denominators",
+      "passed": true,
+      "details": {
+        "n_scores": 65686,
+        "n_metric_rows": 0
+      },
+      "errors": []
+    }
+  ]
+}

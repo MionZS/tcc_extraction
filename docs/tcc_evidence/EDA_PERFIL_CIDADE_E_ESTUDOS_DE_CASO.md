@@ -73,8 +73,8 @@ Abaixo sintetiza-se a ficha cadastral, elétrica, metrológica e analítica de c
 
 | UC | Alimentador | Classe | Tecnologia | Fase | Consumo (kWh/d) | MAD | Score MoE | Hipótese Diagnóstica | Vistoria? | Síntese Pericial |
 |:---|:---|:---:|:---:|:---:|---:|---:|---:|:---|:---:|:---|
-| **90850700** | Oleos Brasil | 5442 | Smart-B (Baixa Tensão) | Trifásico | 17.4 | 1.3 | 0.4279 | `REGULAR` | **NÃO** | Fraude Clássica PNT: Apagão 48h prévio + Degrau CUSUM -68.54% permanente (93 dias) |
-| **29113296** | CSN | 9101 | Smart-B (Baixa Tensão) | BI | 21.8 | 6.9 | 0.4964 | `REGULAR` | **NÃO** | Controle Negativo: Perda de pacotes 50% em RF Mesh com consumo real estável (~25 kWh/d) |
+| **90850700** | Oleos Brasil | 5442 | Smart-B (Baixa Tensão) | Trifásico | 18.0 -> 5.7 | 1.3 | 0.9601 | `POSSIVEL_GD_NAO_CADASTRADA` | **SIM (Prioritário)** | Degrau descendente -68.3% após apagão de 48h com 12 dias de injeção reversa RA (14–31 kWh/d), persistente por 20 dias consecutivos após 31/10/2026. Roteamento de ciclo de vida corrigido para hipótese de GD não cadastrada / intervenção no medidor. |
+| **29113296** | CSN | 9101 | Smart-B (Baixa Tensão) | BI | 21.8 | 6.9 | 0.4964 | `OPERACAO_REGULAR` | **NÃO** | Controle Negativo de Telecom: Completude de 50% compatível com cadência de 10 min (CADENCE_MINUTES: None no arquivo diário). Consumo real estável (~25 kWh/d com 100% integridade do registrador), retida em quarentena técnica sem despacho para perdas. |
 | **96905697** | Oleos Brasil | 9101 | Smart-B (Baixa Tensão) | Trifásico | 156.8 | 6.6 | 0.4027 | `REGULAR` | **NÃO** | Sazonalidade Comercial: Quedas cíclicas a cada fim de semana (190 -> 65 kWh/d) |
 | **82889805** | Van Leer | 4443 | Smart-B (Baixa Tensão) | Trifásico | 71.6 | 42.7 | 0.5927 | `POSSIVEL_GD_NAO_CADASTRADA` | **SIM (Prioritário)** | Geração Distribuída Não Cadastrada: Clássica 'Curva do Pato' solar com injeção diurna |
 | **96515961** | Chapada | 4845 | Smart-B (Baixa Tensão) | Bifásico | 29.2 | 2.7 | 0.4225 | `REGULAR` | **NÃO** | Carga Contínua 24h (+241% CUSUM): Carga ininterrupta 2 kWh/h (Mineração Bitcoin / Câmara fria) |

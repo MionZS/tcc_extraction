@@ -1,0 +1,5 @@
+variant;weights;spearman_vs_full6;top5pct_jaccard_vs_full6;top2k_overlap_vs_full6;top2k_churn_in;top2k_churn_out;top2k_jaccard_vs_full6;p95_score;p99_score
+full_6_detectors;"{""iso_forest"": 0.22, ""lof"": 0.2, ""ecod"": 0.18, ""copod"": 0.18, ""hbos"": 0.1, ""pca"": 0.12}";1.0;1.0;2000;0;0;1.0;0.6348;0.8715
+no_lof_5_detectors;"{""iso_forest"": 0.275, ""lof"": 0.0, ""ecod"": 0.225, ""copod"": 0.225, ""hbos"": 0.125, ""pca"": 0.15}";0.9893;0.8326;1790;210;210;0.81;0.703;0.9806
+no_pca_5_detectors;"{""iso_forest"": 0.25, ""lof"": 0.227, ""ecod"": 0.205, ""copod"": 0.205, ""hbos"": 0.113, ""pca"": 0.0}";0.9968;0.8714;1868;132;132;0.8762;0.6692;0.9452
+core_4_detectors;"{""iso_forest"": 0.324, ""lof"": 0.0, ""ecod"": 0.265, ""copod"": 0.265, ""hbos"": 0.146, ""pca"": 0.0}";0.9859;0.7677;1716;284;284;0.7513;0.7628;1.0

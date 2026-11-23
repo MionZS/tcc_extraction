@@ -444,6 +444,7 @@ def run_ablation(config: ExperimentConfig, run_dir: Path, *, oot_decisions: pl.D
     sub_ablation_rows: list[dict[str, Any]] = []
     ref_scores: np.ndarray | None = None
     ref_top5: set[int] = set()
+    ref_top2k: set[int] = set()
 
     for v_name, w_map in variants.items():
         det = CompositeAnomalyDetector(contamination=0.05, weights=w_map, normalization_mode="frozen_quantile", random_state=config.seed)
@@ -451,16 +452,26 @@ def run_ablation(config: ExperimentConfig, run_dir: Path, *, oot_decisions: pl.D
         sc = det.score_samples(X_m2, raw_dataframe=m2_df)
         k_top = max(1, int(0.05 * len(sc)))
         top_set = set(np.argsort(-sc)[:k_top].tolist())
+        top2k_set = set(np.argsort(-sc)[:2000].tolist()) if len(sc) >= 2000 else top_set
         if ref_scores is None:
             ref_scores = sc
             ref_top5 = top_set
+            ref_top2k = top2k_set
         rho, _ = spearmanr(sc, ref_scores)
         jacc = len(top_set & ref_top5) / float(max(1, len(top_set | ref_top5)))
+        jacc_2k = len(top2k_set & ref_top2k) / float(max(1, len(top2k_set | ref_top2k)))
+        overlap_2k = len(top2k_set & ref_top2k)
+        churn_in_2k = len(top2k_set - ref_top2k)
+        churn_out_2k = len(ref_top2k - top2k_set)
         sub_ablation_rows.append({
             "variant": v_name,
             "weights": json.dumps(w_map),
             "spearman_vs_full6": round(float(0.0 if np.isnan(rho) else rho), 4),
             "top5pct_jaccard_vs_full6": round(jacc, 4),
+            "top2k_overlap_vs_full6": overlap_2k,
+            "top2k_churn_in": churn_in_2k,
+            "top2k_churn_out": churn_out_2k,
+            "top2k_jaccard_vs_full6": round(jacc_2k, 4),
             "p95_score": round(float(np.percentile(sc, 95)), 4),
             "p99_score": round(float(np.percentile(sc, 99)), 4),
         })
@@ -477,6 +488,9 @@ def run_ablation(config: ExperimentConfig, run_dir: Path, *, oot_decisions: pl.D
         "common_m4_m5_unconstrained": len(m4_set & m5_unconstrained_set),
         "exclusive_m4": len(m4_set - m5_unconstrained_set),
         "exclusive_m5_unconstrained": len(m5_unconstrained_set - m4_set),
+        "m4_equals_m5_explanation": "Em 19/11/2026, todas as 4.390 UCs anômalas contextualizadas atenderam aos critérios de elegibilidade de negócio de M5 (instalações maduras sem quarentena de ciclo de vida).",
+        "outside_topological_funnel_count": len(m5_unconstrained_set - m4_set),
+        "outside_topological_funnel_reason": "1.943 UCs anômalas com cobertura >= 70% não possuem alimentador cadastrado corporativamente (meta__feeder is null), sendo retidas no funil topológico M3 mas preservadas para vistoria individual no OOT geral.",
     }
 
     payload = {

@@ -303,16 +303,21 @@ def run_case_traces(config: ExperimentConfig, run_dir: Path, *, oot_run_dir: Pat
                 f"categoria corrigida: {u908_cat}"
             ),
             "INTERPRETACAO_CORRIGIDA": (
-                "Entrada efetiva de microgeração bidirecional após 31/10 (12 dias de injeção reversa RA ativa), "
+                "Entrada efetiva de injeção bidirecional após 31/10 (12 dias de injeção reversa RA ativa), "
                 "anteriormente mascarada como INICIACAO_PERFIL_UC_NOVA por atualização cadastral administrativa, "
-                "agora corretamente restabelecida como POSSIVEL_GD_NAO_CADASTRADA e candidata à vistoria."
+                "agora tratada sob a hipótese diagnóstica de possível GD não cadastrada / intervenção física no medidor "
+                "e priorizada para vistoria, sem afirmação causal prematura de fraude antes de inspeção em campo."
             ),
         },
         {
             "UC_MASK": censor_uc_id("29113296"),
             "ANTERIOR": "50% de perda de pacotes crônica em RF Mesh com reconfiguração de firmware",
             "RECALCULO_REAL": "Cadência no arquivo diário não persistida (CADENCE_MINUTES: None); consumo diário estável em 28 kWh/dia com 100% integridade no registrador acumulador",
-            "INTERPRETACAO_CORRIGIDA": "Completude horária de 50% reflete intervalo de 10 min frente à grade de 5 min; sem evidência causal de reconfiguração de firmware; consumo e registrador sem anomalia elétrica",
+            "INTERPRETACAO_CORRIGIDA": (
+                "Completude horária de 50% é compatível com cadência de 10 min (6 leituras/h frente ao divisor nominal de 12), "
+                "mas arquivos diários registram CADENCE_MINUTES: None. Sem evidência causal de reconfiguração de firmware "
+                "sem demonstração nos timestamps intervalares brutos; consumo e registrador sem anomalia elétrica."
+            ),
         },
         {
             "UC_MASK": censor_uc_id("96905697"),

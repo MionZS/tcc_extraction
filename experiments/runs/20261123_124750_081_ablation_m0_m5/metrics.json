@@ -1,0 +1,98 @@
+{
+  "pipeline_id": "ablation_m0_m5",
+  "funnel_stages": [
+    {
+      "stage": "M0: Janelas Totais Avaliadas (UC x Cutoff)",
+      "count": 65686,
+      "strict_subset": false
+    },
+    {
+      "stage": "M1: UCs Unicas na Coorte OOT",
+      "count": 65686,
+      "strict_subset": true
+    },
+    {
+      "stage": "M2: M1 & Cobertura >= 70%",
+      "count": 62857,
+      "strict_subset": true
+    },
+    {
+      "stage": "M3: M2 & Contextualizacao Topologica",
+      "count": 58857,
+      "strict_subset": true
+    },
+    {
+      "stage": "M4: M3 & Anomalia Estatistica/Eletrica",
+      "count": 4390,
+      "strict_subset": true
+    },
+    {
+      "stage": "M5: M4 & Candidato Operacional Vistoria",
+      "count": 4390,
+      "strict_subset": true
+    }
+  ],
+  "set_reconciliation": {
+    "strict_m5_subset_of_m4": true,
+    "strict_funnel_monotone_m1_to_m5": true,
+    "m4_count": 4390,
+    "m5_sequential_count": 4390,
+    "m5_unconstrained_count": 6333,
+    "common_m4_m5_unconstrained": 4390,
+    "exclusive_m4": 0,
+    "exclusive_m5_unconstrained": 1943,
+    "m4_equals_m5_explanation": "Em 19/11/2026, todas as 4.390 UCs anômalas contextualizadas atenderam aos critérios de elegibilidade de negócio de M5 (instalações maduras sem quarentena de ciclo de vida).",
+    "outside_topological_funnel_count": 1943,
+    "outside_topological_funnel_reason": "1.943 UCs anômalas com cobertura >= 70% não possuem alimentador cadastrado corporativamente (meta__feeder is null), sendo retidas no funil topológico M3 mas preservadas para vistoria individual no OOT geral."
+  },
+  "subdetector_ablation": [
+    {
+      "variant": "full_6_detectors",
+      "weights": "{\"iso_forest\": 0.22, \"lof\": 0.2, \"ecod\": 0.18, \"copod\": 0.18, \"hbos\": 0.1, \"pca\": 0.12}",
+      "spearman_vs_full6": 1.0,
+      "top5pct_jaccard_vs_full6": 1.0,
+      "top2k_overlap_vs_full6": 2000,
+      "top2k_churn_in": 0,
+      "top2k_churn_out": 0,
+      "top2k_jaccard_vs_full6": 1.0,
+      "p95_score": 0.6348,
+      "p99_score": 0.8715
+    },
+    {
+      "variant": "no_lof_5_detectors",
+      "weights": "{\"iso_forest\": 0.275, \"lof\": 0.0, \"ecod\": 0.225, \"copod\": 0.225, \"hbos\": 0.125, \"pca\": 0.15}",
+      "spearman_vs_full6": 0.9893,
+      "top5pct_jaccard_vs_full6": 0.8326,
+      "top2k_overlap_vs_full6": 1790,
+      "top2k_churn_in": 210,
+      "top2k_churn_out": 210,
+      "top2k_jaccard_vs_full6": 0.81,
+      "p95_score": 0.703,
+      "p99_score": 0.9806
+    },
+    {
+      "variant": "no_pca_5_detectors",
+      "weights": "{\"iso_forest\": 0.25, \"lof\": 0.227, \"ecod\": 0.205, \"copod\": 0.205, \"hbos\": 0.113, \"pca\": 0.0}",
+      "spearman_vs_full6": 0.9968,
+      "top5pct_jaccard_vs_full6": 0.8714,
+      "top2k_overlap_vs_full6": 1868,
+      "top2k_churn_in": 132,
+      "top2k_churn_out": 132,
+      "top2k_jaccard_vs_full6": 0.8762,
+      "p95_score": 0.6692,
+      "p99_score": 0.9452
+    },
+    {
+      "variant": "core_4_detectors",
+      "weights": "{\"iso_forest\": 0.324, \"lof\": 0.0, \"ecod\": 0.265, \"copod\": 0.265, \"hbos\": 0.146, \"pca\": 0.0}",
+      "spearman_vs_full6": 0.9859,
+      "top5pct_jaccard_vs_full6": 0.7677,
+      "top2k_overlap_vs_full6": 1716,
+      "top2k_churn_in": 284,
+      "top2k_churn_out": 284,
+      "top2k_jaccard_vs_full6": 0.7513,
+      "p95_score": 0.7628,
+      "p99_score": 1.0
+    }
+  ]
+}

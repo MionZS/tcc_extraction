@@ -22,51 +22,50 @@ A arquitetura executa quatro camadas sequenciais:
 
 ## Capítulo Y — Resultados Experimentais na Rede de Araucária
 
-Na campanha analisada sobre **66,099 UCs únicas** (**262,849 janelas** `UC × cutoff_date`), o sistema identificou **932 UCs com anomalia detectada** (1.41%) no último corte temporal e priorizou **274 candidatos a vistoria** por persistência temporal consecutiva.
+Na campanha de avaliação fora do tempo (*out-of-time* - OOT em 19/11/2026) sobre **65,686 UCs únicas** (**62,857 elegíveis** e **2,829 em quarentena técnica**), o comitê especializado multi-visão identificou **6,333 candidatos operacionais à vistoria** sob critérios rigorosos de persistência e materialidade física. Paralelamente, o monitoramento diário da carteira (`DAILY_RULES`, 01/11 a 19/11/2026, totalizando **1,248,501 janelas** `UC × cutoff`) registrou uma média de **5,387.7 candidatos/dia**.
 
-Os resultados completos de ablação ($M_0 \to M_5$), sensibilidade de gating ($50\%$ a $90\%$) e caracterização exploratória encontram-se auditados nas tabelas CSV e figuras vetoriais SVG/PNG anexas no diretório de evidências.
+Os resultados completos de ablação sequencial ($M_0 \to M_5$, com $M_4 = 4.390 \to M_5 = 4.390$ para UCs contextualizadas topologicamente), sensibilidade de gating ($50\%$ a $90\%$, com 70% retendo 62.857 UCs elegíveis e interceptando 915 candidatos em quarentena) e caracterização exploratória encontram-se auditados nas tabelas e figuras anexas sob os manifestos de execução versionados em `experiments/runs/`.
 
 ---
 
-## Capítulo Z — Estudos de Caso Periciais e Diagnóstico Diferencial (Fraude Física vs Telecomunicação)
+## Capítulo Z — Estudos de Caso Periciais e Diagnóstico Diferencial (Hipóteses Físicas vs Telecomunicação)
 
-A eficácia do sistema reside na sua capacidade de resolver o diagnóstico diferencial entre eventos de rede de comunicação e fraudes metrológicas com evidência empírica incontestável:
+A eficácia do sistema reside na sua capacidade de resolver o diagnóstico diferencial entre eventos de rede de comunicação e anomalias físicas com evidência empírica auditável:
 
-### Z.1 UC 90850700 — Fraude por Derivação Clandestina Precedida de Apagão de Rede
-Na instalação `UC 90850700` (Alimentador Óleos Brasil), o detector CUSUM identifica um degrau descendente abrupto de **$-68.54\%$** em **31/10/2026**, reduzindo a média diária de $17.16\text{ kWh/dia}$ para $\sim 5.10\text{ kWh/dia}$, com persistência contínua por **93 dias seguidos**.
+### Z.1 UC 90850700 — Degrau Descendente com Injeção Reversa (Hipótese de GD Não Cadastrada / Adulteração Física)
+Na instalação `UC 90850700` (Alimentador Óleos Brasil), o detector CUSUM identifica um degrau descendente abrupto de **$-68.3\%$** em **31/10/2026**, reduzindo a média diária de consumo ativo de $18.05\text{ kWh/dia}$ para $\sim 5.72\text{ kWh/dia}$, com persistência contínua por **20 dias seguidos** até o corte de 19/11/2026 (sendo 12 dias com injeção reversa $RA$ ativa de 14 a 31 kWh/dia).
 
-A decomposição horária da telemetria revela que, entre **28/10 21h e 30/10 21h (exatas 48 horas)**, a completude da comunicação foi a **$0.0\%$ (apagão absoluto)**. Imediatamente após a reconexão da comunicação em 30/10 à noite, as medições de 31/10 ressurgem mutiladas no novo patamar deprimido. 
+A decomposição temporal revela que entre 28/10 21h e 30/10 21h (exatas 48 horas) ocorreu silêncio de telemetria. Em 31/10, o registro cadastral do CIS foi atualizado administrativamente, mas no mesmo medidor físico (mesmo NIO). Ao reaparecer, a instalação passa a apresentar forte injeção de energia ativa reversa nas horas de sol e retração severa de consumo forward.
 
-Este padrão reproduz fidedignamente o rastro pericial de adulteração no padrão de entrada: o disjuntor geral é desarmado ou o medidor é removido para implantação de *by-pass* / shunt de corrente nas fases. Ao ser religado, o medidor restabelece enlace com a malha mesh, mas afere apenas uma fração ($31.5\%$) da corrente real. O desequilíbrio severo ($I_{imb} = 1.40$) e reversão induzida ($RA = 0.43$) corroboram a irregularidade, classificando a UC com prioridade máxima de fiscalização (`Candidato a Vistoria: SIM (Prioritário)`).
+Com **score individual de anomalia de 0.9601** (frente à média populacional de 0.2944), o sistema corrigiu o roteamento anterior de ciclo de vida (que incorretamente a rotulava como `INICIACAO_PERFIL_UC_NOVA`), reclassificando-a sob a hipótese diagnóstica de `POSSIVEL_GD_NAO_CADASTRADA` e priorizando-a para vistoria de campo com máxima urgência (`IS_CANDIDATO_VISTORIA = SIM`), sem emitir conclusão causal antecipada de fraude antes do laudo presencial (TOI).
 
-### Z.2 UC 29113296 — O Falso Positivo Evitado via Gating de Telecomunicação (Controle Negativo)
-Na instalação `UC 29113296`, o histórico diário de 30 dias atesta um consumo regular e estável ao redor de $25.45\text{ kWh/dia}$, com $100\%$ de integridade do registrador metrológico acumulador. Todavia, a telemetria horária de 14 dias acusa descarte de pacotes de $50.0\%$ na malha RF mesh ($168/336$ janelas degradadas).
+### Z.2 UC 29113296 — O Falso Positivo Evitado via Gating de Telecomunicação (Controle Negativo de Telecom)
+Na instalação `UC 29113296`, o histórico diário atesta consumo elétrico regular e estável ao redor de $21.8\text{ a }28.0\text{ kWh/dia}$, com $100\%$ de integridade do registrador metrológico acumulador. Todavia, a telemetria intervalar horária acusa completude média de exatamente $50.0\%$.
 
-Sem o filtro de qualidade, o algoritmo computaria a soma dos intervalos parciais e geraria um alarme falso de sub-consumo severo. A camada de *Gating de Quarentena* (`meta__telecom_status == "QUARANTINE"`) intervém e bloqueia o despacho de campo (`IS_CANDIDATO_VISTORIA = NÃO`), economizando o deslocamento inútil de viaturas de inspeção e comprovando a imunidade do pipeline a ruídos de telecomunicação.
+A completude de 50,0% é compatível com uma cadência de amostragem de 10 minutos (6 leituras/h frente à grade nominal de 5 minutos / 12 leituras/h), embora o arquivo diário reporte `CADENCE_MINUTES: None`. Não se afirma causa física de reconfiguração de firmware sem auditoria direta nos timestamps intervalares brutos.
 
+Sem o filtro de qualidade, o algoritmo tradicional somaria os intervalos faltantes e geraria um falso alarme de queda de consumo. A camada de *Gating de Quarentena* (`meta__telecom_status == "QUARANTINE"`) intervém e bloqueia o despacho de campo para vistoria de perdas comerciais (`IS_CANDIDATO_VISTORIA = NÃO`), direcionando a UC, se necessário, para a fila técnica de manutenção de telecomunicações (`DESTINO_OPERACIONAL = "MANUTENCAO_TECNICA_TELECOM_INDIVIDUAL"`).
 
 ---
 ## Adendo Experimental: Avaliação em Novembro/2026
 
 ### 3.4 Protocolo de Avaliação Temporal com Dados Reais de Novembro/2026
-A validação do modelo com dados de campo foi executada sobre os cortes temporais de 01/11/2026 a 19/11/2026 da concessão de Araucária (PR). Para mitigar qualquer risco de vazamento temporal (*look-ahead bias*), o conjunto de treino utilizou estritamente os cortes mensais consolidados de Agosto, Setembro e Outubro/2026 (197.083 janelas UC × dia), enquanto a avaliação fora do tempo (*out-of-time* - OOT) foi processada sobre a janela de 30 dias com corte em 19/11/2026 (65,686 unidades consumidoras ativas). Medidores com degradação severa de enlace RF Mesh ou apagões prolongados de telemetria (<70% de cobertura horária em mais de 15 dias) foram compulsoriamente segregados em Quarentena de Telecomunicação.
-
+A validação do modelo com dados de campo foi executada sobre os cortes temporais de 01/11/2026 a 19/11/2026 da concessão de Araucária (PR). Para mitigar qualquer risco de vazamento temporal (*look-ahead bias*), o conjunto de treino utilizou estritamente os cortes mensais consolidados de Agosto, Setembro e Outubro/2026 (189.341 janelas limpas), enquanto a avaliação fora do tempo (*out-of-time* - OOT) foi processada sobre a janela com corte em 19/11/2026 (65.686 unidades consumidoras ativas). Medidores com degradação severa de enlace RF Mesh ou apagões prolongados de telemetria (<70% de cobertura horária média) foram compulsoriamente segregados em Quarentena de Telecomunicação (2.829 UCs).
 
 ### 4.5 Resultados do Teste Fora do Tempo (OOT - Novembro/2026)
-A inferência do pipeline multi-view especializado sobre o corte de 19/11/2026 produziu um score médio de anomalia de **0.1583**. Do total de 65,686 medidores inteligentes avaliados na rede de baixa e média tensão:
-- **728 instalações** (1.11%) apresentaram score $\ge 0,50$, com desvios elétricos ou de comportamento metrológico;
-- **0 instalações** (0.00%) foram priorizadas como **Candidatos Formais à Vistoria de Campo** após filtragem por persistência temporal e conformidade com perfis operacionais acionáveis;
-- A Baseline com *Isolation Forest* global acusou dispersão excessiva em alimentadores rurais com grande sazonalidade, ao passo que o modelo multi-view conteve os falsos alarmes através da separação entre perdas de pacotes RF e quedas reais de carga.
-
+A inferência do pipeline multi-view especializado sobre o corte congelado de 19/11/2026 produziu um score médio de anomalia de **0.2944** (P95 = 0.9115). Do total de 65.686 medidores inteligentes avaliados na rede de baixa e média tensão:
+- **62.857 instalações** (95.69%) foram declaradas tecnicamente elegíveis para avaliação de perdas;
+- **2.829 instalações** (4.31%) foram segregadas em Quarentena Técnica de Telecomunicação;
+- **6.333 instalações** (9.64% da base total) foram priorizadas como **Candidatos Operacionais à Vistoria de Campo** com base em anomalias elétricas persistentes e hipóteses físicas delimitadas (PNT, possível GD não cadastrada e medidor travado);
+- A Baseline com *Isolation Forest* global (limiar congelado de treino de 0.5512) indicou **5.908 anomalias**, demonstrando que o ensemble multi-view e o pós-processamento de regras capturam um volume operacional consistente, ao mesmo tempo em que fornecem categorização física acionável.
 
 ### 4.6 Reconciliação Pericial dos Estudos de Caso (Auditoria Novembro/2026)
 A análise temporal individual confirmou:
-1. **UC 90850700 (Hipótese de Bypass PNT):** Queda de consumo de 18,05 para 5,72 kWh/dia (-68,3%) após 48 h de silêncio de telemetria em 29-30/10/2026. A persistência comprovada do degrau estendeu-se por 20 dias consecutivos até 19/11/2026, constituindo hipótese de intervenção física prioritária para vistoria.
-2. **UC 29113296 (Controle Negativo de Telecom):** A taxa de 50,0% de completude derivou da cadência de amostragem de 10 minutos (6 leituras/h frente ao divisor de 12), sem alteração do consumo real (21,8 kWh/dia), sendo retida em Quarentena Telecom sem abertura espúria de ordem de serviço.
+1. **UC 90850700 (Hipótese de GD Não Cadastrada / PNT):** Queda de consumo FA de 18,05 para 5,72 kWh/dia (-68,3%) e 12 dias de injeção reversa RA ativa (14 a 31 kWh/dia) após silêncio de telemetria em 29-30/10/2026. A persistência comprovada do degrau estendeu-se por 20 dias consecutivos até 19/11/2026 (score elétrico individual 0.9601), constituindo hipótese física prioritária para vistoria.
+2. **UC 29113296 (Controle Negativo de Telecom):** A taxa de 50,0% de completude é compatível com cadência de amostragem de 10 minutos (6 leituras/h frente ao divisor de 12), sem alteração do consumo real estável (21,8 a 28,0 kWh/dia e 100% integridade no registrador), sendo retida em Quarentena Telecom sem despacho espúrio para perdas comerciais.
 3. **UC 96905697 (Sazonalidade Comercial):** Ciclicidade de fim de semana (redução de ~65% em sábados/domingos com recuperação imediata na segunda-feira).
-4. **UC 82889805 (Possível GD Não Cadastrada):** Injeção reversa de energia ativa diária entre 11h e 15h nos dias ensolarados.
-
+4. **UC 82889805 (Possível GD Não Cadastrada):** Injeção reversa de energia ativa diária entre 11h e 15h nos dias ensolarados (fluxo reverso respondendo por expressiva parcela do balanço).
 
 ### 5.1 Limitações Metodológicas e Recomendações
-Ressalta-se que a plataforma atua na detecção de desvios físicos e priorização operacional de inspeções. Sem laudos de inspeção em campo (Termo de Ocorrência e Inspeção — TOI), os diagnósticos representam **hipóteses diagnósticas de alta probabilidade física** e **candidatos à vistoria**, não devendo ser denominados 'fraudes confirmadas' ou computados sob métricas de economia realizada até que ocorra a averiguação presencial da distribuidora.
+Ressalta-se que a plataforma atua na detecção de desvios físicos e priorização operacional de inspeções. Sem laudos de inspeção em campo (Termo de Ocorrência e Inspeção — TOI), os diagnósticos representam **hipóteses diagnósticas de alta probabilidade física** e **candidatos operacionais à vistoria**, sendo vedada qualquer alegação de 'fraude confirmada', 'precisão de campo' ou 'redução real de falsos positivos' até que ocorra a averiguação presencial da distribuidora.
 
