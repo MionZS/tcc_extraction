@@ -1,0 +1,9 @@
+source;path;exists;partitions;rows;distinct_ucs;distinct_meters;min_date;max_date;future_records_gt_2026_11_20;sample_last_day_rows
+ami_interval;output\measurements\ami_interval;true;111;0;0;0;2026-08-01;2026-11-19;0;8985688
+ami_registers;output\measurements\ami_registers;true;111;0;0;0;2026-08-01;2026-11-19;0;240945
+ami_instantaneous;output\measurements\ami_instantaneous;true;111;0;0;0;2026-08-01;2026-11-19;0;1488362
+uc_day_features;output\features\uc_day_features\feature_set_version=v1;true;109;0;0;0;2026-08-02;2026-11-19;0;64594
+meter_installation_history;output\context\meter_installation_history.parquet;true;0;72707;69895;72661;2026-01-02;2026-11-19;0;
+uc_context;output\context\uc_context.parquet;true;0;69895;69895;0;;;0;
+electrical_hierarchy;output\context\electrical_hierarchy.parquet;true;0;69895;69895;69887;;;0;
+training_dataset;output\model_input\v1\training_dataset.parquet;true;0;262769;66192;0;2026-08-31;2026-11-19;0;

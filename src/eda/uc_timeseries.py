@@ -510,7 +510,7 @@ def load_uc_hourly_timeseries(
         except ValueError:
             parsed_cutoff = None
 
-    cache_key = f"hourly_{str(uc_id).strip()}_{week_days}w_off{offset_days}_b{baseline_days}_{str(parsed_cutoff or 'latest')}"
+    cache_key = f"hourly_v2_{str(uc_id).strip()}_{week_days}w_off{offset_days}_b{baseline_days}_{str(parsed_cutoff or 'latest')}"
     if use_cache:
         cached = _read_from_cache(base, cache_key)
         if cached is not None:
@@ -596,6 +596,8 @@ def load_uc_hourly_timeseries(
             sel = ["NIO", ts_col, "FA_INTERVAL"]
             if "RA_INTERVAL" in avail:
                 sel.append("RA_INTERVAL")
+            if "CADENCE_MINUTES" in avail:
+                sel.append("CADENCE_MINUTES")
             df_p = (
                 lf.select(sel)
                 .with_columns(pl.col("NIO").cast(pl.String).str.strip_chars().alias("_nio"))
@@ -616,6 +618,8 @@ def load_uc_hourly_timeseries(
     raw_df = pl.concat(frames, how="diagonal_relaxed")
     if "RA_INTERVAL" not in raw_df.columns:
         raw_df = raw_df.with_columns(pl.lit(0.0).alias("RA_INTERVAL"))
+    if "CADENCE_MINUTES" not in raw_df.columns:
+        raw_df = raw_df.with_columns(pl.lit(5.0).alias("CADENCE_MINUTES"))
 
     # Parse timestamp if string, strip any timezone safely, deduplicate, and truncate to 1h
     if raw_df.schema["TS"] == pl.String:
@@ -636,16 +640,26 @@ def load_uc_hourly_timeseries(
             pl.col("TS").dt.truncate("1h").alias("HOUR_TS"),
             pl.col("FA_INTERVAL").cast(pl.Float64).fill_null(0.0),
             pl.col("RA_INTERVAL").cast(pl.Float64).fill_null(0.0),
+            pl.col("CADENCE_MINUTES").cast(pl.Float64, strict=False).fill_null(5.0).clip(1.0, 60.0),
         )
         .group_by("HOUR_TS")
         .agg([
             pl.col("FA_INTERVAL").sum().alias("FA_KWH"),
             pl.col("RA_INTERVAL").sum().alias("RA_KWH"),
+            pl.col("CADENCE_MINUTES").median().alias("CADENCE_MINUTES"),
             pl.len().alias("INTERVAL_COUNT"),
+        ])
+        .with_columns([
+            (60.0 / pl.col("CADENCE_MINUTES")).clip(lower_bound=1.0).alias("EXPECTED_INTERVALS"),
+        ])
+        .with_columns([
+            (pl.col("INTERVAL_COUNT").cast(pl.Float64) / pl.col("EXPECTED_INTERVALS")).clip(0.0, 1.0).alias("COV_CADENCE"),
         ])
         .sort("HOUR_TS")
         .with_columns(pl.col("HOUR_TS").dt.hour().alias("HOD"))
     )
+
+    overall_cadence = float(hourly_df["CADENCE_MINUTES"].median() or 5.0) if hourly_df.height > 0 else 5.0
 
     # Reindex to continuous 1-hour grid for the final week_days (168h)
     max_ts = hourly_df["HOUR_TS"].max()
@@ -658,8 +672,8 @@ def load_uc_hourly_timeseries(
         target_end_ts = max_ts
     target_start_ts = target_end_ts - timedelta(hours=week_days * 24 - 1)
 
-    # Hour-of-day baseline from ALL loaded reliable hours
-    reliable_hourly = hourly_df.filter(pl.col("INTERVAL_COUNT") >= 8)
+    # Hour-of-day baseline from ALL loaded reliable hours (cadence-aware >= 70%)
+    reliable_hourly = hourly_df.filter(pl.col("COV_CADENCE") >= 0.70)
     if reliable_hourly.height < 24:
         reliable_hourly = hourly_df
 
@@ -680,7 +694,7 @@ def load_uc_hourly_timeseries(
             hod_stats[h] = (global_med, global_scale)
 
     # Build lookup of target week hours
-    week_lookup: dict[datetime, tuple[float, float, int]] = {}
+    week_lookup: dict[datetime, tuple[float, float, int, float, float]] = {}
     for row in hourly_df.filter(
         (pl.col("HOUR_TS") >= target_start_ts) & (pl.col("HOUR_TS") <= target_end_ts)
     ).iter_rows(named=True):
@@ -688,6 +702,8 @@ def load_uc_hourly_timeseries(
             float(row["FA_KWH"]),
             float(row["RA_KWH"]),
             int(row["INTERVAL_COUNT"]),
+            float(row["COV_CADENCE"]),
+            float(row["CADENCE_MINUTES"]),
         )
 
     total_hours = week_days * 24
@@ -704,13 +720,13 @@ def load_uc_hourly_timeseries(
         m_h, sc_h = hod_stats[hod]
 
         if cur_ts in week_lookup:
-            fa_h, ra_h, cnt_h = week_lookup[cur_ts]
-            cov_h = min(1.0, cnt_h / 12.0)
+            fa_h, ra_h, cnt_h, cov_h, cad_h = week_lookup[cur_ts]
+            raw_5m_cov = min(1.0, cnt_h / 12.0)
         else:
-            fa_h, ra_h, cnt_h, cov_h = 0.0, 0.0, 0, 0.0
+            fa_h, ra_h, cnt_h, cov_h, cad_h, raw_5m_cov = 0.0, 0.0, 0, 0.0, overall_cadence, 0.0
 
         hour_vals.append(fa_h)
-        hour_covs.append(1.0 if cnt_h >= 8 else 0.0)
+        hour_covs.append(cov_h)
         hour_labels.append(cur_ts.strftime("%Y-%m-%d %H:%M"))
 
         z_h = (fa_h - m_h) / sc_h if sc_h > 0 else 0.0
@@ -718,7 +734,7 @@ def load_uc_hourly_timeseries(
         lower_h = max(0.0, m_h - 3.0 * sc_h)
 
         flag = "NORMAL"
-        if cnt_h < 8:
+        if cov_h < 0.70:
             flag = "GAP_TELECOM"
         elif z_h > 3.5:
             flag = "PICO_OUTLIER"
@@ -741,7 +757,9 @@ def load_uc_hourly_timeseries(
             "baseline_hod": round(m_h, 4),
             "upper_hod": round(upper_h, 4),
             "lower_hod": round(lower_h, 4),
-            "coverage": round(cov_h, 3),
+            "coverage": round(cov_h, 4),
+            "raw_5min_coverage": round(raw_5m_cov, 4),
+            "cadence_minutes": round(cad_h, 1),
             "interval_count": cnt_h,
             "z_self": round(z_h, 2),
             "flag": flag,
@@ -801,6 +819,7 @@ def load_uc_hourly_timeseries(
         "uc_censored": censor_uc_id(uc_id),
         "nios": sorted(nios),
         "granularity": "hourly",
+        "cadence_minutes": round(overall_cadence, 1),
         "window_days": week_days,
         "offset_days": offset_days,
         "window_start": target_start_ts.strftime("%Y-%m-%d %H:%M"),

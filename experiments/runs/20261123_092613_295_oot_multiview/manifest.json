@@ -1,0 +1,93 @@
+{
+  "run_id": "20261123_092613_295_oot_multiview",
+  "experiment_id": "november_2026",
+  "pipeline_id": "oot_multiview",
+  "status": "validated",
+  "invariants_verified": true,
+  "git_commit": "c1bfe88",
+  "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+  "config": {
+    "experiment_id": "november_2026",
+    "data_source": "local_lake",
+    "scope": "study_area",
+    "start_date": "2026-11-01",
+    "end_date": "2026-11-19",
+    "timezone": "America/Sao_Paulo",
+    "unit_of_analysis": "uc_cutoff",
+    "pipeline_id": "oot_multiview",
+    "train": {
+      "end_date": "2026-10-31",
+      "artifact_id": "train_aug_sep_oct_2026_v1"
+    },
+    "inference": {
+      "frozen_preprocessing": true,
+      "frozen_model": true,
+      "frozen_thresholds": true,
+      "normalization_mode": "frozen_quantile"
+    },
+    "quality": {
+      "coverage_threshold": 0.7,
+      "min_window_coverage": 0.6,
+      "min_reliable_days": 15
+    },
+    "execution": {
+      "seed": 42,
+      "resume": true,
+      "overwrite": false
+    }
+  },
+  "environment": {
+    "python": "3.14.7",
+    "os": "Windows-11-10.0.26300-SP0",
+    "polars": "1.41.2",
+    "numpy": "2.5.3",
+    "sklearn": "1.9.1"
+  },
+  "input_hashes": {
+    "training_dataset": {
+      "path": "output\\model_input\\v1\\training_dataset.parquet",
+      "size_bytes": 8215298,
+      "sha256": "5bc8b62f361d851f65177642771db7c7831260ad0e83eee56af33b79738abd71"
+    }
+  },
+  "parameters": {
+    "normalization_mode": "frozen_quantile",
+    "frozen_threshold_elec": 0.5226,
+    "comm_features": [
+      "x__coverage_reliable_days",
+      "x__avg_interval_coverage",
+      "x__alarm_count_window",
+      "x__avg_alarm_latency_sec"
+    ],
+    "elec_features": [
+      "x__hist_fa_sum_median",
+      "x__hist_fa_sum_mad",
+      "x__hist_ra_reversal_days",
+      "x__hist_ra_reversal_ratio_max",
+      "x__hist_load_factor_mean",
+      "x__hist_voltage_imbalance_max",
+      "x__hist_current_imbalance_max",
+      "x__trend_fa_slope",
+      "x__fa_cv_window",
+      "x__zero_consumption_flag",
+      "x__tensao_base",
+      "x__demanda",
+      "x__consumo_estm",
+      "x__pot_inst_kva",
+      "x__tensao_alimentador",
+      "x__tensao_se"
+    ]
+  },
+  "artifacts": {
+    "frozen_model_part00": "D:\\Projects\\tcc_extraction\\experiments\\runs\\20261123_092613_295_oot_multiview\\frozen_multiview_model.joblib.part00",
+    "frozen_model_part01": "D:\\Projects\\tcc_extraction\\experiments\\runs\\20261123_092613_295_oot_multiview\\frozen_multiview_model.joblib.part01",
+    "frozen_model_meta": "D:\\Projects\\tcc_extraction\\experiments\\runs\\20261123_092613_295_oot_multiview\\frozen_multiview_model.joblib.meta.json",
+    "decisions": "D:\\Projects\\tcc_extraction\\experiments\\runs\\20261123_092613_295_oot_multiview\\decisions.parquet",
+    "metrics": "D:\\Projects\\tcc_extraction\\experiments\\runs\\20261123_092613_295_oot_multiview\\metrics.json",
+    "invariants": "D:\\Projects\\tcc_extraction\\experiments\\runs\\20261123_092613_295_oot_multiview\\invariants.json"
+  },
+  "errors": [],
+  "created_at": "2026-11-23T09:26:13.508520",
+  "updated_at": "2026-11-23T09:29:35.956317",
+  "completed_at": "2026-11-23T09:29:35.956310"
+}

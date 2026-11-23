@@ -1,0 +1,32 @@
+{
+  "pipeline_id": "oot_multiview",
+  "train_cutoffs": [
+    "2026-08-31",
+    "2026-09-30",
+    "2026-10-31"
+  ],
+  "train_clean_rows": 189341,
+  "oot_cutoff": "2026-11-19",
+  "oot_total_ucs": 65686,
+  "oot_eligible_ucs": 62857,
+  "oot_quarantine_ucs": 2829,
+  "oot_elec_anomalies": 6333,
+  "oot_candidates_vistoria": 6304,
+  "oot_baseline_anomalies": 3122,
+  "oot_mean_score": 0.2944,
+  "oot_p95_score": 0.9115,
+  "frozen_elec_threshold": 0.5226,
+  "frozen_baseline_threshold": 0.643,
+  "category_distribution": {
+    "OPERACAO_REGULAR": 44535,
+    "MUDANCA_CLASSE_COMPORTAMENTAL": 12093,
+    "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT": 4141,
+    "GARGALO_COLETIVO_RF_MESH": 1739,
+    "POSSIVEL_GD_NAO_CADASTRADA": 1479,
+    "ANOMALIA_COMUNICACAO_ISOLADA": 760,
+    "FALHA_METROLOGICA_MEDIDOR_TRAVADO": 739,
+    "INICIACAO_PERFIL_UC_NOVA": 122,
+    "TRANSICAO_TROCA_MEDIDOR": 78
+  },
+  "runtime_sec": 202.63
+}

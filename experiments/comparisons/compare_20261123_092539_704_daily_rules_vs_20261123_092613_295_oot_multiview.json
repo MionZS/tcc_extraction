@@ -1,0 +1,18 @@
+{
+  "run_a": "20261123_092539_704_daily_rules",
+  "run_b": "20261123_092613_295_oot_multiview",
+  "pipeline_a": "daily_rules",
+  "pipeline_b": "oot_multiview",
+  "warnings": [
+    "Different pipeline_id: daily_rules vs oot_multiview — interpret differences cautiously."
+  ],
+  "pop_a": 65908,
+  "pop_b": 65686,
+  "pop_intersection": 65686,
+  "candidates_a": 12951,
+  "candidates_b": 6304,
+  "candidates_common": 3807,
+  "candidates_exclusive_a": 9144,
+  "candidates_exclusive_b": 2497,
+  "jaccard_candidates": 0.2464
+}

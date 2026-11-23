@@ -1,0 +1,59 @@
+{
+  "rows": [
+    {
+      "coverage_threshold": 0.5,
+      "total_ucs": 65686,
+      "eligible_ucs": 63371,
+      "eligible_pct": 96.48,
+      "excluded_ucs": 2315,
+      "candidates_retained": 6304,
+      "candidates_excluded": 0,
+      "spearman_vs_unfiltered": 0.9971,
+      "top5pct_jaccard_vs_unfiltered": 0.8503
+    },
+    {
+      "coverage_threshold": 0.6,
+      "total_ucs": 65686,
+      "eligible_ucs": 63111,
+      "eligible_pct": 96.08,
+      "excluded_ucs": 2575,
+      "candidates_retained": 6304,
+      "candidates_excluded": 0,
+      "spearman_vs_unfiltered": 0.9953,
+      "top5pct_jaccard_vs_unfiltered": 0.8225
+    },
+    {
+      "coverage_threshold": 0.7,
+      "total_ucs": 65686,
+      "eligible_ucs": 62857,
+      "eligible_pct": 95.69,
+      "excluded_ucs": 2829,
+      "candidates_retained": 6304,
+      "candidates_excluded": 0,
+      "spearman_vs_unfiltered": 0.9952,
+      "top5pct_jaccard_vs_unfiltered": 0.804
+    },
+    {
+      "coverage_threshold": 0.8,
+      "total_ucs": 65686,
+      "eligible_ucs": 61530,
+      "eligible_pct": 93.67,
+      "excluded_ucs": 4156,
+      "candidates_retained": 6063,
+      "candidates_excluded": 241,
+      "spearman_vs_unfiltered": 0.995,
+      "top5pct_jaccard_vs_unfiltered": 0.7701
+    },
+    {
+      "coverage_threshold": 0.9,
+      "total_ucs": 65686,
+      "eligible_ucs": 59091,
+      "eligible_pct": 89.96,
+      "excluded_ucs": 6595,
+      "candidates_retained": 5593,
+      "candidates_excluded": 711,
+      "spearman_vs_unfiltered": 0.9945,
+      "top5pct_jaccard_vs_unfiltered": 0.6837
+    }
+  ]
+}

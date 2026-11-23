@@ -72,7 +72,7 @@ def select_pure_electrical_features(df_or_cols: pl.DataFrame | Sequence[str]) ->
 
 
 def _min_max_normalize(scores: np.ndarray) -> np.ndarray:
-    """Normalize arbitrary score array to [0.0, 1.0] safely using robust P01-P99 anchoring."""
+    """Normalize arbitrary score array to [0.0, 1.0] safely using batch min-max."""
     if len(scores) == 0:
         return scores
     s = np.nan_to_num(scores, nan=0.0, posinf=1.0, neginf=0.0)
@@ -81,6 +81,64 @@ def _min_max_normalize(scores: np.ndarray) -> np.ndarray:
     if s_max - s_min < 1e-12:
         return np.zeros_like(s, dtype=float)
     return np.clip((s - s_min) / (s_max - s_min), 0.0, 1.0)
+
+
+def _compute_norm_params(raw_scores: np.ndarray) -> dict[str, Any]:
+    """Compute frozen training-set reference statistics for stable out-of-sample normalization."""
+    s = np.nan_to_num(np.asarray(raw_scores, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    if len(s) == 0:
+        return {
+            "min": 0.0,
+            "max": 1.0,
+            "p01": 0.0,
+            "p99": 1.0,
+            "median": 0.0,
+            "iqr": 1.0,
+            "sorted_raw": np.array([0.0], dtype=float),
+        }
+    p01 = float(np.percentile(s, 1.0))
+    p25 = float(np.percentile(s, 25.0))
+    p50 = float(np.percentile(s, 50.0))
+    p75 = float(np.percentile(s, 75.0))
+    p99 = float(np.percentile(s, 99.0))
+    return {
+        "min": float(np.min(s)),
+        "max": float(np.max(s)),
+        "p01": p01,
+        "p99": p99,
+        "median": p50,
+        "iqr": max(p75 - p25, 1e-9),
+        "sorted_raw": np.sort(s),
+    }
+
+
+def _normalize_with_params(
+    raw_scores: np.ndarray,
+    params: dict[str, Any] | None,
+    mode: str = "frozen_quantile",
+) -> np.ndarray:
+    """Normalize raw detector scores to [0.0, 1.0] without batch-to-batch drift."""
+    s = np.nan_to_num(np.asarray(raw_scores, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    if len(s) == 0:
+        return s
+    if params is None or mode == "batch_minmax":
+        return _min_max_normalize(s)
+
+    if mode == "frozen_ecdf":
+        sorted_ref = params["sorted_raw"]
+        n_ref = max(1, len(sorted_ref))
+        ranks = np.searchsorted(sorted_ref, s, side="right")
+        return np.clip(ranks.astype(float) / float(n_ref), 0.0, 1.0)
+
+    # Default: "frozen_quantile" (anchored at training P01 and P99, fallback to min/max if degenerate)
+    lo = float(params["p01"])
+    hi = float(params["p99"])
+    if hi - lo < 1e-12:
+        lo = float(params["min"])
+        hi = float(params["max"])
+    if hi - lo < 1e-12:
+        return np.zeros_like(s, dtype=float)
+    return np.clip((s - lo) / (hi - lo), 0.0, 1.0)
 
 
 class ECODDetector:
@@ -275,11 +333,15 @@ class CompositeAnomalyDetector:
         n_estimators: int = 150,
         lof_neighbors: int = 20,
         weights: dict[str, float] | None = None,
+        normalization_mode: str = "frozen_quantile",
+        freeze_threshold: bool = True,
         random_state: int = 42,
     ):
         self.contamination = float(np.clip(contamination, 0.001, 0.45))
         self.n_estimators = n_estimators
         self.lof_neighbors = lof_neighbors
+        self.normalization_mode = normalization_mode
+        self.freeze_threshold = freeze_threshold
         self.random_state = random_state
 
         self.weights = weights or {
@@ -312,9 +374,51 @@ class CompositeAnomalyDetector:
         self.pca = RobustPCADetector(random_state=self.random_state)
         self.is_fitted_: bool = False
         self.pyod_backend_active_: bool = HAS_PYOD
+        self.norm_params_: dict[str, dict[str, Any]] = {}
+        self.frozen_threshold_: float | None = None
+
+    def _compute_raw_detector_scores(self, X_scaled: np.ndarray) -> dict[str, np.ndarray]:
+        """Compute unnormalized anomaly scores (higher = more anomalous) for each sub-detector."""
+        copod_det = getattr(self, "copod", None)
+        if copod_det is None:
+            copod_det = COPODDetector().fit(X_scaled)
+            self.copod = copod_det
+
+        hbos_det = getattr(self, "hbos", None)
+        if hbos_det is None:
+            hbos_det = HBOSDetector().fit(X_scaled)
+            self.hbos = hbos_det
+
+        return {
+            "iso_forest": -self.iso_forest.score_samples(X_scaled),
+            "lof": -self.lof.score_samples(X_scaled),
+            "ecod": self.ecod.score_samples(X_scaled),
+            "copod": copod_det.score_samples(X_scaled),
+            "hbos": hbos_det.score_samples(X_scaled),
+            "pca": self.pca.score_samples(X_scaled),
+        }
+
+    def _combine_weighted_scores(self, norm_scores: dict[str, np.ndarray]) -> np.ndarray:
+        """Compute weighted ensemble consensus before PRODIST rule boost."""
+        w_iso = self.weights.get("iso_forest", 0.22)
+        w_lof = self.weights.get("lof", 0.20)
+        w_ecod = self.weights.get("ecod", 0.18)
+        w_copod = self.weights.get("copod", 0.18)
+        w_hbos = self.weights.get("hbos", 0.10)
+        w_pca = self.weights.get("pca", 0.12)
+        w_sum = max(1e-9, w_iso + w_lof + w_ecod + w_copod + w_hbos + w_pca)
+
+        return (
+            w_iso * norm_scores["iso_forest"]
+            + w_lof * norm_scores["lof"]
+            + w_ecod * norm_scores["ecod"]
+            + w_copod * norm_scores["copod"]
+            + w_hbos * norm_scores["hbos"]
+            + w_pca * norm_scores["pca"]
+        ) / w_sum
 
     def fit(self, X: np.ndarray) -> "CompositeAnomalyDetector":
-        """Fit all 6 sub-detectors on clean electrical feature matrix X."""
+        """Fit all 6 sub-detectors on clean electrical feature matrix X and freeze reference stats."""
         if len(X) == 0:
             raise ValueError("Cannot fit CompositeAnomalyDetector on empty array.")
 
@@ -332,6 +436,19 @@ class CompositeAnomalyDetector:
         self.hbos.fit(X_scaled)
         self.pca.fit(X_scaled)
 
+        # Compute and freeze training normalization parameters and consensus threshold
+        raw_train = self._compute_raw_detector_scores(X_scaled)
+        self.norm_params_ = {name: _compute_norm_params(arr) for name, arr in raw_train.items()}
+
+        mode = getattr(self, "normalization_mode", "frozen_quantile")
+        norm_train = {
+            name: _normalize_with_params(arr, self.norm_params_[name], mode)
+            for name, arr in raw_train.items()
+        }
+        train_consensus = np.clip(self._combine_weighted_scores(norm_train), 0.0, 1.0)
+        tau = float(np.percentile(train_consensus, 100.0 * (1.0 - self.contamination)))
+        self.frozen_threshold_ = max(tau, 1e-6) if float(np.max(train_consensus)) <= 1e-6 else tau
+
         self.is_fitted_ = True
         return self
 
@@ -339,6 +456,8 @@ class CompositeAnomalyDetector:
         self,
         X: np.ndarray,
         raw_dataframe: pl.DataFrame | None = None,
+        *,
+        use_frozen_threshold: bool | None = None,
     ) -> dict[str, np.ndarray]:
         """Compute individual detector scores, physical rule flags, and consensus output."""
         if len(X) == 0:
@@ -350,12 +469,18 @@ class CompositeAnomalyDetector:
                 "copod_score": np.array([], dtype=float),
                 "hbos_score": np.array([], dtype=float),
                 "pca_score": np.array([], dtype=float),
+                "raw_iso_score": np.array([], dtype=float),
+                "raw_lof_score": np.array([], dtype=float),
+                "raw_ecod_score": np.array([], dtype=float),
+                "raw_copod_score": np.array([], dtype=float),
+                "raw_hbos_score": np.array([], dtype=float),
+                "raw_pca_score": np.array([], dtype=float),
                 "rule_violation_flag": np.array([], dtype=bool),
                 "is_anomaly": np.array([], dtype=bool),
             }
 
         if not self.is_fitted_:
-            self.fit(X)
+            raise RuntimeError("CompositeAnomalyDetector must be fitted before calling predict_composite.")
 
         if np.isnan(X).any() and np.all(np.isnan(X), axis=0).any():
             valid_cols = ~np.all(np.isnan(X), axis=0)
@@ -367,31 +492,16 @@ class CompositeAnomalyDetector:
         X_clean = np.nan_to_num(X_clean, nan=0.0)
         X_scaled = self.scaler.transform(X_clean)
 
-        # 1. Isolation Forest
-        s_iso = _min_max_normalize(-self.iso_forest.score_samples(X_scaled))
+        raw_scores = self._compute_raw_detector_scores(X_scaled)
+        norm_params = getattr(self, "norm_params_", {})
+        mode = getattr(self, "normalization_mode", "frozen_quantile")
 
-        # 2. Local Outlier Factor
-        s_lof = _min_max_normalize(-self.lof.score_samples(X_scaled))
-
-        # 3. ECOD (Empirical CDF Tails)
-        s_ecod = _min_max_normalize(self.ecod.score_samples(X_scaled))
-
-        # 4. COPOD (Empirical Copula with Skewness Correction)
-        copod_det = getattr(self, "copod", None)
-        if copod_det is None:
-            copod_det = COPODDetector().fit(X_scaled)
-            self.copod = copod_det
-        s_copod = _min_max_normalize(copod_det.score_samples(X_scaled))
-
-        # 5. HBOS (Histogram Density)
-        hbos_det = getattr(self, "hbos", None)
-        if hbos_det is None:
-            hbos_det = HBOSDetector().fit(X_scaled)
-            self.hbos = hbos_det
-        s_hbos = _min_max_normalize(hbos_det.score_samples(X_scaled))
-
-        # 6. Robust PCA Reconstruction
-        s_pca = _min_max_normalize(self.pca.score_samples(X_scaled))
+        s_iso = _normalize_with_params(raw_scores["iso_forest"], norm_params.get("iso_forest"), mode)
+        s_lof = _normalize_with_params(raw_scores["lof"], norm_params.get("lof"), mode)
+        s_ecod = _normalize_with_params(raw_scores["ecod"], norm_params.get("ecod"), mode)
+        s_copod = _normalize_with_params(raw_scores["copod"], norm_params.get("copod"), mode)
+        s_hbos = _normalize_with_params(raw_scores["hbos"], norm_params.get("hbos"), mode)
+        s_pca = _normalize_with_params(raw_scores["pca"], norm_params.get("pca"), mode)
 
         # 7. Physics / PRODIST rules (Strictly electrical measurements)
         rule_flags = np.zeros(len(X), dtype=bool)
@@ -446,27 +556,25 @@ class CompositeAnomalyDetector:
                     r_arr = raw_dataframe[rc].fill_null(0.0).to_numpy()
                     rule_flags |= (r_arr > 0.85)
 
-        # Normalize weights safely even if loaded from an older 4-detector checkpoint
-        w_iso = self.weights.get("iso_forest", 0.22)
-        w_lof = self.weights.get("lof", 0.20)
-        w_ecod = self.weights.get("ecod", 0.18)
-        w_copod = self.weights.get("copod", 0.18)
-        w_hbos = self.weights.get("hbos", 0.10)
-        w_pca = self.weights.get("pca", 0.12)
-        w_sum = max(1e-9, w_iso + w_lof + w_ecod + w_copod + w_hbos + w_pca)
-
-        consensus = (
-            w_iso * s_iso
-            + w_lof * s_lof
-            + w_ecod * s_ecod
-            + w_copod * s_copod
-            + w_hbos * s_hbos
-            + w_pca * s_pca
-        ) / w_sum
-
+        norm_scores = {
+            "iso_forest": s_iso,
+            "lof": s_lof,
+            "ecod": s_ecod,
+            "copod": s_copod,
+            "hbos": s_hbos,
+            "pca": s_pca,
+        }
+        consensus = self._combine_weighted_scores(norm_scores)
         consensus = np.clip(consensus + np.where(rule_flags, 0.15, 0.0), 0.0, 1.0)
 
-        threshold = float(np.percentile(consensus, 100 * (1.0 - self.contamination)))
+        use_frozen = getattr(self, "freeze_threshold", True) if use_frozen_threshold is None else use_frozen_threshold
+        frozen_tau = getattr(self, "frozen_threshold_", None)
+        if use_frozen and frozen_tau is not None:
+            threshold = float(frozen_tau)
+        else:
+            threshold = float(np.percentile(consensus, 100.0 * (1.0 - self.contamination)))
+        self.last_threshold_applied_ = threshold
+
         is_anomaly = consensus >= threshold
 
         return {
@@ -477,8 +585,15 @@ class CompositeAnomalyDetector:
             "copod_score": np.round(s_copod, 4),
             "hbos_score": np.round(s_hbos, 4),
             "pca_score": np.round(s_pca, 4),
+            "raw_iso_score": raw_scores["iso_forest"],
+            "raw_lof_score": raw_scores["lof"],
+            "raw_ecod_score": raw_scores["ecod"],
+            "raw_copod_score": raw_scores["copod"],
+            "raw_hbos_score": raw_scores["hbos"],
+            "raw_pca_score": raw_scores["pca"],
             "rule_violation_flag": rule_flags,
             "is_anomaly": is_anomaly,
+            "threshold_applied": np.full(len(X), threshold, dtype=float),
         }
 
     def score_samples(self, X: np.ndarray, raw_dataframe: pl.DataFrame | None = None) -> np.ndarray:

@@ -9,6 +9,7 @@ import numpy as np
 import polars as pl
 
 from src.models.category_reporting import (
+    CATEGORY_METHODOLOGY_SPECS,
     apply_delimited_isolation_and_categories,
     assign_behavioral_consumption_classes,
     build_temporal_class_transition_report,
@@ -134,7 +135,7 @@ def test_delimited_isolation_rules_and_temporal_class_transitions(tmp_path: Path
     assert tr_row["CLASSE_FINAL"] == "C1_MINIMO_OU_DESOCUPADO"
 
     manifest = export_all_category_reports(classified_df, transitions_df, reports_dir=tmp_path / "reports")
-    assert len(manifest) == 8
+    assert len(manifest) == len(CATEGORY_METHODOLOGY_SPECS)
     for item in manifest:
         assert Path(item["parquet_path"]).exists()
 

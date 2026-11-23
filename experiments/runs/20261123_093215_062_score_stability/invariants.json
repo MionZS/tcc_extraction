@@ -1,0 +1,17 @@
+{
+  "invariants_verified": true,
+  "total_checks": 1,
+  "passed_checks": 1,
+  "failed_checks": 0,
+  "checks": [
+    {
+      "name": "score_bounds_and_kpi_denominators",
+      "passed": true,
+      "details": {
+        "n_scores": 65686,
+        "n_metric_rows": 0
+      },
+      "errors": []
+    }
+  ]
+}

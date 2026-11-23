@@ -1,0 +1,5 @@
+UC_MASK;ANTERIOR;RECALCULO_REAL;INTERPRETACAO_CORRIGIDA
+908***00;"93 dias consecutivos; outro relatório registrava REGULAR";"Regular em 31/08; queda em 31/10 (-68,3%); persistência de 20 dias até 19/11";"Hipótese diagnóstica de intervenção na medição / bypass parcial (candidato prioritário), aguardando TOI em campo; nunca 93 dias"
+291***96;50% de perda de pacotes crônica em RF Mesh;"Cadência bruta no arquivo: None min; dias confiáveis ajustados vs janela 5 min";"Reconfiguração nominal para cadência de 10 min explicada explicitamente; controle negativo sem desvio de consumo"
+969***97;Desequilíbrio/bypass por quedas cíclicas fim de semana;"Ratio dia útil/fim de semana = 1.45x; cadência = 10.0 min";Sazonalidade comercial regular de funcionamento (não anomalia de furto)
+828***05;Geração distribuída solar não cadastrada;Fluxo reverso = 56.0% do fluxo total em 30d;Hipótese diagnóstica de microgeração solar fotovoltaica não homologada

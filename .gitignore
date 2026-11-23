@@ -12,3 +12,7 @@ output/
 vault/
 *.txt
 *.zip
+
+# Prevent uncompressed monolithic model blobs > 50MB from being committed
+experiments/runs/**/*.joblib
+!experiments/runs/**/*.joblib.part*

@@ -1,0 +1,6 @@
+coverage_threshold;total_ucs;eligible_ucs;eligible_pct;excluded_ucs;candidates_retained;candidates_excluded;spearman_vs_unfiltered;top5pct_jaccard_vs_unfiltered
+0.5;65686;63371;96.48;2315;6304;0;0.9971;0.8503
+0.6;65686;63111;96.08;2575;6304;0;0.9953;0.8225
+0.7;65686;62857;95.69;2829;6304;0;0.9952;0.804
+0.8;65686;61530;93.67;4156;6063;241;0.995;0.7701
+0.9;65686;59091;89.96;6595;5593;711;0.9945;0.6837

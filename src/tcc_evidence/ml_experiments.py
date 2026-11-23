@@ -388,13 +388,32 @@ def run_ablation_study(
     m3_df = m2_df.filter(pl.col("meta__feeder").is_not_null()) if "meta__feeder" in m2_df.columns else m2_df
     m3_n = int(m3_df.height)
 
-    m4_df = m2_df.filter(pl.col(anom_col) == True) if anom_col else m2_df  # noqa: E712
+    # Strict sequential funnel: M4 evaluates anomalies strictly inside M3 (reliable + contextualized)
+    m4_df = m3_df.filter(pl.col(anom_col) == True) if anom_col else m3_df  # noqa: E712
     m4_n = int(m4_df.height)
 
-    m5_df = uniq_df.filter(pl.col(cand_col) == True) if cand_col else (  # noqa: E712
+    # Strict sequential funnel M5: candidates strictly within M4
+    m5_df = m4_df.filter(pl.col(cand_col) == True) if cand_col else (  # noqa: E712
         m4_df.filter(pl.col(streak_col) >= 3) if streak_col else m4_df
     )
     m5_n = int(m5_df.height)
+
+    # Track any global candidates outside strict M4 (e.g. from legacy artifacts) for audit transparency
+    uc_key = "id__uc_id" if "id__uc_id" in uniq_df.columns else ("UC" if "UC" in uniq_df.columns else None)
+    set_reconciliation: dict[str, Any] = {}
+    if uc_key and cand_col and anom_col:
+        m4_set = set(m4_df[uc_key].cast(pl.String).to_list())
+        m5_seq_set = set(m5_df[uc_key].cast(pl.String).to_list())
+        m5_global_set = set(uniq_df.filter(pl.col(cand_col) == True)[uc_key].cast(pl.String).to_list())  # noqa: E712
+        set_reconciliation = {
+            "strict_sequential_inclusion": m5_seq_set.issubset(m4_set),
+            "m4_count": len(m4_set),
+            "m5_sequential_count": len(m5_seq_set),
+            "m5_global_unconstrained_count": len(m5_global_set),
+            "common_m4_m5_global": len(m4_set & m5_global_set),
+            "exclusive_m4_not_m5_global": len(m4_set - m5_global_set),
+            "exclusive_m5_global_not_m4": len(m5_global_set - m4_set),
+        }
 
     # Gap incidence among M0 anomalies vs M5 candidates
     gap_rate_m0_anom = 0.0
@@ -431,4 +450,9 @@ def run_ablation_study(
     fig.savefig(abl_dir / "ablation_funnel.svg")
     plt.close(fig)
 
-    return {"stages": stages, "gap_rate_unfiltered_anom_pct": round(gap_rate_m0_anom, 2), "gap_rate_m5_pct": round(gap_rate_m5_cand, 2)}
+    return {
+        "stages": stages,
+        "set_reconciliation": set_reconciliation,
+        "gap_rate_unfiltered_anom_pct": round(gap_rate_m0_anom, 2),
+        "gap_rate_m5_pct": round(gap_rate_m5_cand, 2),
+    }

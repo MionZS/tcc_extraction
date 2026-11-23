@@ -1,0 +1,42 @@
+{
+  "invariants_verified": true,
+  "total_checks": 4,
+  "passed_checks": 4,
+  "failed_checks": 0,
+  "checks": [
+    {
+      "name": "population_partition_conservation",
+      "passed": true,
+      "details": {
+        "cutoffs_checked": 19
+      },
+      "errors": []
+    },
+    {
+      "name": "portfolio_queue_set_identities",
+      "passed": true,
+      "details": {
+        "cutoffs_checked": 19
+      },
+      "errors": []
+    },
+    {
+      "name": "temporal_no_future_leakage",
+      "passed": true,
+      "details": {
+        "train_max_date": null,
+        "eval_start_date": "2026-11-01"
+      },
+      "errors": []
+    },
+    {
+      "name": "score_bounds_and_kpi_denominators",
+      "passed": true,
+      "details": {
+        "n_scores": 1248501,
+        "n_metric_rows": 19
+      },
+      "errors": []
+    }
+  ]
+}

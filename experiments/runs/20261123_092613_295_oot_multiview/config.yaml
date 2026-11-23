@@ -1,0 +1,29 @@
+experiment_id: november_2026
+data_source: local_lake
+scope: study_area
+start_date: 2026-11-01
+end_date: 2026-11-19
+timezone: America/Sao_Paulo
+
+unit_of_analysis: uc_cutoff
+pipeline_id: oot_multiview
+
+train:
+  end_date: 2026-10-31
+  artifact_id: train_aug_sep_oct_2026_v1
+
+inference:
+  frozen_preprocessing: true
+  frozen_model: true
+  frozen_thresholds: true
+  normalization_mode: frozen_quantile
+
+quality:
+  coverage_threshold: 0.70
+  min_window_coverage: 0.60
+  min_reliable_days: 15
+
+execution:
+  seed: 42
+  resume: true
+  overwrite: false

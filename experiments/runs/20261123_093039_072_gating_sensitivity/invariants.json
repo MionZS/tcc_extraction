@@ -1,0 +1,16 @@
+{
+  "invariants_verified": true,
+  "total_checks": 1,
+  "passed_checks": 1,
+  "failed_checks": 0,
+  "checks": [
+    {
+      "name": "population_partition_conservation",
+      "passed": true,
+      "details": {
+        "cutoffs_checked": 5
+      },
+      "errors": []
+    }
+  ]
+}
