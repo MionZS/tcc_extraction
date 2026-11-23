@@ -3,7 +3,7 @@
 ## 1. Ambiente e Versões Registradas
 - **Commit Git / Tag:** `2f668f6`
 - **Python:** `3.14.7`
-- **Polars:** `1.562.8`
+- **Polars:** `1.41.2`
 - **Scikit-Learn:** `1.9.1`
 
 ## 2. Comandos Exatos de Reprodução (100% Local)

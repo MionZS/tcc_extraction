@@ -176,7 +176,9 @@ Dessa pergunta derivam duas questões auxiliares:
 
 ## Objetivo geral
 
-Desenvolver, implementar e examinar experimentalmente uma metodologia para **detecção, localização e caracterização de padrões anômalos em redes de distribuição com dados de medição inteligente**, combinando métodos de aprendizado de máquina, análise temporal, grandezas elétricas e contexto cadastral/topológico, com especial atenção a padrões compatíveis com perdas não técnicas. A contribuição operacional consiste em transformar evidências analíticas em prioridades de investigação auditáveis; sua eficácia em inspeções é objeto de um protocolo de validação de campo distinto da avaliação computacional aqui apresentada.
+Desenvolver, implementar e examinar retrospectivamente uma metodologia e ferramental de software para **detecção, localização e caracterização de padrões anômalos em redes de distribuição a partir de dados de medição inteligente (AMI)**, combinando aprendizado de máquina multi-visão, análise temporal, grandezas elétricas e contexto cadastral/topológico, com foco na geração de hipóteses interpretáveis para investigação de perdas não técnicas. 
+
+**Delimitação explícita de escopo:** O presente TCC entrega a arquitetura de engenharia de dados, os contratos temporais, as regras de decisão, a execução retrospectiva sobre dados reais de campo e a avaliação da consistência, rastreabilidade e sensibilidade dos rankings analíticos. Não houve execução de vistorias em campo para validação deste trabalho; o uso operacional presencial, o retorno das ordens de serviço (OS) e a confirmação pericial de irregularidades (TOI) constituem etapas de trabalho futuro e base do protocolo de verificação prospectiva proposto.
 
 ## Objetivos específicos {#objetivos-especuxedficos}
 
@@ -2637,6 +2639,22 @@ interpretação. Os estudos de caso deste trabalho reproduzem a mesma
 leitura em figuras estáticas. Alarmes e metadados topológicos funcionam
 como contexto, não como confirmação automática de irregularidade.
 
+### Fluxo Operacional de Decisão e Demarcação de Escopo
+
+O fluxo analítico e operacional completo projetado para a atuação integrada com a distribuidora estrutura-se em nove etapas sequenciais, com demarcação estrita entre o escopo executado no TCC e as etapas de validação futura:
+
+1. **Ingestão e Controle de Qualidade (Executado no TCC):** Extração idempotente particionada, cálculo de completude de telemetria ajustada à cadência e reconciliação temporal do vínculo UC--NIO;
+2. **Quarentena Técnica (Executado no TCC):** Segregação automática de medidores com cobertura horária inferior a 70% ou silêncio crônico de rede mesh para a fila de manutenção de telecomunicação;
+3. **Detecção Elétrica Especializada (Executado no TCC):** Extração de atributos sobre subespaço puramente elétrico e inferência pelo comitê não supervisionado de 6 detectores ortogonais;
+4. **Classificação de Hipóteses Diagnósticas (Executado no TCC):** Enquadramento determinístico em categorias interpretáveis (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`, etc.);
+5. **Geração de Lista Priorizada e Carteira (Executado no TCC):** Ordenação multicritério por score elétrico, persistência temporal e materialidade de consumo;
+6. **Análise Humana de Apoio (Simulada no Cockpit / Trabalho Futuro Operacional):** Triagem e auditoria pericial visual das evidências rastreadas pelo inspetor técnico antes da expedição de ordens;
+7. **Eventual Vistoria em Campo (Trabalho Futuro / Fora do Escopo do TCC):** Deslocamento de equipes de fiscalização e inspeção física in loco do medidor e ramal de ligação;
+8. **Registro Pericial do Resultado (Trabalho Futuro / Fora do Escopo do TCC):** Lavratura de Termo de Ocorrência e Inspeção (TOI), categorizando em procedente (irregularidade comprovada), improcedente (consumo legítimo) ou inconclusivo/não executado;
+9. **Realimentação e Calibração dos Modelos (Trabalho Futuro / Fora do Escopo do TCC):** Incorporação dos laudos confirmados para calibração supervisionada de probabilidades, cálculo de Precision@K real e ajuste de hiperparâmetros.
+
+Deixa-se formalmente registrado que as etapas 7, 8 e 9 **não foram executadas neste TCC**, constituindo o limite planejado do estudo e o objeto do protocolo de validação futura.
+
 ### Visão de carteira e funil analítico
 
 A estrutura analítica mantém destinos distintos para baixa qualidade de
@@ -2795,7 +2813,7 @@ Este trabalho apresentou uma metodologia para detecção, localização e caract
 
 A validação experimental executada sobre a totalidade da rede real de Araucária (PR) em Novembro de 2026 demonstrou a robustez do fluxo proposto:
 - Sobre 65.686 unidades consumidoras ativas avaliadas fora do tempo (OOT) com modelo congelado, a camada de *gating* identificou 62.857 instalações elegíveis (95,69%) e segregou 2.829 instalações em quarentena de telecomunicação (4,31%), enquanto o comitê elétrico multi-visão priorizou 6.333 candidatos operacionais à vistoria;
-- A série temporal contínua de regras diárias (`DAILY_RULES`, 19 cortes de 01 a 19/11/2026, totalizando 1.248.501 janelas analisadas) atestou uma média estável de 5.387,7 candidatos/dia, caracterizando a dinâmica operacional de entradas e saídas da carteira;
+- A série temporal contínua de regras diárias (`DAILY_RULES`, 19 cortes de 01 a 19/11/2026, totalizando 1.248.501 janelas analisadas) registrou uma média de 5.387,7 candidatos/dia (desvio padrão de 562,8 UCs/dia e intervalo de 4.737 a 6.728 UCs/dia), caracterizando a dinâmica operacional de entradas, saídas e permanência na carteira;
 - O funil sequencial demonstrou o impacto progressivo dos filtros ($M_0 = 65.686 \to M_1 = 65.686 \to M_2 = 62.857 \to M_3 = 58.857 \to M_4 = 4.390 \to M_5 = 4.390$), com $M_4 = M_5$ evidenciando redundância na coorte avaliada e apontando a necessidade de validação longitudinal contínua;
 - O ensaio de ablação sob o cenário de capacidade operacional simulado de 2.000 vistorias/mês evidenciou a sensibilidade do ranking à supressão de algoritmos de densidade local (LOF, churn de 210 UCs) e de projeção linear (PCA, churn de 132 UCs), fundamentando a decisão técnica de manter o comitê completo de 6 detectores;
 - Os estudos de caso periciais ilustraram a interpretação diferencial entre eventos de rede e desvios de consumo: caracterizando hipóteses de persistência física e injeção reversa (`UC 90850700`, com degrau de $-68,3\%$ e score individual de 0,9601) e permitindo segregar alertas de qualidade decorrentes de descompassos cadastrais e cadências de medição heterogêneas (`UC 29113296`).
