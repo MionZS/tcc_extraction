@@ -363,3 +363,12 @@ def test_contracts_reconciliation_and_fixed_capacity_ablation() -> None:
         assert "p95_score" in row
 
 
+def test_article_and_evidence_numbers_match_active_suite_metrics() -> None:
+    """Automated check of every number, table, metric, and neutral phrasing in the article against run artifacts."""
+    from src.experiments.article_audit import audit_article_against_metrics
+
+    errors = audit_article_against_metrics()
+    assert errors == [], f"Found metric discrepancies in article text: {errors}"
+
+
+

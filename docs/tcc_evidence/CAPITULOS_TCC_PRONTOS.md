@@ -57,7 +57,7 @@ A inferência do pipeline multi-view especializado sobre o corte congelado de 19
 - **62.857 instalações** (95.69%) foram declaradas tecnicamente elegíveis para avaliação de perdas;
 - **2.829 instalações** (4.31%) foram segregadas em Quarentena Técnica de Telecomunicação;
 - **6.333 instalações** (9.64% da base total) foram priorizadas como **Candidatos Operacionais à Vistoria de Campo** com base em anomalias elétricas persistentes e hipóteses físicas delimitadas (PNT, possível GD não cadastrada e medidor travado);
-- A Baseline com *Isolation Forest* global (limiar congelado de treino de 0.5512) indicou **5.908 anomalias**, demonstrando que o ensemble multi-view e o pós-processamento de regras capturam um volume operacional consistente, ao mesmo tempo em que fornecem categorização física acionável.
+- A Baseline com *Isolation Forest* global (limiar congelado de treino de 0.643) indicou **3.122 anomalias**, demonstrando que o ensemble multi-view e o pós-processamento de regras capturam um volume operacional consistente, ao mesmo tempo em que fornecem categorização física acionável.
 
 ### 4.6 Reconciliação Pericial dos Estudos de Caso (Auditoria Novembro/2026)
 A análise temporal individual confirmou:
