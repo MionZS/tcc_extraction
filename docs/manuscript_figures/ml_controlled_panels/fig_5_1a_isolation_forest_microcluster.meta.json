@@ -1,0 +1,39 @@
+{
+  "figure_id": "fig_5_1a_isolation_forest_microcluster",
+  "section_target": "5.1 / Figura 05 (Substituição de Nota Editorial 1 - Painel IForest)",
+  "title": "Isolation Forest com microagrupamento compacto e scores calculados (N=1.000, seed=42)",
+  "files": {
+    "png": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.png",
+    "svg": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.svg",
+    "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.pdf",
+    "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster_data.csv"
+  },
+  "sha256": {
+    "png": "0cd319e77f87a4d3f4bd54fff2a00718c3c68e17dd16e09fa5dcab6bc5efeb56",
+    "svg": "712a0231dc7546b8383dab8b938557e65bb319725e6bb2b951fb6b7ea02a0c5d",
+    "pdf": "db5359c19acf451c3b6c1fa9a68e2e079cd26a9b3aebde0b21725627d9b6ce99",
+    "csv": "1d87c169667653d839914640f4815f90bf27c56184c5a04db056b00611ec525c"
+  },
+  "origin_data": {
+    "dataset": "controlled_benchmark_v1",
+    "n_samples": 1000,
+    "cohorts": {
+      "Normal": 922,
+      "Outlier Global": 20,
+      "Outlier Local": 20,
+      "Morfologia Rara": 20,
+      "Microagrupamento": 18
+    }
+  },
+  "parameters": {
+    "estimator": "IsolationForest",
+    "n_estimators": 200,
+    "contamination": 0.078,
+    "random_state": 42,
+    "scaler": "RobustScaler",
+    "norm": "P01-P99"
+  },
+  "run_id": "controlled_benchmark_v1_seed42",
+  "caption_academic_pt": "Comportamento do Isolation Forest sobre o experimento controlado (N=1.000, seed=42): (A) projeção PCA colorida pelo escore calculado com destaque para o microagrupamento compacto (n=18); (B) distribuição dos escores brutos e normalizados por coorte face ao corte P95.",
+  "interpretative_analysis_pt": "Enquanto outliers globais isolados atingem mediana de escore normalizado igual a 1.000 (acima de P95=0.564), o microagrupamento compacto (n=18) obtém mediana reduzida (0.500) por compartilhar partições aleatórias nas árvores, evidenciando o efeito de mascaramento que motiva a inclusão do LOF."
+}

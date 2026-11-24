@@ -1,0 +1,30 @@
+{
+  "figure_id": "fig_caso_908xxx00_fa_ra_completo",
+  "section_target": "Estudo de Caso 1 — UC 908***00",
+  "title": "Série temporal completa FA/RA e perfil intradiário da UC 908***00 (02/08 a 19/11/2026)",
+  "files": {
+    "png": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.png",
+    "svg": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.svg",
+    "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.pdf",
+    "csv": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo_data.csv"
+  },
+  "sha256": {
+    "png": "29625c8d8dcbab9c076e09a425134f8cef5ca8d28bdee1a1211c2b8c8fe2b787",
+    "svg": "159783dc96784266dfb4b706db35c910edd950ab0323fb73bca560ec9b8bb3dd",
+    "pdf": "bce2bdaf3c29457d739bec0dabd101d02bf172892305ebd83289c863d2335f43",
+    "csv": "47655bf9da3b1dcf4ac90c7d943f186b7e60649735b52f0fa8b4a8316d1c196a"
+  },
+  "origin_data": {
+    "uc_day_features_rows": 102,
+    "calendar_days": 110,
+    "feeder_anon": "Circuito F-10"
+  },
+  "parameters": {
+    "cadence_minutes": 10,
+    "window_days_oot": 30,
+    "cutoff": "2026-11-19"
+  },
+  "run_id": "20261123_124416_146_oot_multiview",
+  "caption_academic_pt": "Série temporal completa observada para a UC 908***00 (02/08 a 19/11/2026, medidor NIO-435***63): (A) energia ativa direta (FA) e reversa (RA) diárias com atualização administrativa em 31/10; (B) cobertura ajustada à cadência de 10 min; (C) comparação intradiária pré/pós-evento.",
+  "interpretative_analysis_pt": "O registro longitudinal demonstra queda persistente de FA após 31/10 (mediana de ~18,05 para 5,72 kWh/dia) acompanhada por 12 dias de injeção reversa RA em novembro (até 31,27 kWh/dia). Como o medidor NIO-435***63 permaneceu o mesmo durante a atualização cadastral, a correção de ciclo de vida redirecionou a UC para a hipótese diagnóstica POSSIVEL_GD_NAO_CADASTRADA (escore 0,9601), sem afirmar causa ou tecnologia antes de vistoria."
+}

@@ -1,0 +1,27 @@
+{
+  "figure_id": "fig_4_4a_tui_menu_governanca",
+  "section_target": "4.4 — Capturas Reais da Plataforma (TUI Rich)",
+  "title": "TUI Rich — Menu operacional, inventário real do Data Lake e topologia anonimizada",
+  "files": {
+    "svg": "docs/manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.svg",
+    "png": "docs/manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.png"
+  },
+  "sha256": {
+    "svg": "8b39f1a439e64d8c25c97fc69ffa64679c67a58f1c0f6075a1ee6b303c747b9f",
+    "png": "b4b58a98cb74b351f7acfd20503ab79b13af075e07d9d27ddf9cfa7397f040a0"
+  },
+  "origin_data": {
+    "training_rows": 262769,
+    "hierarchy_rows": 69895,
+    "context_rows": 69895,
+    "oot_rows": 65686
+  },
+  "parameters": {
+    "console_renderer": "rich.Console(record=True)",
+    "theme": "ACADEMIC_LIGHT_TERMINAL_THEME",
+    "anonymized": true
+  },
+  "run_id": "20261123_124416_146_oot_multiview",
+  "caption_academic_pt": "Captura vetorial (Rich SVG) da interface de terminal (TUI) executada sobre os artefatos reais do Data Lake e da execução OOT validada, apresentando dimensões das camadas e distribuição anonimizada por circuito elétrico.",
+  "interpretative_analysis_pt": "A interface TUI materializa os contratos entre engenharia de dados e inferência: antes de acionar modelos, o operador audita cardinalidades de training_dataset, hierarquia elétrica, contexto cadastral e partições da suíte validada sem consultar sistemas externos em tempo de execução."
+}

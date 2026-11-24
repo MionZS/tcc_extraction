@@ -140,7 +140,11 @@ def filter_cockpit_dataframe(
                         ])
                     )
         elif category == "TELECOM_ALL":
-            if "CATEGORIA_DIAGNOSTICA" in work.columns:
+            if "x__avg_interval_coverage" in work.columns:
+                work = work.filter(
+                    pl.col("x__avg_interval_coverage").cast(pl.Float64, strict=False).fill_null(0.0) < 0.70
+                )
+            elif "CATEGORIA_DIAGNOSTICA" in work.columns:
                 work = work.filter(pl.col("CATEGORIA_DIAGNOSTICA").is_in(list(TELECOM_CATEGORIES)))
         elif "CATEGORIA_DIAGNOSTICA" in work.columns:
             work = work.filter(
@@ -243,8 +247,17 @@ def compute_reconciled_kpis(df: pl.DataFrame) -> dict[str, Any]:
     gd_win = int(df.filter(pl.col(cat_col) == "POSSIVEL_GD_NAO_CADASTRADA").height) if cat_col else 0
     gd_uc = int(unique_df.filter(pl.col(cat_col) == "POSSIVEL_GD_NAO_CADASTRADA").height) if cat_col else 0
 
-    tel_win = int(df.filter(pl.col(cat_col).is_in(list(TELECOM_CATEGORIES))).height) if cat_col else 0
-    tel_uc = int(unique_df.filter(pl.col(cat_col).is_in(list(TELECOM_CATEGORIES))).height) if cat_col else 0
+    if "x__avg_interval_coverage" in cols:
+        tel_mask = pl.col("x__avg_interval_coverage").cast(pl.Float64, strict=False).fill_null(0.0) < 0.70
+        tel_win = int(df.filter(tel_mask).height)
+        tel_uc = int(unique_df.filter(tel_mask).height)
+    elif cat_col:
+        tel_mask = pl.col(cat_col).is_in(list(TELECOM_CATEGORIES))
+        tel_win = int(df.filter(tel_mask).height)
+        tel_uc = int(unique_df.filter(tel_mask).height)
+    else:
+        tel_win = 0
+        tel_uc = 0
 
     cutoff_min = str(df[cutoff_col].min()) if cutoff_col else None
     cutoff_max = str(df[cutoff_col].max()) if cutoff_col else None

@@ -188,9 +188,11 @@ def render_continuity_calendar(
     # 1. Header Banner
     banner_color = "green" if pct_covered >= 90 else ("yellow" if pct_covered >= 50 else "red")
     banner_text = Text()
-    banner_text.append("📅 AUDITORIA DE GOVERNANÇA & CONTINUIDADE TEMPORAL\n", style="bold white")
+    banner_text.append("📅 AUDITORIA DE GOVERNANÇA & CONTINUIDADE TEMPORAL\n", style="bold blue")
     banner_text.append(f"Período Alvo: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')} ({total_days} dias)\n", style="dim")
-    banner_text.append(f"Filtro de Formato: [bold white on blue] {file_type.upper()} [/bold white on blue]  |  ", style="bold")
+    banner_text.append("Filtro de Formato: ", style="bold")
+    banner_text.append(f" {file_type.upper()} ", style="bold white on blue")
+    banner_text.append("  |  ", style="bold")
     banner_text.append(f"Parquet: {parquet_count} | CSV: {csv_count} | Ambos Sincronizados: {synced_count}\n", style="cyan")
     banner_text.append(f"Cobertura: {covered_days}/{total_days} ({pct_covered:.1f}%) | Dias Faltantes: {missing_days} | Status: ", style="bold")
     if pct_covered >= 90:

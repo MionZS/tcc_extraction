@@ -1340,12 +1340,10 @@ para triagem multidimensional, mas também cria um ponto cego importante:
 um pequeno agrupamento de observações anômalas semelhantes entre si pode
 deixar de parecer isolado.
 
-![Isolation Forest no benchmark controlado: raridade global e exemplo do
-ponto cego produzido por um microagrupamento
-compacto.](figures/ml_method_demo/05_isolation_forest.png){#fig:ml-iforest
+![Isolation Forest no benchmark controlado ($N=1.000$, seed=42): projeção PCA dos escores calculados, mascaramento no microagrupamento compacto ($n=18$, mediana $0{,}500 < P_{95}=0{,}564$) e comparação entre coortes.](figures/ml_method_demo/05_isolation_forest.png){#fig:ml-iforest
 width="98%" height="0.80\\textheight"}
 
-O mapa de score deve ser lido pela facilidade de isolamento dos pontos. Observações muito afastadas do conjunto tendem a maior anomalia; já um pequeno agrupamento consistente pode alterar as profundidades de isolamento. A figura torna visível um mecanismo que não pode ser resumido por um limiar sobre consumo total.
+O mapa de score espelha os valores efetivamente calculados pelo estimador (\emph{Isolation Forest} com $200$ árvores e contaminação de $0{,}078$). Enquanto os *outliers* globais atingem mediana normalizada de $1{,}000$ ($0{,}773$ bruto), o microagrupamento compacto ($n=18$) obtém mediana de apenas $0{,}500$ ($0{,}560$ bruto), permanecendo abaixo do limiar $P_{95}=0{,}564$ por compartilhar partições aleatórias com vizinhos idênticos (\emph{masking}).
 
 ## LOF: raridade local {#demo-lof}
 
@@ -1355,12 +1353,10 @@ pode ser pouco extrema globalmente e, ao mesmo tempo, muito incomum
 quando comparada apenas com consumidores de comportamento ou topologia
 semelhantes.
 
-![Comparação entre LOF e Isolation Forest para casos globais, locais e
-microagrupamentos no conjunto
-controlado.](figures/ml_method_demo/06_lof.png){#fig:ml-lof width="98%"
+![Comparação entre LOF ($k=35 > 18$) e Isolation Forest em escala bruta própria ($-\text{NOF}$ log) e normalizada P01--P99 no conjunto controlado.](figures/ml_method_demo/06_lof.png){#fig:ml-lof width="98%"
 height="0.80\\textheight"}
 
-A divergência entre LOF e Isolation Forest aparece nas regiões onde a densidade dos vizinhos difere da população global. O exemplo não estabelece que LOF seja superior em qualquer alimentador: mostra que uma referência de proximidade pode recuperar situações não destacadas pelo isolamento global, desde que a métrica e a população de comparação sejam adequadas.
+Para eliminar o esmagamento visual decorrente de escores extremos em escala linear, o algoritmo é apresentado simultaneamente em escala bruta logarítmica própria ($-\text{NOF}$) e em escala padronizada por quantis P01--P99 $[0,1]$. Quando a vizinhança ($k=35$) excede a cardinalidade do microagrupamento ($n=18$), a mediana de LOF bruto salta de $1{,}05$ (normal) para $3{,}15$ nos *outliers* locais e $2{,}39$ no microagrupamento — ambos acima do corte $P_{95}=1{,}99$ — demonstrando seu papel complementar ao *Isolation Forest*.
 
 Essa propriedade justifica avaliar LOF em coortes reduzidas, por exemplo
 por alimentador ou perfil comportamental, em vez de assumir que a mesma
@@ -1413,26 +1409,14 @@ e $w_m$ é seu peso. Os pesos atualmente implementados são parâmetros de
 projeto e não devem ser interpretados como probabilidades ou importância
 causal.
 
-## Ablation funnel e contextualização por alimentador {#demo-ablation}
+## Contextualização por alimentador em escala percentílica {#demo-ablation}
 
-O experimento também produz uma ablação controlada $M_0\rightarrow M_5$.
-O funil ilustra o efeito de adicionar saneamento cadastral, gating de
-comunicação, contextualização, persistência e ensemble. Os números da
-Figura [figura](#fig:ml-ablation) pertencem ao benchmark sintético e não
-devem ser confundidos com contagens finais de Araucária; sua finalidade
-é demonstrar como cada camada modifica a população elegível.
+O experimento controlado multi-circuito ($N=1.000$, distribuídos em quatro circuitos simulados com portes e perfis de carga distintos) ilustra o efeito da mudança de referência entre o ranking global da concessão e a avaliação intra-circuito. Para eliminar distorções causadas por diferentes tamanhos amostrais nos circuitos, os resultados são comparados exclusivamente em escala normalizada de **percentis empíricos $[0, 100]\%$**, e não por posição ordinal bruta ($1\ldots N$). Os números da Figura [figura](#fig:ml-ablation) pertencem ao benchmark sintético (`seed=42`) e não se confundem com contagens reais de campo.
 
-![Ablação operacional controlada e exemplo de alteração do ranking
-quando o contexto do alimentador é
-introduzido.](figures/ml_method_demo/09_ablation_funnel.png){#fig:ml-ablation
+![Contextualização por circuito elétrico no experimento controlado ($N=1.000$): comparação direta entre Percentil Empírico Global e Percentil Empírico Local intra-circuito em $[0, 100]\%$ e deslocamento líquido $\Delta P$.](figures/ml_method_demo/09_ablation_funnel.png){#fig:ml-ablation
 width="98%" height="0.80\\textheight"}
 
-O funil do experimento controlado ilustra a consequência de aplicar filtros e contextualização sobre a quantidade de candidatos. Como as etapas podem se sobrepor, a redução marginal precisa ser calculada sobre conjuntos de UCs, evitando somar exclusões duplicadas. O painel de alimentadores mostra mudança de referência estatística; sua interpretação exige normalizar por tamanho da coorte e comparar estabilidade de ranking.
-
-O segundo painel mostra que uma UC pode ter baixa prioridade no ranking
-global e alta prioridade dentro do seu alimentador. Essa comparação será
-reproduzida na base real por meio de ranking global, ranking local e
-sobreposição Top-$K$.
+No recorte de prioridade máxima ($P \ge 95\%$, Top 5%), a concordância entre o ranking global e o local apresenta índice Jaccard igual a $0{,}776$: **7 UCs** em circuitos residenciais leves são promovidas ao Top 5% apenas na análise intra-circuito ($\Delta P > 0$), enquanto **6 unidades** com carga nominal elevada em circuito pesado são atenuadas ($\Delta P < 0$). O painel B evidencia a distribuição de deslocamentos normalizados $\Delta P = P_{\text{local}} - P_{\text{global}}$ por circuito, garantindo comparação justa entre coortes de cardinalidades distintas. Essa formulação em escala percentílica espelha o critério adotado nos experimentos reais de ablação.
 
 ## Casos arquetípicos e relação com CPD {#demo-cases}
 
@@ -1641,20 +1625,19 @@ real juntamente com baseline horário e banda robusta; o painel inferior
 apresenta a visão de disponibilidade de telemetria utilizada durante a
 investigação.
 
-![Exemplo real mascarado de UC destacada pelo pipeline. O gráfico
-combina série de consumo, baseline robusto e diagnóstico de
-disponibilidade de telemetria para apoiar interpretação do
-score.](figures/eda/acompanhamento_semanal_outlier.png){#fig:outlier-real
+![Exemplo real mascarado da UC 685***20 destacada pelo pipeline (Circuito F-11). O gráfico combina série horária de consumo (168h entre 29/10 e 04/11/2026), baseline robusto e reconciliação explícita de cobertura por cadência nativa de 10 minutos.](figures/eda/exemplos/acompanhamento_semanal_outlier.png){#fig:outlier-real
 width="98%"}
 
-O Raio-X da UC superpõe medição observada, referência robusta e marcações de anomalia. A presença de desvios sustentados em uma janela pode justificar prioridade, mas a interpretação exige cobertura adequada e consulta ao histórico de instalação, alarmes e vizinhança. A designação de bypass é categoria investigativa compatível com hipóteses concorrentes; a figura, por si, não comprova manipulação de medidor.
+O Raio-X da UC superpõe medição observada, referência robusta e marcações de anomalia. A presença de desvios sustentados em uma janela pode justificar prioridade, mas a interpretação exige cobertura adequada e consulta ao histórico de instalação, alarmes e vizinhança. A reconciliação pericial desse caso (`NIO-437***86`) esclarece integralmente a convivência matemática entre diferentes percentuais de cobertura reportados sem alterar qualquer registro bruto:
+- **Representação horária em grade fixa legada (`50,0%`):** em `ami_interval.FA`, a cadência física nativa do medidor é de **10 minutos** ($6\text{ leituras/hora}$). Sobre a grade fixa legada de 5 minutos ($12\text{ slots/hora}$), cada uma das 168 horas entre 29/10 e 04/11/2026 registra $6/12 = 50{,}0\%$ aparente;
+- **Representação horária ajustada à cadência nativa (`100,0%`):** ao ajustar o denominador pela cadência predominante observada ($6\text{ slots/hora}$), a disponibilidade horária é integral ($6/6 = 100{,}0\%$ em todas as 168 horas);
+- **Janela móvel diária de 30 dias (`99,49%`):** na tabela `uc_day_features` (janela 06/10 a 04/11/2026, denominador $30 \times 144 = 4.320$ intervalos de 10 minutos), 28 dias somam $144/144$ intervalos completos, enquanto `25/10` soma $141/144$ ($97{,}92\%$) e `26/10` soma $125/144$ ($86{,}81\%$), totalizando exatamente $4.298 / 4.320 = 0{,}99491$ (**$99{,}49\%$**);
+- **Canal instantâneo (`25,0%`):** o canal separado `ami_instantaneous` opera a 20 minutos ($72/288$ slots diários), com finalidade diagnóstica distinta.
 
-No snapshot utilizado para gerar o exemplo, a UC `685***20` apresentava
+No snapshot utilizado para gerar o exemplo (`2026-11-04`, figura complementar de reconciliação disponível em `manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.png`), a UC `685***20` apresentava
 mediana histórica de 81,08 kWh/dia, MAD de 24,46 kWh/dia, tendência
 negativa de aproximadamente -1,37 kWh/dia e indicador elevado de
-desequilíbrio de corrente. O ensemble produziu score 0,621. Esses
-valores explicam por que a UC é rara no espaço multivariado, mas **não
-provam a causa física da irregularidade**.
+desequilíbrio de corrente. O ensemble produziu score 0,621 (e no corte OOT de 19/11/2026 alcançou `ANOMALY_SCORE = 0,8656`, mediana de $82{,}60\text{ kWh/dia}$). Esses valores explicam por que a UC é rara no espaço multivariado, mas **não provam a causa física da irregularidade**.
 
 A figura evidencia o papel da arquitetura multivisão: o score deve ser
 interpretado ao lado da qualidade da série, do comportamento temporal e
@@ -1902,6 +1885,18 @@ O calendário fornece dois diagnósticos diferentes que devem ser apresentados j
 A comparação de modelos deve ocorrer sobre o mesmo cutoff, mesma coorte elegível e mesmas features, exceto pela alteração deliberada no ablation study. Sem esse controle, diferenças de F1, contaminação ou quantidade de alertas podem decorrer apenas de alterações de amostra. Ao salvar o modelo, o repositório de artefatos deve ser interpretado em conjunto com o manifesto de dados e o pré-processamento correspondente.
 
 A aplicação Web complementa a TUI, mas atende outro usuário: o analista que precisa investigar a UC no tempo. Seu Raio-X apresenta curva de energia, referência histórica, indicador de cobertura, categoria e evolução da anomalia, com consulta temporal sob demanda e navegação entre candidatos. Uma eventual posição na lista deve remeter ao mesmo instante de corte e à mesma versão de modelo registrada pela execução de treinamento; do contrário, TUI e Cockpit exibiriam decisões de campanhas distintas sem identificação.
+
+## Capturas reais da plataforma em operação retrospectiva {#capturas-reais-plataforma}
+
+Para evidenciar a integração efetiva entre a camada de engenharia de dados, os detectores multivisão e as interfaces de investigação sem recorrer a painéis ilustrativos, a TUI em terminal e o Cockpit Analítico Web foram executados localmente sobre a suíte retrospectiva validada em `latest_suite.json` (corte OOT `19/11/2026`, execução `20261123_124416_146_oot_multiview`, 65.686 UCs anonimizadas em tema claro). Ressalta-se que estas capturas demonstram o **funcionamento real do software sobre dados históricos da concessão**, sem implicar validação presencial por ordens de serviço em campo.
+
+![Interface de terminal (TUI Rich exportada em SVG/PDF) executada sobre os artefatos reais do Data Lake e da suíte validada, exibindo cardinalidade das camadas e distribuição topológica anonimizada por circuito elétrico.](manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.png){#fig:tui-menu-governanca width="96%"}
+
+![Calendário real de continuidade temporal (111 dias íntegros entre 01/08/2026 e 19/11/2026) gerado por `render_continuity_calendar` e trilha de auditoria dos manifestos ativos.](manuscript_figures/platform_interfaces/fig_4_4b_tui_calendario_auditoria.png){#fig:tui-calendario-auditoria width="96%"}
+
+![Cockpit Analítico Web capturado via Playwright sobre o corte OOT validado (65.686 UCs totais; 6.333 candidatas à vistoria; 1.451 possíveis GD; 2.829 em quarentena de telecomunicação) com filtro de carteira priorizada ativo e anonimização integral.](manuscript_figures/platform_interfaces/fig_4_4c_cockpit_carteira_candidatos.png){#fig:cockpit-carteira-candidatos width="98%"}
+
+![Painel individual (*Raio-X*) do Cockpit Analítico Web para a UC `908***00` em janela diária de 30 dias até 19/11/2026, integrando séries de energia ativa direta (FA), reversa (RA), degrau CUSUM (-69,06% em 31/10) e diagnóstico de completude.](manuscript_figures/platform_interfaces/fig_4_4d_cockpit_raiox_uc_908xxx00.png){#fig:cockpit-raiox-908xxx00 width="98%"}
 
 # Operacionalização da detecção e priorização de inspeções
 
@@ -2769,24 +2764,27 @@ Em distribuidoras de energia elétrica, o volume de ordens de serviço executáv
 
 ## Estudos de Caso Periciais com Telemetria Real Mascarada
 
-Para ilustrar a operação concreta dos contratos de engenharia e das camadas de decisão, examinam-se dois casos reais auditados nos dados de campo da concessão.
+Para ilustrar a operação concreta dos contratos de engenharia e das camadas de decisão com anonimização integral, examinam-se os casos reais auditados nos dados retrospectivos da concessão (séries diárias, registradores e reconciliação de cadência da UC `685***20`).
 
-### Estudo 1: UC 90850700 — Degrau Descendente com Injeção Reversa Persistente
-Identificada na execução auditada `20261123_124416_146_oot_multiview`, a instalação `UC 90850700` (Alimentador Óleos Brasil) exemplifica a atuação coordenada do detector de mudanças de regime (CUSUM) e do comitê elétrico:
+### Estudo 1: UC `908***00` (`Circuito F-10`) — Degrau Descendente com Injeção Reversa Persistente
+Identificada na execução auditada `20261123_124416_146_oot_multiview`, a instalação `UC 908***00` (`Circuito F-10`, medidor `NIO-435***63`) exemplifica a atuação coordenada do detector de mudanças de regime (CUSUM) e do comitê elétrico:
 - **Pontuação:** score individual de anomalia elétrica de **0,9601** ($s_{elec} = 0,9601$), posicionando-se no extremo da distribuição frente à média populacional de 0,2944 ($P_{95} = 0,9115$);
-- **Desacoplamento analítico das grandezas ativas:** a energia ativa direta ($FA$) registrou queda abrupta de **$-68,3\%$** em 31/10/2026, reduzindo a média diária de consumo de $18,05\text{ kWh/dia}$ para aproximadamente $5,72\text{ kWh/dia}$. Simultaneamente, a energia ativa reversa ($RA$) passou a registrar 12 dias de injeção substancial (entre 14 e 31 kWh/dia, com razão $RA/FA$ atingindo até 0,5069);
-- **Persistência temporal:** o padrão anômalo manteve-se ininterrupto por **20 dias consecutivos** até a data de corte em 19/11/2026;
-- **Trilha cadastral e correção de ciclo de vida:** a inspeção temporal revelou silêncio de telemetria de 48 horas entre 28/10 e 30/10/2026, com atualização cadastral administrativa no CIS em 31/10, sem troca do medidor físico (mesmo NIO). A versão anterior do pipeline enquadrava incorretamente a instalação na fila de iniciação de novas ligações. A correção metodológica implementada identificou a continuidade metrológica e reclassificou a UC sob a hipótese diagnóstica de `POSSIVEL_GD_NAO_CADASTRADA`, priorizando-a com urgência para vistoria presencial (`IS_CANDIDATO_VISTORIA = SIM`).
+- **Desacoplamento analítico das grandezas ativas:** ao longo dos 102 dias ativos entre 02/08 e 19/11/2026, a energia ativa direta ($FA$) registrou queda abrupta de **$-68,3\%$** em 31/10/2026, reduzindo a mediana de consumo de aproximadamente $18,05\text{ kWh/dia}$ para $5,72\text{ kWh/dia}$. Simultaneamente, a energia ativa reversa ($RA$) passou a registrar 12 dias de injeção substancial em novembro (entre 3,89 e $31,27\text{ kWh/dia}$, com razão $RA/FA$ atingindo 0,5069);
+- **Persistência e qualidade na janela OOT:** o padrão anômalo manteve-se ativo até 19/11/2026 (**22 dias consecutivos** na janela móvel de 30 dias), com cobertura média de **$81,48\%$** (acima do corte de 70% em cadência de 10 minutos = 144 leituras/dia);
+- **Trilha cadastral e correção de ciclo de vida:** a inspeção temporal revelou silêncio de telemetria de 48 horas entre 29/10 e 30/10/2026, com atualização cadastral administrativa no CIS em 31/10, sem troca do medidor físico (mesmo `NIO-435***63`). A correção metodológica identificou a continuidade metrológica e reclassificou a UC sob a hipótese diagnóstica de `POSSIVEL_GD_NAO_CADASTRADA`, priorizando-a para vistoria presencial (`IS_CANDIDATO_VISTORIA = SIM`).
+
+![Série temporal completa observada para a UC `908***00` (02/08 a 19/11/2026, medidor `NIO-435***63`): energia ativa direta (FA), injeção reversa (RA), atualização cadastral de 31/10, cobertura em cadência de 10 min e perfis intradiários pré/pós-evento.](manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.png){#fig:caso-908xxx00-completo width="98%"}
 
 Ressalta-se o compromisso com a neutralidade epistêmica: a telemetria comprova a existência de fluxo reverso e contração de consumo; contudo, não se afirma tecnologia solar ou irregularidade cadastral deliberada sem a devida constatação presencial por equipe técnica (TOI).
 
-### Estudo 2: UC 29113296 — Descasamento Cadastral e Cobertura Aparente Ambígua
-O caso da instalação `UC 29113296` ilustra a complexidade pericial dos dados de campo e a importância da camada de *gating* de telecomunicação:
-- **Inspeção direta nos dados intervalares brutos:** a auditoria nos registros da partição `ami_interval` comprovou empiricamente que o medidor (NIO 0042312054) transmitiu leituras regularmente espaçadas a cada **10,0 minutos** (exatamente 144 leituras por dia, com $\Delta t = 10,0$ min), muito embora a trilha incremental agregada reporte cadência bruta como `None`;
-- **Origem da completude aparente:** como a grade analítica do pipeline foi concebida sob expectativa nominal de 5 minutos (288 leituras/dia), o cálculo automatizado resultou em completude horária média de exatamente **$50,0\%$** ($144 / 288$ leituras);
-- **Integridade metrológica acumulada:** o registrador físico acumulador de energia ativa direta confirmou consumo regular e perfeitamente estável, variando entre 21,8 e 28,0 kWh/dia (100% de integridade nos índices diários);
-- **Descompasso cadastral no CIS:** o histórico de movimentação de medidores indicava `DATA_REMOCAO = 2026-06-11`. Não obstante a baixa administrativa no sistema corporativo, o medidor continuou fisicamente instalado e transmitindo medições intervalares por meses consecutivos;
-- **Decisão e Enquadramento:** o caso foi classificado pericialmente como **cobertura aparente ambígua** (descasamento entre a cadência física do medidor, a grade analítica de agregação e o cadastro comercial defasado). A camada de *gating* reteve a instalação em quarentena técnica (`meta__telecom_status == "QUARANTINE"`), bloqueando o despacho indevido para fiscalização de perdas comerciais (`IS_CANDIDATO_VISTORIA = NÃO`). Permitiram-se segregar alertas de qualidade de telecomunicação sem formular hipóteses causais precipitadas de falha de firmware ou defeito de modem sem acesso aos parâmetros de configuração do equipamento.
+### Estudo 2: UC `291***96` (`Circuito F-03`) — Registradores, Horários de Leitura e Hiatos Pré-Corte
+O caso da instalação `UC 291***96` (`Circuito F-03`, medidor `NIO-423***54`) ilustra a auditoria conjunta entre medições intervalares (`ami_interval`), registradores acumuladores (`ami_registers`) e cadastro comercial:
+- **Horários empíricos em registradores (`314` leituras):** a consulta direta à tabela `ami_registers` identificou exatamente **314 leituras acumuladoras** regulares a cada 6 horas (**00h, 06h, 12h e 18h UTC**) entre 01/08 e 05/11/2026. O acumulador de energia reversa `RA_TOTAL` evoluiu monotonicamente de $764{,}601\text{ kWh}$ para $2.967{,}725\text{ kWh}$ ($\Delta = +2.203{,}124\text{ kWh}$ no período; `FA_TOTAL` nulo), confirmando integração metrológica contínua mesmo durante intervalos sem coleta intervalar;
+- **Telemetria intervalar e cadência bruta `None` em 19/11:** entre 02/08 e 05/11/2026, observaram-se 80 dias íntegros com cadência de **10,0 minutos** ($144\text{ leituras/dia}$). Após um hiato de 15 dias (21/10 a 04/11/2026) seguido por um único dia ativo em 05/11, iniciou-se apagão total entre 06/11 e 19/11/2026 (14 dias sem transmissões). Essa ausência de amostras na ponta explica diretamente por que a cadência pontual reportada em 19/11 consta como `None` e a cobertura média na janela de 30 dias cai para **$3,33\%$** ($1/30$ dias), sem necessidade de inferir falha específica de *firmware*;
+- **Descompasso cadastral no CIS:** o histórico administrativo indicava `DATA_REMOCAO = 2026-06-11`, embora o medidor tenha permanecido fisicamente ativo e transmitindo `RA` até 05/11/2026;
+- **Decisão e reconciliação complementar com UC `685***20`:** a camada de *gating* reteve a instalação em quarentena técnica de comunicação (`IS_CANDIDATO_VISTORIA = NÃO`), permitindo segregar alertas de qualidade e encaminhá-la à manutenção de telecomunicação/cadastro sem despacho indevido para fraude. Complementarmente, conforme demonstrado na reconciliação da UC `685***20` (`NIO-437***86`, Figura [figura](#fig:outlier-real) e `fig_caso_685xxx20_reconciliacao_cobertura.png`), diferenças entre coberturas de $50{,}0\%$ ($6/12$ slots em grade fixa de 5 min), $100{,}0\%$ ($6/6$ em cadência nativa de 10 min) e $99{,}49\%$ ($4.298/4.320$ intervalos em 30 dias) explicam-se integralmente por canal, cadência e denominador sem alterar valores medidos.
+
+![Auditoria temporal da UC `291***96` (`NIO-423***54`, 01/08 a 19/11/2026): evolução monotônica de 314 leituras de `RA_TOTAL` em `ami_registers` (00h/06h/12h/18h UTC), hiatos de comunicação (21/10–04/11 e 06–19/11) e contagem diária de leituras intervalares de 10 min.](manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.png){#fig:caso-291xxx96-registradores width="98%"}
 
 ## Discussão Transversal: da Abordagem Clássica à Arquitetura Multivisão Auditável
 
@@ -2816,6 +2814,6 @@ A validação experimental executada sobre a totalidade da rede real de Araucár
 - A série temporal contínua de regras diárias (`DAILY_RULES`, 19 cortes de 01 a 19/11/2026, totalizando 1.248.501 janelas analisadas) registrou uma média de 5.387,7 candidatos/dia (desvio padrão de 562,8 UCs/dia e intervalo de 4.737 a 6.728 UCs/dia), caracterizando a dinâmica operacional de entradas, saídas e permanência na carteira;
 - O funil sequencial demonstrou o impacto progressivo dos filtros ($M_0 = 65.686 \to M_1 = 65.686 \to M_2 = 62.857 \to M_3 = 58.857 \to M_4 = 4.390 \to M_5 = 4.390$), com $M_4 = M_5$ evidenciando redundância na coorte avaliada e apontando a necessidade de validação longitudinal contínua;
 - O ensaio de ablação sob o cenário de capacidade operacional simulado de 2.000 vistorias/mês evidenciou a sensibilidade do ranking à supressão de algoritmos de densidade local (LOF, churn de 210 UCs) e de projeção linear (PCA, churn de 132 UCs), fundamentando a decisão técnica de manter o comitê completo de 6 detectores;
-- Os estudos de caso periciais ilustraram a interpretação diferencial entre eventos de rede e desvios de consumo: caracterizando hipóteses de persistência física e injeção reversa (`UC 90850700`, com degrau de $-68,3\%$ e score individual de 0,9601) e permitindo segregar alertas de qualidade decorrentes de descompassos cadastrais e cadências de medição heterogêneas (`UC 29113296`).
+- Os estudos de caso periciais ilustraram a interpretação diferencial entre eventos de rede e desvios de consumo: caracterizando hipóteses de persistência física e injeção reversa (`UC 908***00`, com degrau de $-68,3\%$ e score individual de 0,9601), auditando registradores acumuladores e apagão pré-corte na `UC 291***96` (314 leituras em `ami_registers` e cobertura OOT de 3,33%, permitindo segregar alertas de qualidade) e reconciliando integralmente cadências e denominadores de cobertura na `UC 685***20` ($50,0\%$ em grade de 5 min versus $100,0\%$ nativo e $99,49\%$ em janela de 30 dias).
 
 Dessa forma, a metodologia proposta consolida uma base transparente e auditável para o suporte à tomada de decisão operacional em distribuidoras de energia elétrica. Reconhecendo que a confirmação definitiva de irregularidades permanece indissociável da vistoria pericial presencial em campo, o pipeline entrega listas priorizadas com alta rastreabilidade temporal, hipóteses físicas interpretáveis e fundamentação técnica contra ruídos de medição.

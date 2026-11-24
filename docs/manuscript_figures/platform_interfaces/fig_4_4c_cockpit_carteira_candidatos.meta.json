@@ -1,0 +1,29 @@
+{
+  "figure_id": "fig_4_4c_cockpit_carteira_candidatos",
+  "section_target": "4.4 — Capturas Reais da Plataforma (Cockpit Carteira Filtrada)",
+  "title": "Cockpit Analítico Web — Carteira priorizada de candidatos à vistoria (6.333 UCs, 19/11/2026)",
+  "files": {
+    "png": "docs/manuscript_figures/platform_interfaces/fig_4_4c_cockpit_carteira_candidatos.png",
+    "overview_png": "docs/manuscript_figures/platform_interfaces/cockpit_visao_geral.png"
+  },
+  "sha256": {
+    "png": "7151a4edb5a44cbae5817dd321e44f38860c3472a9eb8cc8f816a77e0604cfc1",
+    "overview_png": "775c3660c7b1f7e802295b184a23059303345eda33087a1042cd03c8a55b472b"
+  },
+  "origin_data": {
+    "source": "oot_multiview/decisions.parquet",
+    "total_ucs": 65686,
+    "candidates": 6333,
+    "possivel_gd": 1451,
+    "quarantine_telecom": 2829
+  },
+  "parameters": {
+    "preset": "candidatos_vistoria",
+    "theme": "light",
+    "anonymized": true,
+    "viewport": "1720x1000@2x"
+  },
+  "run_id": "20261123_124416_146_oot_multiview",
+  "caption_academic_pt": "Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261123_124416_146_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.333 candidatas à vistoria; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela priorizada pelo preset de investigação.",
+  "interpretative_analysis_pt": "A interface web traduz diretamente os contratos analíticos para a triagem humana (Etapa 6 do fluxo): cada linha preserva identificador mascarado, circuito anonimizado, score composto, hipótese diagnóstica e persistência em dias consecutivos sem alterar ou executar ordens de serviço de campo."
+}

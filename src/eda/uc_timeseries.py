@@ -255,6 +255,7 @@ def load_uc_daily_timeseries(
     cutoff_date: str | date | None = None,
     days: int = 30,
     use_cache: bool = True,
+    fill_missing_partition_days: bool = True,
 ) -> dict[str, Any]:
     """Query real daily telemetry for a UC from uc_day_features and annotate anomalies."""
     base = Path(base_dir)
@@ -267,7 +268,7 @@ def load_uc_daily_timeseries(
         except ValueError:
             parsed_cutoff = None
 
-    cache_key = f"daily_{str(uc_id).strip()}_{days}d_{str(parsed_cutoff or 'latest')}"
+    cache_key = f"daily_v2_{str(uc_id).strip()}_{days}d_{str(parsed_cutoff or 'latest')}"
     if use_cache:
         cached = _read_from_cache(base, cache_key)
         if cached is not None:
@@ -329,29 +330,61 @@ def load_uc_daily_timeseries(
     if "REPORT_DAY" in df.columns:
         df = df.sort("REPORT_DAY").unique(subset=["REPORT_DAY"], keep="last").sort("REPORT_DAY")
 
-    # Convert columns to Python lists safely
-    dates = [str(d)[:10] for d in df["REPORT_DAY"].to_list()]
-    fa_vals = [float(v) if v is not None else 0.0 for v in df["FA_INTERVAL_SUM"].to_list()]
-    cov_vals = [
-        float(v) if v is not None else 0.0
-        for v in (df["INTERVAL_COVERAGE"].to_list() if "INTERVAL_COVERAGE" in df.columns else [1.0] * len(dates))
-    ]
-    ra_vals = [
-        float(v) if v is not None else 0.0
-        for v in (df["RA_INTERVAL_SUM"].to_list() if "RA_INTERVAL_SUM" in df.columns else [0.0] * len(dates))
-    ]
-    ci_vals = [
-        float(v) if v is not None else 0.0
-        for v in (df["CURRENT_IMBALANCE_MAX"].to_list() if "CURRENT_IMBALANCE_MAX" in df.columns else [0.0] * len(dates))
-    ]
-    vi_vals = [
-        float(v) if v is not None else 0.0
-        for v in (df["VOLTAGE_IMBALANCE_MAX"].to_list() if "VOLTAGE_IMBALANCE_MAX" in df.columns else [0.0] * len(dates))
-    ]
-    lf_vals = [
-        float(v) if v is not None else 0.0
-        for v in (df["LOAD_FACTOR"].to_list() if "LOAD_FACTOR" in df.columns else [0.0] * len(dates))
-    ]
+    # Fill missing partition days (where Data Lake has partition, but UC had zero telemetry)
+    if fill_missing_partition_days and len(selected_files) >= 15 and "REPORT_DAY" in df.columns:
+        existing_by_dt = {
+            str(r["REPORT_DAY"])[:10]: r
+            for r in df.with_columns(pl.col("REPORT_DAY").cast(pl.String)).to_dicts()
+        }
+        part_dates = sorted({str(d)[:10] for p in selected_files if (d := parse_partition_date(p)) is not None})
+        dates = []
+        fa_vals = []
+        cov_vals = []
+        ra_vals = []
+        ci_vals = []
+        vi_vals = []
+        lf_vals = []
+        for dt_s in part_dates:
+            r = existing_by_dt.get(dt_s)
+            dates.append(dt_s)
+            if r is not None:
+                fa_vals.append(float(r.get("FA_INTERVAL_SUM") or 0.0))
+                cov_vals.append(float(r.get("INTERVAL_COVERAGE") if r.get("INTERVAL_COVERAGE") is not None else 1.0))
+                ra_vals.append(float(r.get("RA_INTERVAL_SUM") or 0.0))
+                ci_vals.append(float(r.get("CURRENT_IMBALANCE_MAX") or 0.0))
+                vi_vals.append(float(r.get("VOLTAGE_IMBALANCE_MAX") or 0.0))
+                lf_vals.append(float(r.get("LOAD_FACTOR") or 0.0))
+            else:
+                fa_vals.append(0.0)
+                cov_vals.append(0.0)
+                ra_vals.append(0.0)
+                ci_vals.append(0.0)
+                vi_vals.append(0.0)
+                lf_vals.append(0.0)
+    else:
+        # Convert columns to Python lists safely
+        dates = [str(d)[:10] for d in df["REPORT_DAY"].to_list()]
+        fa_vals = [float(v) if v is not None else 0.0 for v in df["FA_INTERVAL_SUM"].to_list()]
+        cov_vals = [
+            float(v) if v is not None else 0.0
+            for v in (df["INTERVAL_COVERAGE"].to_list() if "INTERVAL_COVERAGE" in df.columns else [1.0] * len(dates))
+        ]
+        ra_vals = [
+            float(v) if v is not None else 0.0
+            for v in (df["RA_INTERVAL_SUM"].to_list() if "RA_INTERVAL_SUM" in df.columns else [0.0] * len(dates))
+        ]
+        ci_vals = [
+            float(v) if v is not None else 0.0
+            for v in (df["CURRENT_IMBALANCE_MAX"].to_list() if "CURRENT_IMBALANCE_MAX" in df.columns else [0.0] * len(dates))
+        ]
+        vi_vals = [
+            float(v) if v is not None else 0.0
+            for v in (df["VOLTAGE_IMBALANCE_MAX"].to_list() if "VOLTAGE_IMBALANCE_MAX" in df.columns else [0.0] * len(dates))
+        ]
+        lf_vals = [
+            float(v) if v is not None else 0.0
+            for v in (df["LOAD_FACTOR"].to_list() if "LOAD_FACTOR" in df.columns else [0.0] * len(dates))
+        ]
 
     reliable_y = [v for v, c in zip(fa_vals, cov_vals) if c >= 0.70]
     if len(reliable_y) < 3:

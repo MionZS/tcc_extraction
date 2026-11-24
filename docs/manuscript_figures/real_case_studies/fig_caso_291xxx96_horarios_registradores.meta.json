@@ -1,0 +1,30 @@
+{
+  "figure_id": "fig_caso_291xxx96_horarios_registradores",
+  "section_target": "Estudo de Caso 2 — UC 291***96",
+  "title": "Horários de leitura e evolução acumulada dos registradores da UC 291***96 (01/08 a 19/11/2026)",
+  "files": {
+    "png": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.png",
+    "svg": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.svg",
+    "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.pdf",
+    "csv": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores_data.csv"
+  },
+  "sha256": {
+    "png": "ae636309e59a924fe3b7a5779e5a5417d955fbd2060ef568c054e85f0dd9ffa1",
+    "svg": "55fa140770a5dfd26d367df43dd27559797dd70a6484e296f94407d033b26369",
+    "pdf": "5f2fd0c34018a65d23ac2dc71b793c2ab643fda9ce6e5ff9d7f3aa520c459a6e",
+    "csv": "5eae242c1a94325134ee6ce62bdf2599565ca39a906da4bdadebdf9fb76abc5c"
+  },
+  "origin_data": {
+    "ami_registers_rows": 314,
+    "active_interval_days": 80,
+    "cis_data_remocao": "2026-06-11"
+  },
+  "parameters": {
+    "register_cadence_hours": 6,
+    "interval_cadence_minutes": 10,
+    "cutoff": "2026-11-19"
+  },
+  "run_id": "20261123_124416_146_oot_multiview",
+  "caption_academic_pt": "Auditoria temporal da UC 291***96 (NIO-423***54, 01/08 a 19/11/2026): (A) evolução monotônica de 314 leituras do registrador RA_TOTAL (764,601 a 2.967,725 kWh), delta médio diário e hiatos de comunicação; (B) distribuição horária das leituras intervalares (144/dia) e dos snapshots de registrador (00h/06h/12h/18h UTC).",
+  "interpretative_analysis_pt": "Mesmo constando DATA_REMOCAO=2026-06-11 no cadastro CIS, o medidor transmitiu 144 intervalos/dia (Δt=10 min) e 314 leituras acumuladoras até 05/11/2026, preservando o cômputo acumulado durante o hiato de 15 dias (21/10–04/11). O apagão final entre 06 e 19/11 explica a ausência de cadência bruta em 19/11 ('None') e a cobertura OOT de 3,33%, segregando a UC em quarentena técnica sem despacho comercial."
+}

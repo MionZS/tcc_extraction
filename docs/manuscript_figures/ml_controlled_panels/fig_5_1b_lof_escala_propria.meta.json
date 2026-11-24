@@ -1,0 +1,31 @@
+{
+  "figure_id": "fig_5_1b_lof_escala_propria",
+  "section_target": "5.1 / Figura 06 (Substituição de Nota Editorial 1 - Painel LOF)",
+  "title": "LOF em escala bruta própria e escala quantílica P01-P99 vs Isolation Forest (k=35)",
+  "files": {
+    "png": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.png",
+    "svg": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.svg",
+    "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.pdf",
+    "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria_data.csv"
+  },
+  "sha256": {
+    "png": "5bb04a782639dc8d50d640f436affa93a658fe5d74055adcc3a3bbcf5a369878",
+    "svg": "d1bc1378ae795e80dab8f1275103beb17a7f002a818581ceb7fe98de60f65e2a",
+    "pdf": "19b89991892f275d50f457f139dc8eb281745a62fa88cc68d8e8a841d1d83981",
+    "csv": "2f55713af197e63cc5ba4e31532362e5d41aa596fdf534854f488a5688a813b6"
+  },
+  "origin_data": {
+    "dataset": "controlled_benchmark_v1",
+    "n_samples": 1000,
+    "n_neighbors": 35
+  },
+  "parameters": {
+    "estimator": "LocalOutlierFactor",
+    "n_neighbors": 35,
+    "scaler": "RobustScaler",
+    "norm": "P01-P99"
+  },
+  "run_id": "controlled_benchmark_v1_seed42",
+  "caption_academic_pt": "Respostas do Local Outlier Factor (k=35) sobre o experimento controlado (N=1.000): (A) comparação em escala própria bruta (-NOF em escala logarítmica) e normalizada P01-P99; (B) espaço de decisão conjunto entre IForest e LOF bruto.",
+  "interpretative_analysis_pt": "Com k=35 vizinhos (superior ao tamanho n=18 do microagrupamento), a mediana do LOF bruto eleva-se de 1.05 (Normal) para 3.15 (Outlier Local) e 2.39 (Microagrupamento), acima do limiar P95 (1.99) sem esmagamento de escala."
+}

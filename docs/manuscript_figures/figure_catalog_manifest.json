@@ -1,0 +1,310 @@
+{
+  "generated_at": "2026-11-24T14:49:58.400026",
+  "canonical_manuscript": "TCC_AMI_Consolidado.pdf",
+  "active_oot_run_id": "20261123_124416_146_oot_multiview",
+  "figures": [
+    {
+      "figure_id": "fig_5_1a_isolation_forest_microcluster",
+      "section_target": "5.1 / Figura 05 (Substituição de Nota Editorial 1 - Painel IForest)",
+      "title": "Isolation Forest com microagrupamento compacto e scores calculados (N=1.000, seed=42)",
+      "files": {
+        "png": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.png",
+        "svg": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.svg",
+        "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.pdf",
+        "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster_data.csv"
+      },
+      "sha256": {
+        "png": "0cd319e77f87a4d3f4bd54fff2a00718c3c68e17dd16e09fa5dcab6bc5efeb56",
+        "svg": "712a0231dc7546b8383dab8b938557e65bb319725e6bb2b951fb6b7ea02a0c5d",
+        "pdf": "db5359c19acf451c3b6c1fa9a68e2e079cd26a9b3aebde0b21725627d9b6ce99",
+        "csv": "1d87c169667653d839914640f4815f90bf27c56184c5a04db056b00611ec525c"
+      },
+      "origin_data": {
+        "dataset": "controlled_benchmark_v1",
+        "n_samples": 1000,
+        "cohorts": {
+          "Normal": 922,
+          "Outlier Global": 20,
+          "Outlier Local": 20,
+          "Morfologia Rara": 20,
+          "Microagrupamento": 18
+        }
+      },
+      "parameters": {
+        "estimator": "IsolationForest",
+        "n_estimators": 200,
+        "contamination": 0.078,
+        "random_state": 42,
+        "scaler": "RobustScaler",
+        "norm": "P01-P99"
+      },
+      "run_id": "controlled_benchmark_v1_seed42",
+      "caption_academic_pt": "Comportamento do Isolation Forest sobre o experimento controlado (N=1.000, seed=42): (A) projeção PCA colorida pelo escore calculado com destaque para o microagrupamento compacto (n=18); (B) distribuição dos escores brutos e normalizados por coorte face ao corte P95.",
+      "interpretative_analysis_pt": "Enquanto outliers globais isolados atingem mediana de escore normalizado igual a 1.000 (acima de P95=0.564), o microagrupamento compacto (n=18) obtém mediana reduzida (0.500) por compartilhar partições aleatórias nas árvores, evidenciando o efeito de mascaramento que motiva a inclusão do LOF."
+    },
+    {
+      "figure_id": "fig_5_1b_lof_escala_propria",
+      "section_target": "5.1 / Figura 06 (Substituição de Nota Editorial 1 - Painel LOF)",
+      "title": "LOF em escala bruta própria e escala quantílica P01-P99 vs Isolation Forest (k=35)",
+      "files": {
+        "png": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.png",
+        "svg": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.svg",
+        "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.pdf",
+        "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria_data.csv"
+      },
+      "sha256": {
+        "png": "5bb04a782639dc8d50d640f436affa93a658fe5d74055adcc3a3bbcf5a369878",
+        "svg": "d1bc1378ae795e80dab8f1275103beb17a7f002a818581ceb7fe98de60f65e2a",
+        "pdf": "19b89991892f275d50f457f139dc8eb281745a62fa88cc68d8e8a841d1d83981",
+        "csv": "2f55713af197e63cc5ba4e31532362e5d41aa596fdf534854f488a5688a813b6"
+      },
+      "origin_data": {
+        "dataset": "controlled_benchmark_v1",
+        "n_samples": 1000,
+        "n_neighbors": 35
+      },
+      "parameters": {
+        "estimator": "LocalOutlierFactor",
+        "n_neighbors": 35,
+        "scaler": "RobustScaler",
+        "norm": "P01-P99"
+      },
+      "run_id": "controlled_benchmark_v1_seed42",
+      "caption_academic_pt": "Respostas do Local Outlier Factor (k=35) sobre o experimento controlado (N=1.000): (A) comparação em escala própria bruta (-NOF em escala logarítmica) e normalizada P01-P99; (B) espaço de decisão conjunto entre IForest e LOF bruto.",
+      "interpretative_analysis_pt": "Com k=35 vizinhos (superior ao tamanho n=18 do microagrupamento), a mediana do LOF bruto eleva-se de 1.05 (Normal) para 3.15 (Outlier Local) e 2.39 (Microagrupamento), acima do limiar P95 (1.99) sem esmagamento de escala."
+    },
+    {
+      "figure_id": "fig_5_1c_contextualizacao_percentis",
+      "section_target": "5.1 / Figura 09 (Substituição de Nota Editorial 1 - Painel Contextualização)",
+      "title": "Contextualização por circuito comparando percentis global e local [0, 100]% (N=1.000, seed=42)",
+      "files": {
+        "png": "docs/manuscript_figures/ml_controlled_panels/fig_5_1c_contextualizacao_percentis.png",
+        "svg": "docs/manuscript_figures/ml_controlled_panels/fig_5_1c_contextualizacao_percentis.svg",
+        "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1c_contextualizacao_percentis.pdf",
+        "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1c_contextualizacao_percentis_data.csv"
+      },
+      "sha256": {
+        "png": "493077fd052015bfe8a50ce74c2e223e160da732bbe4eb6b346209506d852793",
+        "svg": "89da56a8fc76495c262fae5ed9ca69f540ddd552a8bd715d7339b02b5912ea9c",
+        "pdf": "a8728be45ffcbcd6b78fea0bdabfd38a5049f026a7420bfaa558d2efa645646d",
+        "csv": "6dea595a042f88994d76fb2d4aea5d2bc15ef3839566f41d9808521c8f8eef57"
+      },
+      "origin_data": {
+        "dataset": "controlled_benchmark_v1",
+        "n_samples": 1000,
+        "circuits": 4
+      },
+      "parameters": {
+        "estimator": "IsolationForest",
+        "comparison_scale": "empirical_percentile_0_100",
+        "top_cutoff_pct": 95.0,
+        "random_state": 42
+      },
+      "run_id": "controlled_benchmark_v1_seed42",
+      "caption_academic_pt": "Efeito da contextualização por circuito elétrico em escala normalizada de percentis [0, 100]% (N=1.000): (A) comparação direta entre Percentil Global e Percentil Local com zonas de promoção e atenuação no corte P95; (B) deslocamento líquido de percentil (ΔP) por perfil de circuito.",
+      "interpretative_analysis_pt": "A comparação em percentis [0, 100]% elimina o viés de tamanho de amostra presente na posição ordinal bruta. No experimento controlado, a mudança para referência local apresenta concordância Jaccard Top-5% de 0.776, promovendo 7 casos locais em circuitos leves e atenuando 6 cargas elevadas nominais de circuito pesado."
+    },
+    {
+      "figure_id": "fig_caso_291xxx96_horarios_registradores",
+      "section_target": "Estudo de Caso 2 — UC 291***96",
+      "title": "Horários de leitura e evolução acumulada dos registradores da UC 291***96 (01/08 a 19/11/2026)",
+      "files": {
+        "png": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.png",
+        "svg": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.svg",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.pdf",
+        "csv": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores_data.csv"
+      },
+      "sha256": {
+        "png": "ae636309e59a924fe3b7a5779e5a5417d955fbd2060ef568c054e85f0dd9ffa1",
+        "svg": "55fa140770a5dfd26d367df43dd27559797dd70a6484e296f94407d033b26369",
+        "pdf": "5f2fd0c34018a65d23ac2dc71b793c2ab643fda9ce6e5ff9d7f3aa520c459a6e",
+        "csv": "5eae242c1a94325134ee6ce62bdf2599565ca39a906da4bdadebdf9fb76abc5c"
+      },
+      "origin_data": {
+        "ami_registers_rows": 314,
+        "active_interval_days": 80,
+        "cis_data_remocao": "2026-06-11"
+      },
+      "parameters": {
+        "register_cadence_hours": 6,
+        "interval_cadence_minutes": 10,
+        "cutoff": "2026-11-19"
+      },
+      "run_id": "20261123_124416_146_oot_multiview",
+      "caption_academic_pt": "Auditoria temporal da UC 291***96 (NIO-423***54, 01/08 a 19/11/2026): (A) evolução monotônica de 314 leituras do registrador RA_TOTAL (764,601 a 2.967,725 kWh), delta médio diário e hiatos de comunicação; (B) distribuição horária das leituras intervalares (144/dia) e dos snapshots de registrador (00h/06h/12h/18h UTC).",
+      "interpretative_analysis_pt": "Mesmo constando DATA_REMOCAO=2026-06-11 no cadastro CIS, o medidor transmitiu 144 intervalos/dia (Δt=10 min) e 314 leituras acumuladoras até 05/11/2026, preservando o cômputo acumulado durante o hiato de 15 dias (21/10–04/11). O apagão final entre 06 e 19/11 explica a ausência de cadência bruta em 19/11 ('None') e a cobertura OOT de 3,33%, segregando a UC em quarentena técnica sem despacho comercial."
+    },
+    {
+      "figure_id": "fig_caso_685xxx20_reconciliacao_cobertura",
+      "section_target": "Estudo de Caso 3 — UC 685***20",
+      "title": "Reconciliação de cobertura horária (50% vs 100%) e cobertura de janela (99,49%) para a UC 685***20",
+      "files": {
+        "png": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.png",
+        "svg": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.svg",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.pdf",
+        "csv": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura_data.csv"
+      },
+      "sha256": {
+        "png": "cbb0d11fd898b28c98c047a3cd4a42c2c696d9f6ef99208aa79d39ba0c3e0c45",
+        "svg": "2571693863a7264ba4fd27d13680c0940076280542ad7db0b064c0801793f9a8",
+        "pdf": "49ba723e4af482421fe08438e6eadc27941b8fc95d5d8bbbbe2102aab41cf059",
+        "csv": "093778e46ed804485d449fb4a483d5b6de0a74ec1132193d6048fce35b8a51ce"
+      },
+      "origin_data": {
+        "hours_168h": 168,
+        "window_30d_days": 30,
+        "total_observed_intervals_30d": 4298,
+        "expected_intervals_30d": 4320
+      },
+      "parameters": {
+        "cadence_minutes": 10,
+        "legacy_hourly_denom": 12,
+        "native_hourly_denom": 6,
+        "daily_denom": 144,
+        "oot_score_nov19": 0.8656
+      },
+      "run_id": "20261123_124416_146_oot_multiview",
+      "caption_academic_pt": "Reconciliação empírica da cobertura da UC 685***20 (NIO-437***86, Δt=10 min): (A) série horária real observada (29/10 a 04/11/2026); (B) cobertura horária calculada sobre denominador fixo de 5 min (6/12 = 50,0%) versus denominador nativo de 10 min (6/6 = 100,0%); (C) série de 30 dias com média 4.298/4.320 = 99,49%.",
+      "interpretative_analysis_pt": "A aparente divergência entre 50,0% (gráfico horário legado) e 99,49% (janela de 30 dias em uc_day_features) não decorre de perda de pacotes nem de alteração nos dados: o medidor operou em cadência nativa de 10 minutos (6 leituras/h; 144 leituras/dia). Ao dividir por 12 (grade fixa de 5 min), obtinha-se 50,0% constante sem nenhum gap físico; no cômputo diário consciente de cadência (denominador 144/dia), apenas 25/10 (141/144) e 26/10 (125/144) tiveram perdas parciais, resultando exatamente em 99,49%."
+    },
+    {
+      "figure_id": "fig_caso_908xxx00_fa_ra_completo",
+      "section_target": "Estudo de Caso 1 — UC 908***00",
+      "title": "Série temporal completa FA/RA e perfil intradiário da UC 908***00 (02/08 a 19/11/2026)",
+      "files": {
+        "png": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.png",
+        "svg": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.svg",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.pdf",
+        "csv": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo_data.csv"
+      },
+      "sha256": {
+        "png": "29625c8d8dcbab9c076e09a425134f8cef5ca8d28bdee1a1211c2b8c8fe2b787",
+        "svg": "159783dc96784266dfb4b706db35c910edd950ab0323fb73bca560ec9b8bb3dd",
+        "pdf": "bce2bdaf3c29457d739bec0dabd101d02bf172892305ebd83289c863d2335f43",
+        "csv": "47655bf9da3b1dcf4ac90c7d943f186b7e60649735b52f0fa8b4a8316d1c196a"
+      },
+      "origin_data": {
+        "uc_day_features_rows": 102,
+        "calendar_days": 110,
+        "feeder_anon": "Circuito F-10"
+      },
+      "parameters": {
+        "cadence_minutes": 10,
+        "window_days_oot": 30,
+        "cutoff": "2026-11-19"
+      },
+      "run_id": "20261123_124416_146_oot_multiview",
+      "caption_academic_pt": "Série temporal completa observada para a UC 908***00 (02/08 a 19/11/2026, medidor NIO-435***63): (A) energia ativa direta (FA) e reversa (RA) diárias com atualização administrativa em 31/10; (B) cobertura ajustada à cadência de 10 min; (C) comparação intradiária pré/pós-evento.",
+      "interpretative_analysis_pt": "O registro longitudinal demonstra queda persistente de FA após 31/10 (mediana de ~18,05 para 5,72 kWh/dia) acompanhada por 12 dias de injeção reversa RA em novembro (até 31,27 kWh/dia). Como o medidor NIO-435***63 permaneceu o mesmo durante a atualização cadastral, a correção de ciclo de vida redirecionou a UC para a hipótese diagnóstica POSSIVEL_GD_NAO_CADASTRADA (escore 0,9601), sem afirmar causa ou tecnologia antes de vistoria."
+    },
+    {
+      "figure_id": "fig_4_4a_tui_menu_governanca",
+      "section_target": "4.4 — Capturas Reais da Plataforma (TUI Rich)",
+      "title": "TUI Rich — Menu operacional, inventário real do Data Lake e topologia anonimizada",
+      "files": {
+        "svg": "docs/manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.svg",
+        "png": "docs/manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.png"
+      },
+      "sha256": {
+        "svg": "8b39f1a439e64d8c25c97fc69ffa64679c67a58f1c0f6075a1ee6b303c747b9f",
+        "png": "b4b58a98cb74b351f7acfd20503ab79b13af075e07d9d27ddf9cfa7397f040a0"
+      },
+      "origin_data": {
+        "training_rows": 262769,
+        "hierarchy_rows": 69895,
+        "context_rows": 69895,
+        "oot_rows": 65686
+      },
+      "parameters": {
+        "console_renderer": "rich.Console(record=True)",
+        "theme": "ACADEMIC_LIGHT_TERMINAL_THEME",
+        "anonymized": true
+      },
+      "run_id": "20261123_124416_146_oot_multiview",
+      "caption_academic_pt": "Captura vetorial (Rich SVG) da interface de terminal (TUI) executada sobre os artefatos reais do Data Lake e da execução OOT validada, apresentando dimensões das camadas e distribuição anonimizada por circuito elétrico.",
+      "interpretative_analysis_pt": "A interface TUI materializa os contratos entre engenharia de dados e inferência: antes de acionar modelos, o operador audita cardinalidades de training_dataset, hierarquia elétrica, contexto cadastral e partições da suíte validada sem consultar sistemas externos em tempo de execução."
+    },
+    {
+      "figure_id": "fig_4_4b_tui_calendario_auditoria",
+      "section_target": "4.4 — Capturas Reais da Plataforma (Calendário e Auditoria Rich)",
+      "title": "Calendário mensal de continuidade do Data Lake (01/08–19/11/2026) e manifestos da suíte validada",
+      "files": {
+        "svg": "docs/manuscript_figures/platform_interfaces/fig_4_4b_tui_calendario_auditoria.svg",
+        "png": "docs/manuscript_figures/platform_interfaces/fig_4_4b_tui_calendario_auditoria.png"
+      },
+      "sha256": {
+        "svg": "d12a7904966b7cd1fc86fca97c2d7ee7a6cf28795fcb201ddb23c03f5e148ac6",
+        "png": "d5ae54c6bdbb09fa2c090a4ca2653822e55559b134536259b946cbde8cb28bcb"
+      },
+      "origin_data": {
+        "period": "2026-08-01..2026-11-19",
+        "suite_runs": 7
+      },
+      "parameters": {
+        "file_type": "both",
+        "console_renderer": "rich.Console(record=True)",
+        "theme": "ACADEMIC_LIGHT_TERMINAL_THEME"
+      },
+      "run_id": "20261123_124342_976_audit",
+      "caption_academic_pt": "Saída vetorial (Rich SVG) de `render_continuity_calendar` cobrindo 111 dias de partições (01/08 a 19/11/2026) em formatos Parquet e CSV, acompanhada da tabela de rastreabilidade dos manifestos em `latest_suite.json`.",
+      "interpretative_analysis_pt": "A auditoria visual de continuidade confirma disponibilidade contínua de 111/111 dias no recorte experimental e integridade sincronizada entre cópias Parquet e CSV, pré-requisito para execução retrospectiva sem vazamento temporal."
+    },
+    {
+      "figure_id": "fig_4_4c_cockpit_carteira_candidatos",
+      "section_target": "4.4 — Capturas Reais da Plataforma (Cockpit Carteira Filtrada)",
+      "title": "Cockpit Analítico Web — Carteira priorizada de candidatos à vistoria (6.333 UCs, 19/11/2026)",
+      "files": {
+        "png": "docs/manuscript_figures/platform_interfaces/fig_4_4c_cockpit_carteira_candidatos.png",
+        "overview_png": "docs/manuscript_figures/platform_interfaces/cockpit_visao_geral.png"
+      },
+      "sha256": {
+        "png": "7151a4edb5a44cbae5817dd321e44f38860c3472a9eb8cc8f816a77e0604cfc1",
+        "overview_png": "775c3660c7b1f7e802295b184a23059303345eda33087a1042cd03c8a55b472b"
+      },
+      "origin_data": {
+        "source": "oot_multiview/decisions.parquet",
+        "total_ucs": 65686,
+        "candidates": 6333,
+        "possivel_gd": 1451,
+        "quarantine_telecom": 2829
+      },
+      "parameters": {
+        "preset": "candidatos_vistoria",
+        "theme": "light",
+        "anonymized": true,
+        "viewport": "1720x1000@2x"
+      },
+      "run_id": "20261123_124416_146_oot_multiview",
+      "caption_academic_pt": "Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261123_124416_146_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.333 candidatas à vistoria; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela priorizada pelo preset de investigação.",
+      "interpretative_analysis_pt": "A interface web traduz diretamente os contratos analíticos para a triagem humana (Etapa 6 do fluxo): cada linha preserva identificador mascarado, circuito anonimizado, score composto, hipótese diagnóstica e persistência em dias consecutivos sem alterar ou executar ordens de serviço de campo."
+    },
+    {
+      "figure_id": "fig_4_4d_cockpit_raiox_uc_908xxx00",
+      "section_target": "4.4 — Capturas Reais da Plataforma (Raio-X UC 908***00)",
+      "title": "Cockpit Analítico Web — Painel Raio-X da UC 908***00 (série 30d FA/RA e completude)",
+      "files": {
+        "png": "docs/manuscript_figures/platform_interfaces/fig_4_4d_cockpit_raiox_uc_908xxx00.png",
+        "svg": "docs/manuscript_figures/platform_interfaces/fig_4_4d_cockpit_raiox_uc_908xxx00_chart.svg"
+      },
+      "sha256": {
+        "png": "168a51a843a2a75b98f93e5ae13b462d85b5bc533975b536836d1ede45391bad",
+        "svg": "6d190013c5151062d59bf640010cacdadcc89552e79163d11e62cfc10466aed6"
+      },
+      "origin_data": {
+        "uc_censored": "908***00",
+        "cutoff": "2026-11-19",
+        "score": 0.9601,
+        "category": "POSSIVEL_GD_NAO_CADASTRADA"
+      },
+      "parameters": {
+        "chart_granularity": "daily_30d",
+        "theme": "light",
+        "anonymized": true,
+        "playwright_viewport": "1720x1000@2x"
+      },
+      "run_id": "20261123_124416_146_oot_multiview",
+      "caption_academic_pt": "Captura do painel lateral de inspeção ('Gráfico & Raio-X') no Cockpit Web para a UC 908***00 em resolução diária (30 dias até 19/11/2026): curva superior com queda de energia ativa direta (FA), ascensão de injeção reversa (RA) e marcação CUSUM; gráfico inferior com barras diárias de cobertura frente ao limiar de 70%.",
+      "interpretative_analysis_pt": "O painel individual integra métricas sumárias (escore 0,9601, persistência de 22 dias na tabela OOT, trajetória de classe comportamental) aos gráficos vetoriais sob demanda, permitindo ao analista verificar que a contração de FA não decorre de ausência de telemetria."
+    }
+  ]
+}

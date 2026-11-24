@@ -1,0 +1,33 @@
+{
+  "figure_id": "fig_caso_685xxx20_reconciliacao_cobertura",
+  "section_target": "Estudo de Caso 3 — UC 685***20",
+  "title": "Reconciliação de cobertura horária (50% vs 100%) e cobertura de janela (99,49%) para a UC 685***20",
+  "files": {
+    "png": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.png",
+    "svg": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.svg",
+    "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.pdf",
+    "csv": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura_data.csv"
+  },
+  "sha256": {
+    "png": "cbb0d11fd898b28c98c047a3cd4a42c2c696d9f6ef99208aa79d39ba0c3e0c45",
+    "svg": "2571693863a7264ba4fd27d13680c0940076280542ad7db0b064c0801793f9a8",
+    "pdf": "49ba723e4af482421fe08438e6eadc27941b8fc95d5d8bbbbe2102aab41cf059",
+    "csv": "093778e46ed804485d449fb4a483d5b6de0a74ec1132193d6048fce35b8a51ce"
+  },
+  "origin_data": {
+    "hours_168h": 168,
+    "window_30d_days": 30,
+    "total_observed_intervals_30d": 4298,
+    "expected_intervals_30d": 4320
+  },
+  "parameters": {
+    "cadence_minutes": 10,
+    "legacy_hourly_denom": 12,
+    "native_hourly_denom": 6,
+    "daily_denom": 144,
+    "oot_score_nov19": 0.8656
+  },
+  "run_id": "20261123_124416_146_oot_multiview",
+  "caption_academic_pt": "Reconciliação empírica da cobertura da UC 685***20 (NIO-437***86, Δt=10 min): (A) série horária real observada (29/10 a 04/11/2026); (B) cobertura horária calculada sobre denominador fixo de 5 min (6/12 = 50,0%) versus denominador nativo de 10 min (6/6 = 100,0%); (C) série de 30 dias com média 4.298/4.320 = 99,49%.",
+  "interpretative_analysis_pt": "A aparente divergência entre 50,0% (gráfico horário legado) e 99,49% (janela de 30 dias em uc_day_features) não decorre de perda de pacotes nem de alteração nos dados: o medidor operou em cadência nativa de 10 minutos (6 leituras/h; 144 leituras/dia). Ao dividir por 12 (grade fixa de 5 min), obtinha-se 50,0% constante sem nenhum gap físico; no cômputo diário consciente de cadência (denominador 144/dia), apenas 25/10 (141/144) e 26/10 (125/144) tiveram perdas parciais, resultando exatamente em 99,49%."
+}

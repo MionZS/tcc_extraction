@@ -25,6 +25,7 @@ import urllib.parse
 import webbrowser
 
 import polars as pl
+import polars.selectors as cs
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -36,12 +37,20 @@ from src.eda.cockpit_metrics import (
     filter_cockpit_dataframe,
 )
 from src.eda.uc_timeseries import load_uc_daily_timeseries, load_uc_hourly_timeseries
+from src.utils.censorship import (
+    build_feeder_anonymizer,
+    censor_nio_id,
+    censor_uc_id,
+    pseudonymize_uc,
+    sanitize_public_text,
+)
 
 BASE_DIR = PROJECT_ROOT / "output"
 REPORTS_DIR = BASE_DIR / "reports"
 CLASSIFIED_PARQUET = REPORTS_DIR / "classified_ucs_latest.parquet"
 CLASSIFIED_CSV = REPORTS_DIR / "classified_ucs_latest.csv"
 SUMMARY_JSON = REPORTS_DIR / "model_training_summary_latest.json"
+SUITE_INDEX_PATH = PROJECT_ROOT / "experiments" / "runs" / "latest_suite.json"
 
 _DATA_LOCK = threading.Lock()
 _CACHED_DF: pl.DataFrame | None = None
@@ -51,6 +60,110 @@ _CACHED_SUMMARY: dict | None = None
 _CACHED_DASHBOARD: dict | None = None
 _ANOMALIES_CACHE: OrderedDict[tuple, bytes] = OrderedDict()
 _ANOMALIES_CACHE_MAX = 64
+
+_ACTIVE_DATA_PATH: Path | None = None
+_ANONYMIZE_MODE: bool = False
+_DEFAULT_THEME: str = "dark"
+_FEEDER_ANON_MAP: dict[str, str] = {}
+_ANON_TO_RAW_FEEDER: dict[str, str] = {}
+_MASK_TO_RAW_UC: dict[str, str] = {}
+_RAW_TO_TOKEN_UC: dict[str, str] = {}
+_TOKEN_TO_RAW_UC: dict[str, str] = {}
+
+
+def configure_cockpit_runtime(
+    *,
+    data_path: Path | None = None,
+    suite_oot: bool = False,
+    anonymize: bool = False,
+    theme: str = "dark",
+) -> None:
+    """Configure runtime dataset, anonymization and theme and clear caches."""
+    global _CACHED_DF, _CACHED_FEEDERS, _CACHED_CATEGORIES, _CACHED_SUMMARY
+    global _CACHED_DASHBOARD, _ACTIVE_DATA_PATH, _ANONYMIZE_MODE, _DEFAULT_THEME
+    global _FEEDER_ANON_MAP, _ANON_TO_RAW_FEEDER, _MASK_TO_RAW_UC, _RAW_TO_TOKEN_UC, _TOKEN_TO_RAW_UC
+
+    resolved_path = data_path
+    if suite_oot and resolved_path is None and SUITE_INDEX_PATH.exists():
+        suite_idx = json.loads(SUITE_INDEX_PATH.read_text(encoding="utf-8"))
+        if "oot_multiview" in suite_idx:
+            resolved_path = (PROJECT_ROOT / suite_idx["oot_multiview"] / "decisions.parquet").resolve()
+
+    with _DATA_LOCK:
+        _ACTIVE_DATA_PATH = resolved_path
+        _ANONYMIZE_MODE = bool(anonymize)
+        _DEFAULT_THEME = theme if theme in ("dark", "light") else "dark"
+        _CACHED_DF = None
+        _CACHED_FEEDERS = None
+        _CACHED_CATEGORIES = None
+        _CACHED_SUMMARY = None
+        _CACHED_DASHBOARD = None
+        _ANOMALIES_CACHE.clear()
+        _FEEDER_ANON_MAP = {}
+        _ANON_TO_RAW_FEEDER = {}
+        _MASK_TO_RAW_UC = {}
+        _RAW_TO_TOKEN_UC = {}
+        _TOKEN_TO_RAW_UC = {}
+
+
+def _ensure_anonymization_maps(df: pl.DataFrame) -> None:
+    """Populate deterministic feeder and UC anonymization lookup maps."""
+    global _FEEDER_ANON_MAP, _ANON_TO_RAW_FEEDER, _MASK_TO_RAW_UC, _RAW_TO_TOKEN_UC, _TOKEN_TO_RAW_UC
+    if _FEEDER_ANON_MAP and _MASK_TO_RAW_UC and _TOKEN_TO_RAW_UC:
+        return
+    feeder_col = "meta__feeder" if "meta__feeder" in df.columns else ("ALIMENTADOR" if "ALIMENTADOR" in df.columns else None)
+    if feeder_col:
+        raw_feeders = [str(f) for f in df.get_column(feeder_col).drop_nulls().unique().to_list() if str(f).strip()]
+        _FEEDER_ANON_MAP = build_feeder_anonymizer(raw_feeders)
+        _ANON_TO_RAW_FEEDER = {v: k for k, v in _FEEDER_ANON_MAP.items() if v not in ("Outros", "Sem Alimentador")}
+
+    uc_col = "id__uc_id" if "id__uc_id" in df.columns else ("UC" if "UC" in df.columns else None)
+    if uc_col:
+        for raw_uc in sorted(df.get_column(uc_col).drop_nulls().unique().cast(pl.String).to_list()):
+            masked = censor_uc_id(raw_uc)
+            _MASK_TO_RAW_UC.setdefault(masked, raw_uc)
+            tok = pseudonymize_uc(raw_uc)
+            _RAW_TO_TOKEN_UC[raw_uc] = tok
+            _TOKEN_TO_RAW_UC[tok] = raw_uc
+
+
+def _anonymize_feeder_name(val: str | None) -> str | None:
+    if not _ANONYMIZE_MODE or val is None:
+        return val
+    s = str(val).strip()
+    if not s:
+        return val
+    return _FEEDER_ANON_MAP.get(s, sanitize_public_text(s, _FEEDER_ANON_MAP))
+
+
+def _anonymize_record(rec: dict) -> dict:
+    if not _ANONYMIZE_MODE:
+        return rec
+    out = dict(rec)
+    for k in ("id__uc_id", "UC"):
+        if k in out and out[k] is not None:
+            raw_u = str(out[k])
+            masked = censor_uc_id(raw_u)
+            _MASK_TO_RAW_UC.setdefault(masked, raw_u)
+            tok = _RAW_TO_TOKEN_UC.get(raw_u) or pseudonymize_uc(raw_u)
+            _RAW_TO_TOKEN_UC[raw_u] = tok
+            _TOKEN_TO_RAW_UC[tok] = raw_u
+            out["_uc_token"] = tok
+            out[k] = masked
+    for k in ("id__nio", "NIO"):
+        if k in out and out[k] is not None:
+            out[k] = censor_nio_id(out[k])
+    for k in ("meta__feeder", "ALIMENTADOR"):
+        if k in out and out[k] is not None:
+            out[k] = _anonymize_feeder_name(str(out[k]))
+    if "meta__subestacao" in out and out["meta__subestacao"] is not None:
+        out["meta__subestacao"] = "SE-01"
+    if "meta__posto" in out and out["meta__posto"] is not None:
+        out["meta__posto"] = "TR-***"
+    for geo_k in ("meta__latitude", "meta__longitude"):
+        if geo_k in out and out[geo_k] is not None:
+            out[geo_k] = None
+    return out
 
 
 _CATEGORY_META: dict[str, dict[str, str]] = {
@@ -238,8 +351,9 @@ def _build_dashboard_stats(df: pl.DataFrame) -> dict:
             for row in f_grp.iter_rows(named=True):
                 tot_f = int(row["total"])
                 an_f = int(row["anomalies"])
+                raw_f = str(row[feeder_col])
                 top_feeders.append({
-                    "feeder": str(row[feeder_col]),
+                    "feeder": _anonymize_feeder_name(raw_f) if _ANONYMIZE_MODE else raw_f,
                     "total": tot_f,
                     "anomalies": an_f,
                     "rate_pct": round((an_f / max(tot_f, 1)) * 100.0, 2),
@@ -275,15 +389,29 @@ def _load_data() -> pl.DataFrame:
         if _CACHED_DF is not None and not _CACHED_DF.is_empty():
             return _CACHED_DF
 
+        if _ACTIVE_DATA_PATH is not None and _ACTIVE_DATA_PATH.exists() and _ACTIVE_DATA_PATH.stat().st_size > 0:
+            try:
+                _CACHED_DF = (
+                    pl.read_parquet(_ACTIVE_DATA_PATH)
+                    if _ACTIVE_DATA_PATH.suffix == ".parquet"
+                    else pl.read_csv(_ACTIVE_DATA_PATH, separator=";", infer_schema_length=5000, ignore_errors=True)
+                )
+                _ensure_anonymization_maps(_CACHED_DF)
+                return _CACHED_DF
+            except Exception:
+                pass
+
         if CLASSIFIED_PARQUET.exists() and CLASSIFIED_PARQUET.stat().st_size > 0:
             try:
                 _CACHED_DF = pl.read_parquet(CLASSIFIED_PARQUET)
+                _ensure_anonymization_maps(_CACHED_DF)
                 return _CACHED_DF
             except Exception:
                 pass
 
         if CLASSIFIED_CSV.exists() and CLASSIFIED_CSV.stat().st_size > 0:
             _CACHED_DF = pl.read_csv(CLASSIFIED_CSV, separator=";", infer_schema_length=5000, ignore_errors=True)
+            _ensure_anonymization_maps(_CACHED_DF)
             return _CACHED_DF
 
         return pl.DataFrame()
@@ -697,6 +825,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .detail-title { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
     .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; }
     .kv-box { background: #0b0f17; padding: 10px; border-radius: 6px; border: 1px solid var(--card-border); }
+    .kv-box-streak { border: 1px solid #ef4444; background: #1c1117; }
+    .kv-v-streak { color: #fca5a5; font-weight: 800; font-size: 16px; }
+    .btn-export-csv { background: #1e293b; border-color: #38bdf8; color: #38bdf8; }
+    .btn-export-svg { background: #1e293b; border-color: #818cf8; color: #818cf8; }
     .kv-k { font-size: 11px; color: var(--text-dim); }
     .kv-v { font-weight: 700; margin-top: 2px; }
 
@@ -743,6 +875,113 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .nav-uc-btn:hover:not(:disabled) { background: #0284c7; border-color: #38bdf8; }
     .nav-uc-select { background: #0b0f17; color: #f8fafc; border: 1px solid #334155; border-radius: 5px; padding: 5px 9px; font-size: 11.5px; max-width: 280px; }
     .missing-box { background: #070b12; border: 1px solid #1e293b; border-radius: 6px; padding: 8px 10px; margin-top: 10px; }
+
+    /* Academic Light Theme (Print / Publication Ready) */
+    html[data-theme="light"] {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #cbd5e1;
+      --text: #0f172a;
+      --text-dim: #475569;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --danger: #b91c1c;
+      --warning: #b45309;
+      --success: #047857;
+      --accent: #6d28d9;
+      --solar: #a16207;
+    }
+    html[data-theme="light"] header {
+      background: #ffffff;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    html[data-theme="light"] .brand-icon { color: #ffffff; }
+    html[data-theme="light"] .btn-secondary {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+    }
+    html[data-theme="light"] .btn-secondary:hover { background-color: #e2e8f0; }
+    html[data-theme="light"] .search-input,
+    html[data-theme="light"] .select-filter,
+    html[data-theme="light"] .nav-uc-select {
+      background-color: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    html[data-theme="light"] .custom-filter-box { background: #f8fafc; }
+    html[data-theme="light"] .preset-btn {
+      background: #ffffff;
+      color: #1e293b;
+      border-color: #cbd5e1;
+    }
+    html[data-theme="light"] .preset-btn.active {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #ffffff;
+    }
+    html[data-theme="light"] #btnPresetCandidates {
+      color: #991b1b !important;
+      border-color: #ef4444 !important;
+      background: #fef2f2;
+    }
+    html[data-theme="light"] #btnPresetCandidates.active {
+      color: #ffffff !important;
+      background: #b91c1c !important;
+      border-color: #991b1b !important;
+    }
+    html[data-theme="light"] th { background-color: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1; }
+    html[data-theme="light"] td { border-bottom: 1px solid #e2e8f0; color: #0f172a; }
+    html[data-theme="light"] tr:hover td { background-color: #eff6ff; }
+    html[data-theme="light"] .table-scroll-top,
+    html[data-theme="light"] .table-scroll-sticky,
+    html[data-theme="light"] .pagination {
+      background-color: #f1f5f9;
+    }
+    html[data-theme="light"] .score-bar-bg { background-color: #e2e8f0; }
+    html[data-theme="light"] .dash-panel { background: #ffffff; }
+    html[data-theme="light"] .dash-title { color: #0f172a; }
+    html[data-theme="light"] .dash-bar-row { background: #f8fafc; border-color: #cbd5e1; }
+    html[data-theme="light"] .dash-bar-name,
+    html[data-theme="light"] .dash-bar-count { color: #0f172a; }
+    html[data-theme="light"] .dash-bar-track { background: #e2e8f0; }
+    html[data-theme="light"] .signal-pill,
+    html[data-theme="light"] .feeder-chip,
+    html[data-theme="light"] .kv-box,
+    html[data-theme="light"] .chart-card,
+    html[data-theme="light"] .nav-uc-bar,
+    html[data-theme="light"] .missing-box {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    html[data-theme="light"] .chart-btn,
+    html[data-theme="light"] .nav-uc-btn {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    html[data-theme="light"] .chart-btn.active {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #ffffff;
+    }
+    html[data-theme="light"] .anom-event-item {
+      background: #fef2f2;
+      color: #0f172a;
+    }
+    html[data-theme="light"] .anom-event-item.drop { background: #fffbeb; }
+    html[data-theme="light"] .badge-fraud { background-color: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+    html[data-theme="light"] .badge-solar { background-color: #fef3c7; color: #92400e; border-color: #fcd34d; }
+    html[data-theme="light"] .badge-tamper { background-color: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+    html[data-theme="light"] .badge-telecom { background-color: #e2e8f0; color: #334155; border-color: #94a3b8; }
+    html[data-theme="light"] .badge-meter { background-color: #ffedd5; color: #9a3412; border-color: #fdba74; }
+    html[data-theme="light"] .badge-regular { background-color: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+    html[data-theme="light"] .kv-box-streak { background: #fef2f2; border-color: #ef4444; }
+    html[data-theme="light"] .kv-box-streak .kv-k { color: #991b1b; }
+    html[data-theme="light"] .kv-v-streak { color: #b91c1c; }
+    html[data-theme="light"] .btn-export-csv { background: #eff6ff; border-color: #0284c7; color: #0284c7; }
+    html[data-theme="light"] .btn-export-svg { background: #eef2ff; border-color: #4f46e5; color: #4f46e5; }
   </style>
 </head>
 <body>
@@ -756,6 +995,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
     </div>
     <div class="header-actions">
+      <button class="btn btn-secondary" id="btnThemeToggle" onclick="toggleThemeMode()">🌙 Tema Escuro</button>
       <button class="btn btn-secondary" onclick="exportData('csv')">📥 Exportar CSV</button>
       <button class="btn" onclick="fetchData()">🔄 Atualizar Dados</button>
     </div>
@@ -1488,6 +1728,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       tbody.innerHTML = data.map(d => {
         const uc = d.id__uc_id || d.UC || '-';
+        const ucToken = d._uc_token || uc;
         const feeder = d.meta__feeder || d.ALIMENTADOR || '-';
 
         const rowCells = selectedColumns.map(col => {
@@ -1547,7 +1788,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <tr>
             ${rowCells}
             <td>
-              <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px; font-weight:700;" onclick="openDetail('${uc}')">📈 Gráfico & Raio-X</button>
+              <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px; font-weight:700;" onclick="openDetail('${uc}', '${ucToken}')">📈 Gráfico & Raio-X</button>
             </td>
           </tr>
         `;
@@ -1575,6 +1816,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     let activeDashCat = '';
     let activeDrawerUc = '';
+    let activeDrawerToken = '';
     let activeDrawerCutoff = '';
     let activeChartGranularity = 'hourly';
     let activeChartDays = 7;
@@ -1598,15 +1840,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function navigateDetailUc(delta) {
       if (!pageRecords || pageRecords.length === 0) return;
-      const idx = pageRecords.findIndex(x => (x.id__uc_id === activeDrawerUc || x.UC === activeDrawerUc));
+      const idx = pageRecords.findIndex(x => (x._uc_token && activeDrawerToken ? x._uc_token === activeDrawerToken : (x.id__uc_id === activeDrawerUc || x.UC === activeDrawerUc)));
       if (idx < 0) {
-        openDetail(pageRecords[0].id__uc_id || pageRecords[0].UC);
+        openDetail(pageRecords[0].id__uc_id || pageRecords[0].UC, pageRecords[0]._uc_token || '');
         return;
       }
       const newIdx = idx + delta;
       if (newIdx >= 0 && newIdx < pageRecords.length) {
         const nextRec = pageRecords[newIdx];
-        openDetail(nextRec.id__uc_id || nextRec.UC);
+        openDetail(nextRec.id__uc_id || nextRec.UC, nextRec._uc_token || '');
       }
     }
 
@@ -1706,8 +1948,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     let activeChartOffsetDays = 0;
     let lastLoadedChartData = null;
+    let latestChartReqId = 0;
 
     async function loadUcChart(uc, cutoff, granularity, days, offsetDays) {
+      const reqId = ++latestChartReqId;
       activeChartGranularity = granularity || 'hourly';
       activeChartDays = days || (activeChartGranularity === 'hourly' ? 7 : 30);
       if (typeof offsetDays === 'number') {
@@ -1739,16 +1983,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (activeChartOffsetDays !== 0) params.set('offset', activeChartOffsetDays);
         const res = await fetch(`/api/v1/meter/${encodeURIComponent(uc)}/timeseries?${params.toString()}`);
         const data = await res.json();
+        if (reqId !== latestChartReqId) return;
         lastLoadedChartData = data;
         renderUcChartSvg(data);
       } catch (err) {
+        if (reqId !== latestChartReqId) return;
         box.innerHTML = `<div style="padding:18px;color:#fca5a5;font-size:12px;">Erro ao carregar gráfico da UC: ${err.message}</div>`;
       }
     }
 
     function slideChartWindow(stepDays) {
       activeChartOffsetDays += stepDays;
-      loadUcChart(activeDrawerUc, activeDrawerCutoff, activeChartGranularity, activeChartDays, activeChartOffsetDays);
+      loadUcChart(activeDrawerToken || activeDrawerUc, activeDrawerCutoff, activeChartGranularity, activeChartDays, activeChartOffsetDays);
     }
 
     function exportCurrentChartCsv() {
@@ -1823,6 +2069,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         return;
       }
 
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      const svgBg = isLight ? '#ffffff' : '#070b12';
+      const svgBorder = isLight ? '#cbd5e1' : '#1e293b';
+      const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
+      const axisFill = isLight ? '#475569' : '#94a3b8';
+      const faStroke = isLight ? '#0f172a' : '#f8fafc';
+      const raStroke = isLight ? '#059669' : '#34d399';
+      const baseStroke = isLight ? '#0284c7' : '#38bdf8';
+      const bandFill = isLight ? '#0284c7' : '#0284c7';
+      const barLegendBg = isLight ? '#f1f5f9' : '#0a0f18';
+      const metaHeaderColor = isLight ? '#334155' : '#cbd5e1';
+      const subTitleColor = isLight ? '#475569' : '#94a3b8';
+      const stepTxtColor = isLight ? '#b45309' : '#fbbf24';
+
       const pts = data.points;
       const W = 680;
       const H1 = 220; // Gráfico 1: Consumo & Bandas
@@ -1833,9 +2093,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const plotH2 = H2 - padT - padB;
 
       const vals = pts.map(p => Number(p.value || 0));
+      const raVals = pts.map(p => Number(p.ra || 0));
+      const hasReverse = Math.max(0, ...raVals) > 0.05;
       const uppers = pts.map(p => Number(p.upper_hod !== undefined ? p.upper_hod : data.upper_band || 0));
       const bases = pts.map(p => Number(p.baseline_hod !== undefined ? p.baseline_hod : data.baseline_median || 0));
-      const maxY = Math.max(0.5, ...vals, ...uppers) * 1.08;
+      const maxY = Math.max(0.5, ...vals, ...raVals, ...uppers) * 1.08;
       const minY = 0;
 
       const xOf = (i) => padL + (pts.length > 1 ? (i / (pts.length - 1)) * plotW : plotW / 2);
@@ -1886,19 +2148,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       const baseLinePts = pts.map((_, i) => `${xOf(i).toFixed(1)},${yOfVal(bases[i]).toFixed(1)}`).join(' ');
       const valLinePts = pts.map((p, i) => `${xOf(i).toFixed(1)},${yOfVal(p.value).toFixed(1)}`).join(' ');
+      const raLinePts = hasReverse ? pts.map((p, i) => `${xOf(i).toFixed(1)},${yOfVal(Number(p.ra || 0)).toFixed(1)}`).join(' ') : '';
 
       // Anomaly point circles
       let anomMarkers = '';
       pts.forEach((p, i) => {
         const cx = xOf(i).toFixed(1);
         const cy = yOfVal(p.value).toFixed(1);
-        const tip = `${p.label} | ${p.value} kWh | Cob: ${(p.coverage * 100).toFixed(0)}% | z=${p.z_self}`;
+        const tip = `${p.label} | FA=${p.value} | RA=${p.ra || 0} kWh | Cob: ${(p.coverage * 100).toFixed(0)}% | z=${p.z_self}`;
         if (p.flag === 'PICO_OUTLIER') {
-          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.2"><title>PICO: ${tip}</title></circle>`;
+          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="5" fill="#ef4444" stroke="${faStroke}" stroke-width="1.2"><title>PICO: ${tip}</title></circle>`;
         } else if (p.flag === 'QUEDA_OUTLIER' || p.flag === 'DEGRAU_QUEDA') {
-          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="4.2" fill="#f59e0b" stroke="#0b0f17" stroke-width="1"><title>QUEDA: ${tip}</title></circle>`;
+          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="4.2" fill="#f59e0b" stroke="${faStroke}" stroke-width="1"><title>QUEDA: ${tip}</title></circle>`;
         } else {
-          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="2.3" fill="#38bdf8" opacity="0.65"><title>${tip}</title></circle>`;
+          anomMarkers += `<circle cx="${cx}" cy="${cy}" r="2.3" fill="${baseStroke}" opacity="0.7"><title>${tip}</title></circle>`;
         }
       });
 
@@ -1907,13 +2170,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       for (let t = 0; t <= 4; t++) {
         const valT = (maxY * t) / 4;
         const yT = yOfVal(valT).toFixed(1);
-        gridLines1 += `<line x1="${padL}" y1="${yT}" x2="${padL + plotW}" y2="${yT}" stroke="#1e293b" stroke-width="1" />`;
-        gridLines1 += `<text x="${padL - 6}" y="${Number(yT) + 3}" text-anchor="end" fill="#94a3b8" font-size="10">${valT.toFixed(1)}</text>`;
+        gridLines1 += `<line x1="${padL}" y1="${yT}" x2="${padL + plotW}" y2="${yT}" stroke="${gridStroke}" stroke-width="1" />`;
+        gridLines1 += `<text x="${padL - 6}" y="${Number(yT) + 3}" text-anchor="end" fill="${axisFill}" font-size="10">${valT.toFixed(1)}</text>`;
       }
       const xStep = Math.max(1, Math.floor(pts.length / 7));
       let xTicks1 = '';
       for (let i = 0; i < pts.length; i += xStep) {
-        xTicks1 += `<text x="${xOf(i).toFixed(1)}" y="${H1 - 7}" text-anchor="middle" fill="#94a3b8" font-size="9.5">${pts[i].label}</text>`;
+        xTicks1 += `<text x="${xOf(i).toFixed(1)}" y="${H1 - 7}" text-anchor="middle" fill="${axisFill}" font-size="9.5">${pts[i].label}</text>`;
       }
 
       // ----------------------------------------------------------------------
@@ -1933,17 +2196,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       // Linha de Limiar 70% de Cobertura
       const y70 = yOfCov(0.70).toFixed(1);
       const gridLines2 = `
-        <line x1="${padL}" y1="${padT}" x2="${padL + plotW}" y2="${padT}" stroke="#1e293b" stroke-width="1" />
+        <line x1="${padL}" y1="${padT}" x2="${padL + plotW}" y2="${padT}" stroke="${gridStroke}" stroke-width="1" />
         <line x1="${padL}" y1="${y70}" x2="${padL + plotW}" y2="${y70}" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="4,3" />
-        <line x1="${padL}" y1="${padT + plotH2}" x2="${padL + plotW}" y2="${padT + plotH2}" stroke="#1e293b" stroke-width="1" />
-        <text x="${padL - 6}" y="${padT + 3}" text-anchor="end" fill="#94a3b8" font-size="9.5">100%</text>
+        <line x1="${padL}" y1="${padT + plotH2}" x2="${padL + plotW}" y2="${padT + plotH2}" stroke="${gridStroke}" stroke-width="1" />
+        <text x="${padL - 6}" y="${padT + 3}" text-anchor="end" fill="${axisFill}" font-size="9.5">100%</text>
         <text x="${padL - 6}" y="${Number(y70) + 3}" text-anchor="end" fill="#ef4444" font-size="9.5" font-weight="bold">70%</text>
-        <text x="${padL - 6}" y="${padT + plotH2 + 3}" text-anchor="end" fill="#94a3b8" font-size="9.5">0%</text>
+        <text x="${padL - 6}" y="${padT + plotH2 + 3}" text-anchor="end" fill="${axisFill}" font-size="9.5">0%</text>
       `;
 
       let xTicks2 = '';
       for (let i = 0; i < pts.length; i += xStep) {
-        xTicks2 += `<text x="${xOf(i).toFixed(1)}" y="${H2 - 6}" text-anchor="middle" fill="#94a3b8" font-size="9.5">${pts[i].label}</text>`;
+        xTicks2 += `<text x="${xOf(i).toFixed(1)}" y="${H2 - 6}" text-anchor="middle" fill="${axisFill}" font-size="9.5">${pts[i].label}</text>`;
       }
 
       const unit = data.granularity === 'hourly' ? 'kWh/h' : 'kWh/dia';
@@ -1951,8 +2214,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const missingPct = ((missingCount / Math.max(pts.length, 1)) * 100).toFixed(1);
 
       const missingBadge = missingCount > 0
-        ? `<span style="color:#ef4444;font-weight:700;">🚨 ${missingCount} janelas c/ falha de telemetria (&lt;70% cob. — ${missingPct}% do período)</span>`
-        : `<span style="color:#10b981;font-weight:700;">✅ Telemetria 100% íntegra (sem gaps críticos)</span>`;
+        ? `<span style="color:#dc2626;font-weight:700;">🚨 ${missingCount} janelas c/ falha de telemetria (&lt;70% cob. — ${missingPct}% do período)</span>`
+        : `<span style="color:#059669;font-weight:700;">✅ Telemetria 100% íntegra (sem gaps críticos)</span>`;
 
       const stepTxt = data.step_change
         ? `Degrau CUSUM: ${data.step_change.delta_pct > 0 ? '+' : ''}${data.step_change.delta_pct}% em ${data.step_change.date}`
@@ -1963,39 +2226,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         return `<div class="anom-event-item ${cls}"><b>${a.label}</b> [${a.type}] — ${a.reason}</div>`;
       }).join('') || '<div class="kv-k">Nenhum ponto isolado acima de ±3.5 sigma MAD nesta janela.</div>';
 
+      const raPolyline = hasReverse ? `<polyline fill="none" stroke="${raStroke}" stroke-width="2" stroke-dasharray="5,3" points="${raLinePts}" />` : '';
+      const raLegend = hasReverse ? `<span><i class="legend-dot" style="background:${raStroke}"></i>Energia Reversa RA (${unit})</span>` : '';
+
       box.innerHTML = `
-        <div style="font-size:11.5px;color:#cbd5e1;margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+        <div style="font-size:11.5px;color:${metaHeaderColor};margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
           <span>Mediana Base: <b>${data.baseline_median} ${unit}</b> · MAD: <b>${data.baseline_mad}</b> · Slope: <b>${data.slope_kwh_day ?? '-'} kWh/dia</b></span>
-          <span style="color:#fbbf24">${stepTxt}</span>
+          <span style="color:${stepTxtColor}">${stepTxt}</span>
         </div>
 
         <!-- GRÁFICO 1: Curva de Consumo Real & Detecção -->
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:3px;">1. Telemetria Ativa & Envelopes de Anomalia</div>
-        <svg viewBox="0 0 ${W} ${H1}" style="width:100%;height:auto;display:block;background:#070b12;border-radius:6px 6px 0 0;border:1px solid #1e293b;border-bottom:none;">
+        <div style="font-size:11px;font-weight:700;color:${subTitleColor};margin-bottom:3px;">1. Telemetria Ativa & Envelopes de Anomalia</div>
+        <svg viewBox="0 0 ${W} ${H1}" style="width:100%;height:auto;display:block;background:${svgBg};border-radius:6px 6px 0 0;border:1px solid ${svgBorder};border-bottom:none;">
           ${gridLines1}
           ${gapRects1}
           ${stepOverlay}
-          <polygon points="${polyUpper} ${polyLower}" fill="#0284c7" opacity="0.14" />
-          <polyline fill="none" stroke="#38bdf8" stroke-width="1.3" stroke-dasharray="4,3" points="${baseLinePts}" />
-          <polyline fill="none" stroke="#f8fafc" stroke-width="2" points="${valLinePts}" />
+          <polygon points="${polyUpper} ${polyLower}" fill="${bandFill}" opacity="0.14" />
+          <polyline fill="none" stroke="${baseStroke}" stroke-width="1.3" stroke-dasharray="4,3" points="${baseLinePts}" />
+          <polyline fill="none" stroke="${faStroke}" stroke-width="2" points="${valLinePts}" />
+          ${raPolyline}
           ${anomMarkers}
           ${xTicks1}
         </svg>
 
-        <div class="chart-legend" style="border-left:1px solid #1e293b;border-right:1px solid #1e293b;padding:4px 8px;background:#0a0f18;">
-          <span><i class="legend-dot" style="background:#f8fafc"></i>Consumo Real (${unit})</span>
-          <span><i class="legend-dot" style="background:#38bdf8"></i>Mediana Baseline</span>
-          <span><i class="legend-dot" style="background:#0284c7"></i>Banda MAD (±3.5σ)</span>
+        <div class="chart-legend" style="border-left:1px solid ${svgBorder};border-right:1px solid ${svgBorder};padding:4px 8px;background:${barLegendBg};">
+          <span><i class="legend-dot" style="background:${faStroke}"></i>Energia Direta FA (${unit})</span>
+          ${raLegend}
+          <span><i class="legend-dot" style="background:${baseStroke}"></i>Mediana Baseline</span>
+          <span><i class="legend-dot" style="background:${bandFill}"></i>Banda MAD (±3.5σ)</span>
           <span><i class="legend-dot" style="background:#ef4444"></i>Pico Anômalo (z &gt; +3.5)</span>
           <span><i class="legend-dot" style="background:#f59e0b"></i>Queda / Degrau CUSUM</span>
         </div>
 
         <!-- GRÁFICO 2: Diagnóstico de Dados Faltantes & Cobertura -->
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin:8px 0 3px 0;display:flex;justify-content:space-between;flex-wrap:wrap;">
+        <div style="font-size:11px;font-weight:700;color:${subTitleColor};margin:8px 0 3px 0;display:flex;justify-content:space-between;flex-wrap:wrap;">
           <span>2. Diagnóstico de Dados Faltantes (Completude da Telemetria por Janela)</span>
           <span>${missingBadge} · Méd: <b>${avgCovPct}%</b></span>
         </div>
-        <svg viewBox="0 0 ${W} ${H2}" style="width:100%;height:auto;display:block;background:#070b12;border-radius:0 0 6px 6px;border:1px solid #1e293b;">
+        <svg viewBox="0 0 ${W} ${H2}" style="width:100%;height:auto;display:block;background:${svgBg};border-radius:0 0 6px 6px;border:1px solid ${svgBorder};">
           ${gridLines2}
           ${covBars}
           ${xTicks2}
@@ -2012,15 +2280,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       `;
     }
 
-    function openDetail(uc) {
-      const idx = pageRecords.findIndex(x => (x.id__uc_id === uc || x.UC === uc));
+    function openDetail(uc, ucToken) {
+      const tok = ucToken || uc;
+      const idx = pageRecords.findIndex(x => (x._uc_token ? x._uc_token === tok : (x.id__uc_id === uc || x.UC === uc)));
       const d = idx >= 0 ? pageRecords[idx] : null;
       if (!d) return;
 
-      activeDrawerUc = uc;
+      activeDrawerUc = d.id__uc_id || d.UC || uc;
+      activeDrawerToken = d._uc_token || activeDrawerUc;
       activeDrawerCutoff = d.meta__cutoff_date || d.CUTOFF_DATE || '';
       activeChartOffsetDays = 0;
-      document.getElementById('drawerUc').innerText = `UC ${maskUcText(uc)}`;
+      document.getElementById('drawerUc').innerText = `UC ${maskUcText(activeDrawerUc)}`;
       const catEl = document.getElementById('drawerCat');
       catEl.innerText = formatCat(d.CATEGORIA_DIAGNOSTICA || 'OPERACAO_REGULAR');
       catEl.className = `badge ${getBadgeClass(d.CATEGORIA_DIAGNOSTICA || '')}`;
@@ -2036,12 +2306,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <button class="nav-uc-btn" onclick="navigateDetailUc(-1)" ${prevDisabled}>◀ Anterior (←)</button>
           <div style="font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span>Candidato <b>${candNum}</b> de <b>${totalCands}</b></span>
-            <select class="nav-uc-select" onchange="openDetail(this.value)">
+            <select class="nav-uc-select" onchange="openDetail(this.options[this.selectedIndex].dataset.uc || this.value, this.value)">
               ${pageRecords.map((r, i) => {
                 const rUc = r.id__uc_id || r.UC;
-                const isSel = rUc === uc ? 'selected' : '';
+                const rTok = r._uc_token || rUc;
+                const isSel = rTok === activeDrawerToken ? 'selected' : '';
                 const rCat = formatCat(r.CATEGORIA_DIAGNOSTICA || 'REGULAR');
-                return `<option value="${rUc}" ${isSel}>#${i + 1}: UC ${maskUcText(rUc)} (${rCat})</option>`;
+                return `<option value="${rTok}" data-uc="${rUc}" ${isSel}>#${i + 1}: UC ${maskUcText(rUc)} (${rCat})</option>`;
               }).join('')}
             </select>
           </div>
@@ -2049,9 +2320,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="kv-grid" style="margin-bottom: 12px;">
-          <div class="kv-box" style="border: 1px solid #ef4444; background: #1c1117;">
-            <div class="kv-k" style="color:#ef4444; font-weight:700;">🔥 Dias Anomalia Seguidos</div>
-            <div class="kv-v" style="color:#fca5a5; font-weight:800; font-size:16px;">${d.DIAS_ANOMALIA_SEGUIDOS || 0} dias</div>
+          <div class="kv-box kv-box-streak">
+            <div class="kv-k" style="font-weight:700;">🔥 Dias Anomalia Seguidos</div>
+            <div class="kv-v kv-v-streak">${d.DIAS_ANOMALIA_SEGUIDOS || 0} dias</div>
           </div>
           <div class="kv-box">
             <div class="kv-k">Score Consenso</div>
@@ -2072,16 +2343,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="detail-title" style="margin:0">📈 Acompanhamento Temporal & Diagnóstico</div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
               <span style="font-size:11px;color:#94a3b8">Período:</span>
-              <button class="chart-btn active" id="btnPeriod7h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 7, 0)">7d Horário</button>
-              <button class="chart-btn" id="btnPeriod14h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 14, 0)">14d Horário</button>
-              <button class="chart-btn" id="btnPeriod30h" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'hourly', 30, 0)">30d Horário</button>
-              <button class="chart-btn" id="btnPeriod30d" onclick="loadUcChart('${uc}', '${activeDrawerCutoff}', 'daily', 30)">30d Diário</button>
+              <button class="chart-btn active" id="btnPeriod7h" onclick="loadUcChart('${activeDrawerToken}', '${activeDrawerCutoff}', 'hourly', 7, 0)">7d Horário</button>
+              <button class="chart-btn" id="btnPeriod14h" onclick="loadUcChart('${activeDrawerToken}', '${activeDrawerCutoff}', 'hourly', 14, 0)">14d Horário</button>
+              <button class="chart-btn" id="btnPeriod30h" onclick="loadUcChart('${activeDrawerToken}', '${activeDrawerCutoff}', 'hourly', 30, 0)">30d Horário</button>
+              <button class="chart-btn" id="btnPeriod30d" onclick="loadUcChart('${activeDrawerToken}', '${activeDrawerCutoff}', 'daily', 30)">30d Diário</button>
               <span id="slideControls" style="display:none;gap:3px;align-items:center;">
                 <button class="chart-btn" style="padding:4px 8px;" title="Deslizar janela 7 dias para o passado" onclick="slideChartWindow(-7)">◀ -7d</button>
                 <button class="chart-btn" style="padding:4px 8px;" title="Deslizar janela 7 dias para o futuro" onclick="slideChartWindow(7)">+7d ▶</button>
               </span>
-              <button class="chart-btn" id="btnExportCsv" style="background:#1e293b;border-color:#38bdf8;color:#38bdf8;" title="Exportar série temporal atual para CSV" onclick="exportCurrentChartCsv()">📥 CSV</button>
-              <button class="chart-btn" id="btnExportSvg" style="background:#1e293b;border-color:#818cf8;color:#818cf8;" title="Exportar gráfico vetorial atual para SVG" onclick="exportCurrentChartSvg()">🖼️ SVG</button>
+              <button class="chart-btn btn-export-csv" id="btnExportCsv" title="Exportar série temporal atual para CSV" onclick="exportCurrentChartCsv()">📥 CSV</button>
+              <button class="chart-btn btn-export-svg" id="btnExportSvg" title="Exportar gráfico vetorial atual para SVG" onclick="exportCurrentChartSvg()">🖼️ SVG</button>
               <button class="chart-btn" id="btnLgpdToggle" onclick="toggleLgpdMode()">${lgpdMaskMode ? '🔒 LGPD: Censurado' : '🔓 LGPD: Visível'}</button>
             </div>
           </div>
@@ -2134,7 +2405,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('drawerContent').innerHTML = content;
       document.getElementById('detailDrawer').classList.add('open');
       document.getElementById('drawerOverlay').classList.add('open');
-      loadUcChart(uc, activeDrawerCutoff, 'hourly', 7);
+      loadUcChart(activeDrawerToken, activeDrawerCutoff, 'hourly', 7);
     }
 
     function closeDrawer() {
@@ -2146,7 +2417,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       window.location.href = '/api/v1/export?format=' + fmt;
     }
 
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const btn = document.getElementById('btnThemeToggle');
+      if (btn) btn.innerText = theme === 'light' ? '🌙 Tema Escuro' : '☀️ Tema Claro';
+    }
+
+    function toggleThemeMode() {
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = cur === 'light' ? 'dark' : 'light';
+      applyTheme(next);
+      if (lastLoadedChartData) renderUcChartSvg(lastLoadedChartData);
+    }
+
     window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      const initialTheme = params.get('theme') || document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(initialTheme);
       initCockpit();
       loadDashboard();
     };
@@ -2172,7 +2459,24 @@ class CockpitHandler(BaseHTTPRequestHandler):
 
         # 1. Static HTML
         if path in ("/", "/index.html"):
-            html_bytes = HTML_TEMPLATE.encode("utf-8")
+            theme_q = (query.get("theme") or [_DEFAULT_THEME])[0].strip().lower()
+            theme_attr = "light" if theme_q == "light" else "dark"
+            html_rendered = HTML_TEMPLATE.replace('<html lang="pt-BR">', f'<html lang="pt-BR" data-theme="{theme_attr}">')
+            if _ANONYMIZE_MODE:
+                html_rendered = html_rendered.replace(
+                    "COCKPIT ANALÍTICO AMI — COPEL ARAUCÁRIA",
+                    "COCKPIT ANALÍTICO AMI — REDE DE DISTRIBUIÇÃO (SUÍTE OOT VALIDADA)",
+                ).replace(
+                    "Cockpit Analítico AMI — Detecção de Anomalias Copel Araucária",
+                    "Cockpit Analítico AMI — Suíte Retrospectiva Validada (Anonimizada)",
+                ).replace(
+                    "Monitoramento Inteligente de Perdas Não-Técnicas, GD e Qualidade de Energia",
+                    "Monitoramento Retrospectivo Multi-Visão de Anomalias Elétricas, Fluxo Reverso e Qualidade de Telemetria",
+                ).replace(
+                    "Buscar por UC, NIO, Alimentador ou Bairro...",
+                    "Buscar por UC, UC mascarada (ex: 908***00) ou Circuito...",
+                )
+            html_bytes = html_rendered.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -2214,7 +2518,10 @@ class CockpitHandler(BaseHTTPRequestHandler):
             filter_op = query.get("filter_op", ["eq"])[0].strip()
             filter_val = query.get("filter_val", [""])[0].strip()
 
-            cache_key = (granularity, cat_filter, feeder_filter, q_filter, filter_col, filter_op, filter_val, offset, limit)
+            q_filter_eff = _MASK_TO_RAW_UC.get(q_filter.strip(), q_filter) if _ANONYMIZE_MODE else q_filter
+            feeder_filter_eff = _ANON_TO_RAW_FEEDER.get(feeder_filter, feeder_filter) if _ANONYMIZE_MODE else feeder_filter
+
+            cache_key = (_ANONYMIZE_MODE, granularity, cat_filter, feeder_filter_eff, q_filter_eff, filter_col, filter_op, filter_val, offset, limit)
             with _DATA_LOCK:
                 cached_bytes = _ANOMALIES_CACHE.get(cache_key)
                 if cached_bytes is not None:
@@ -2253,8 +2560,8 @@ class CockpitHandler(BaseHTTPRequestHandler):
                     df,
                     granularity=granularity,
                     category=cat_filter,
-                    feeder=feeder_filter,
-                    search_q=q_filter,
+                    feeder=feeder_filter_eff,
+                    search_q=q_filter_eff,
                     filter_col=filter_col,
                     filter_op=filter_op,
                     filter_val=filter_val,
@@ -2263,9 +2570,16 @@ class CockpitHandler(BaseHTTPRequestHandler):
                 total_matched = filtered_df.height
                 reconciled_kpis = compute_reconciled_kpis(df)
 
-                # Fast slice
-                paged_slice = filtered_df.slice(offset, limit)
-                records = paged_slice.to_dicts()
+                # Fast slice with timezone sanitization before .to_dicts()
+                paged_slice = filtered_df.slice(offset, limit).with_columns(
+                    cs.datetime().cast(pl.String), cs.date().cast(pl.String)
+                )
+                records = [_anonymize_record(r) for r in paged_slice.to_dicts()] if _ANONYMIZE_MODE else paged_slice.to_dicts()
+                feeders_out = (
+                    sorted({_anonymize_feeder_name(f) for f in _CACHED_FEEDERS if _anonymize_feeder_name(f)})
+                    if _ANONYMIZE_MODE
+                    else _CACHED_FEEDERS
+                )
                 payload = {
                     "data": records,
                     "total": total_matched,
@@ -2273,7 +2587,7 @@ class CockpitHandler(BaseHTTPRequestHandler):
                     "granularity": granularity,
                     "offset": offset,
                     "limit": limit,
-                    "feeders": _CACHED_FEEDERS,
+                    "feeders": feeders_out,
                     "categories": _CACHED_CATEGORIES,
                     "summary": summary,
                     "reconciled_kpis": reconciled_kpis,
@@ -2295,13 +2609,20 @@ class CockpitHandler(BaseHTTPRequestHandler):
                 feeder_filter = query.get("feeder", [""])[0]
                 q_filter = query.get("q", [""])[0].strip().lower()
                 granularity = query.get("granularity", ["unique_ucs"])[0].strip().lower()
+                q_filter_eff = _MASK_TO_RAW_UC.get(q_filter.strip(), q_filter) if _ANONYMIZE_MODE else q_filter
+                feeder_filter_eff = _ANON_TO_RAW_FEEDER.get(feeder_filter, feeder_filter) if _ANONYMIZE_MODE else feeder_filter
                 filtered_df, _ = filter_cockpit_dataframe(
                     df,
                     granularity=granularity,
                     category=cat_filter,
-                    feeder=feeder_filter,
-                    search_q=q_filter,
+                    feeder=feeder_filter_eff,
+                    search_q=q_filter_eff,
                 )
+                if _ANONYMIZE_MODE:
+                    uc_c = "id__uc_id" if "id__uc_id" in filtered_df.columns else "UC"
+                    filtered_df = filtered_df.with_columns(
+                        pl.col(uc_c).cast(pl.String).map_elements(censor_uc_id, return_dtype=pl.String).alias(uc_c)
+                    )
                 self.send_response(200)
                 self.send_header("Content-Type", "text/csv; charset=utf-8")
                 self.send_header("Content-Disposition", f"attachment; filename=cockpit_export_{granularity}.csv")
@@ -2333,6 +2654,7 @@ class CockpitHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/v1/meter/") and path.endswith("/timeseries"):
             raw_uc = path[len("/api/v1/meter/"):-len("/timeseries")].strip("/")
             uc_decoded = urllib.parse.unquote(raw_uc)
+            uc_lookup = _TOKEN_TO_RAW_UC.get(uc_decoded) or _MASK_TO_RAW_UC.get(uc_decoded, uc_decoded)
             qs = urllib.parse.parse_qs(parsed.query)
             cutoff = (qs.get("cutoff") or [""])[0].strip() or None
             granularity = (qs.get("granularity") or ["daily"])[0].strip().lower()
@@ -2343,7 +2665,7 @@ class CockpitHandler(BaseHTTPRequestHandler):
             try:
                 if granularity == "hourly":
                     payload = load_uc_hourly_timeseries(
-                        uc_decoded,
+                        uc_lookup,
                         base_dir=BASE_DIR,
                         cutoff_date=cutoff,
                         week_days=days,
@@ -2352,13 +2674,20 @@ class CockpitHandler(BaseHTTPRequestHandler):
                     )
                 else:
                     payload = load_uc_daily_timeseries(
-                        uc_decoded, base_dir=BASE_DIR, cutoff_date=cutoff, days=max(days, 30)
+                        uc_lookup, base_dir=BASE_DIR, cutoff_date=cutoff, days=max(days, 30)
                     )
+                if _ANONYMIZE_MODE and isinstance(payload, dict):
+                    payload["uc"] = censor_uc_id(uc_lookup)
+                    payload["uc_censored"] = censor_uc_id(uc_lookup)
+                    if "nios" in payload and isinstance(payload["nios"], list):
+                        payload["nios"] = [censor_nio_id(n) for n in payload["nios"]]
+                    if "message" in payload and isinstance(payload["message"], str):
+                        payload["message"] = sanitize_public_text(payload["message"], _FEEDER_ANON_MAP)
                 self._send_json(payload)
             except Exception as exc:
                 self._send_json({
                     "status": "error",
-                    "uc": uc_decoded,
+                    "uc": censor_uc_id(uc_lookup) if _ANONYMIZE_MODE else uc_decoded,
                     "message": f"Falha ao ler série temporal no Data Lake: {exc}",
                     "points": [],
                     "anomalies": [],
@@ -2367,7 +2696,12 @@ class CockpitHandler(BaseHTTPRequestHandler):
 
         # 6. API: Health Check
         if path == "/api/v1/health":
-            self._send_json({"status": "OK", "has_data": CLASSIFIED_PARQUET.exists() or CLASSIFIED_CSV.exists()})
+            self._send_json({
+                "status": "OK",
+                "has_data": (_ACTIVE_DATA_PATH is not None and _ACTIVE_DATA_PATH.exists()) or CLASSIFIED_PARQUET.exists() or CLASSIFIED_CSV.exists(),
+                "anonymize": _ANONYMIZE_MODE,
+                "theme": _DEFAULT_THEME,
+            })
             return
 
         if path == "/favicon.ico":
@@ -2410,11 +2744,28 @@ def _prewarm_caches() -> None:
         print(f"[Cockpit] Aviso no pre-warm: {exc}")
 
 
-def run_web_cockpit(host: str = "127.0.0.1", port: int = 8050, open_browser: bool = True):
+def run_web_cockpit(
+    host: str = "127.0.0.1",
+    port: int = 8050,
+    open_browser: bool = True,
+    *,
+    data_path: Path | None = None,
+    suite_oot: bool = False,
+    anonymize: bool = False,
+    theme: str = "dark",
+):
     """Starts the zero-dependency threaded web cockpit server."""
+    if data_path is not None or suite_oot or anonymize or theme != "dark":
+        configure_cockpit_runtime(
+            data_path=data_path,
+            suite_oot=suite_oot,
+            anonymize=anonymize,
+            theme=theme,
+        )
     server_address = (host, port)
     httpd = ThreadingHTTPServer(server_address, CockpitHandler)
-    url = f"http://localhost:{port}"
+    actual_port = httpd.server_address[1]
+    url = f"http://localhost:{actual_port}"
 
     threading.Thread(target=_prewarm_caches, daemon=True).start()
 
@@ -2435,9 +2786,20 @@ def main():
     parser = argparse.ArgumentParser(description="Run Cockpit Analítico AMI Web Server.")
     parser.add_argument("--port", type=int, default=8050, help="HTTP server port.")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically.")
+    parser.add_argument("--data-path", type=Path, default=None, help="Override path to classified UCs dataset.")
+    parser.add_argument("--suite-oot", action="store_true", help="Load OOT decisions from experiments/runs/latest_suite.json.")
+    parser.add_argument("--anonymize", action="store_true", help="Mask UCs, NIOs, feeder names and utility identifiers.")
+    parser.add_argument("--theme", choices=["dark", "light"], default="dark", help="Default UI theme.")
     args = parser.parse_args()
 
-    run_web_cockpit(port=args.port, open_browser=not args.no_browser)
+    run_web_cockpit(
+        port=args.port,
+        open_browser=not args.no_browser,
+        data_path=args.data_path,
+        suite_oot=args.suite_oot,
+        anonymize=args.anonymize,
+        theme=args.theme,
+    )
 
 
 if __name__ == "__main__":
