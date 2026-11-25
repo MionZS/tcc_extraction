@@ -40,3 +40,11 @@
 - **Extração bruta Oracle/MDM/CIS:** exige credenciais e rede corporativa da distribuidora; a reprodutibilidade do repositório parte das camadas particionadas do Data Lake e dos artefatos congelados em `experiments/runs/20261125_*`.
 - **Compilação do PDF a partir de `main.tex`:** tratada separadamente em ambiente com MiKTeX/TeX Live.
 - **Metadados administrativos finais (`00-dados.tex` / `DADOS_PRETEXTUAIS.md`):** confirmação oficial de titulações/vínculos da banca, termo de aprovação oficial e exigência de ficha catalográfica.
+
+---
+
+## 4. Registro de Evidência Auditada (Testes e Hashes)
+
+A execução completa dos testes e a validação criptográfica (SHA-256) de todos os artefatos e figuras encontram-se registradas e auditadas em:
+- [EVIDENCIA_TESTES_E_HASHES_2026-11-25.md](../../experiments/runs/EVIDENCIA_TESTES_E_HASHES_2026-11-25.md)
+- [EVIDENCIA_TESTES_E_HASHES_2026-11-25.json](../../experiments/runs/EVIDENCIA_TESTES_E_HASHES_2026-11-25.json)
