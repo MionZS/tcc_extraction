@@ -9,9 +9,9 @@
     "csv": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo_data.csv"
   },
   "sha256": {
-    "png": "29625c8d8dcbab9c076e09a425134f8cef5ca8d28bdee1a1211c2b8c8fe2b787",
-    "svg": "dc18aa763fec422a6441265ce2f743046cfc65f40ca28d2a7b5d5f817e01e43c",
-    "pdf": "2009527741dcc476c3a1cbe7652b468fb50bdf55df6fe23ce13b946d99709b35",
+    "png": "a3b4b4abb38316bf7b93635524aeeb7a7e96685efe4ebd20920ef037659f9886",
+    "svg": "82abdd93d06669c662e3fc5eb0d86043fb9b021ada13eaad1d84f02935f2543c",
+    "pdf": "154c4285e06a8f63d1819c619d7d04c62bad8fa6177f7e817cc7248bcbbf7b4e",
     "csv": "47655bf9da3b1dcf4ac90c7d943f186b7e60649735b52f0fa8b4a8316d1c196a"
   },
   "origin_data": {
@@ -24,7 +24,7 @@
     "window_days_oot": 30,
     "cutoff": "2026-11-19"
   },
-  "run_id": "20261123_124416_146_oot_multiview",
+  "run_id": "20261125_134559_972_oot_multiview",
   "caption_academic_pt": "Série temporal completa observada para a UC 908***00 (02/08 a 19/11/2026, medidor NIO-435***63): (A) energia ativa direta (FA) e reversa (RA) diárias com atualização administrativa em 31/10; (B) cobertura ajustada à cadência de 10 min; (C) comparação intradiária pré/pós-evento.",
   "interpretative_analysis_pt": "O registro longitudinal demonstra queda persistente de FA após 31/10 (mediana de ~18,05 para 5,72 kWh/dia) acompanhada por 12 dias de injeção reversa RA em novembro (até 31,27 kWh/dia). Como o medidor NIO-435***63 permaneceu o mesmo durante a atualização cadastral, a correção de ciclo de vida redirecionou a UC para a hipótese diagnóstica POSSIVEL_GD_NAO_CADASTRADA (escore 0,9601), sem afirmar causa ou tecnologia antes de vistoria."
 }

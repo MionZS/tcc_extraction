@@ -110,7 +110,7 @@ Quando \(b_m-a_m<10^{-12}\) (amplitude degenerada por empates em cauda), adota-s
 
 com pesos \(\mathbf w=(0{,}22;0{,}20;0{,}18;0{,}18;0{,}10;0{,}12)\) e \(R_i\in\{0,1\}\) representando a ativação da regra elétrica crítica da política. Os pesos e o bônus são escolhas heurísticas de projeto, não estimativas de parâmetros de um modelo supervisionado. Sua sensibilidade individual é avaliada nos ensaios de ablação. O bônus de \(0{,}15\) não é peso de detector. As regras permanecem condições de triagem e não confirmação de violação regulatória ou fraude.
 
-A validação temporal definiu o limiar de referência \(\tau_{train}=0{,}5226\), obtido exclusivamente no conjunto de ajuste anterior ao corte. A seleção deve ser lida conjuntamente com qualidade, regras diagnósticas e política operacional; logo, \(S_{elec,i}\ge\tau_{train}\) isoladamente não é sinônimo de candidato final. Esse limiar permanece congelado na avaliação fora do tempo.
+A validação temporal definiu o limiar de referência \(\tau_{train}=0{,}5131\) na execução consolidada pós-saneamento (\texttt{20261125\_134559\_972\_oot\_multiview}; frente a \(0{,}5226\) na execução preliminar de 23/11), obtido exclusivamente no conjunto de ajuste anterior ao corte. A seleção deve ser lida conjuntamente com qualidade, regras diagnósticas e política operacional; logo, \(S_{elec,i}\ge\tau_{train}\) isoladamente não é sinônimo de candidato final. Esse limiar permanece congelado na avaliação fora do tempo.
 
 A configuração preliminar de quatro detectores pode ser escrita, para comparação, como:
 

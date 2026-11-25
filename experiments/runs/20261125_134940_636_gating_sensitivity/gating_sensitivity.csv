@@ -1,0 +1,6 @@
+coverage_threshold;total_ucs;eligible_ucs;eligible_pct;excluded_ucs;raw_anomalies_common_cohort;candidates_retained;candidates_intercepted_quarantine;spearman_vs_unfiltered;top5pct_jaccard_vs_unfiltered
+0.5;65686;63371;96.48;2315;6729;5945;784;0.9967;0.8319
+0.6;65686;63111;96.08;2575;6700;5793;907;0.9955;0.8067
+0.7;65686;62857;95.69;2829;6767;5788;979;0.9952;0.79
+0.8;65686;61530;93.67;4156;6904;5728;1176;0.9947;0.7525
+0.9;65686;59091;89.96;6595;7398;5531;1867;0.9944;0.6755

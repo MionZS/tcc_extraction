@@ -131,7 +131,7 @@ def test_oot_cockpit_kpi_reconciliation_matches_2829_quarantine() -> None:
     kpis = compute_reconciled_kpis(oot_df)
 
     assert kpis["total_unique_ucs"] == 65686
-    assert kpis["candidatos_vistoria_ucs"] == 6333
+    assert kpis["candidatos_vistoria_ucs"] == 6037
     assert kpis["possivel_gd_ucs"] == 1451
     assert kpis["quarentena_telecom_ucs"] == 2829
 

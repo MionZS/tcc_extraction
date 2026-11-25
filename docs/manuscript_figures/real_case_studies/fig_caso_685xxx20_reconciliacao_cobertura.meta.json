@@ -10,8 +10,8 @@
   },
   "sha256": {
     "png": "cbb0d11fd898b28c98c047a3cd4a42c2c696d9f6ef99208aa79d39ba0c3e0c45",
-    "svg": "4e7c95cb71b7e210b76a4b70e19c2cd6d3543891ee9062fc0ac0b16c9c0738ea",
-    "pdf": "f26974a34ea6fb21e3c2db30d9c2a47d677f9d7321c650e7ca3d4046331e0226",
+    "svg": "4fc5a94fcb4378c11d9e704a82622a507a52c330e868e37e5024da6646369bdb",
+    "pdf": "f906e8d2d6587d41de52833d23cc3b2a915d16f6ad096852b57a1daa532ce990",
     "csv": "093778e46ed804485d449fb4a483d5b6de0a74ec1132193d6048fce35b8a51ce"
   },
   "origin_data": {
@@ -25,9 +25,9 @@
     "legacy_hourly_denom": 12,
     "native_hourly_denom": 6,
     "daily_denom": 144,
-    "oot_score_nov19": 0.8656
+    "oot_score_nov19": 0.985
   },
-  "run_id": "20261123_124416_146_oot_multiview",
+  "run_id": "20261125_134559_972_oot_multiview",
   "caption_academic_pt": "Reconciliação empírica da cobertura da UC 685***20 (NIO-437***86, Δt=10 min): (A) série horária real observada (29/10 a 04/11/2026); (B) cobertura horária calculada sobre denominador fixo de 5 min (6/12 = 50,0%) versus denominador nativo de 10 min (6/6 = 100,0%); (C) série de 30 dias com média 4.298/4.320 = 99,49%.",
   "interpretative_analysis_pt": "A aparente divergência entre 50,0% (gráfico horário legado) e 99,49% (janela de 30 dias em uc_day_features) não decorre de perda de pacotes nem de alteração nos dados: o medidor operou em cadência nativa de 10 minutos (6 leituras/h; 144 leituras/dia). Ao dividir por 12 (grade fixa de 5 min), obtinha-se 50,0% constante sem nenhum gap físico; no cômputo diário consciente de cadência (denominador 144/dia), apenas 25/10 (141/144) e 26/10 (125/144) tiveram perdas parciais, resultando exatamente em 99,49%."
 }

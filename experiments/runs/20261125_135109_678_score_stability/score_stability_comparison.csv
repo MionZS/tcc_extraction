@@ -1,0 +1,4 @@
+normalization_mode;n_eval_full;n_eval_trimmed_1pct;mean_abs_shift;max_abs_shift
+batch_minmax;65686;65029;0.034047;0.2291
+frozen_quantile;65686;65029;0.0;0.0
+frozen_ecdf;65686;65686;0.0;0.0

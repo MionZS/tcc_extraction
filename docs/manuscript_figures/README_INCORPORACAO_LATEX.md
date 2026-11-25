@@ -1,6 +1,6 @@
 # Pacote de Figuras Reproduzíveis e Fragmentos LaTeX para `TCC_AMI_Consolidado.pdf`
 
-**Execução de Referência (`latest_suite.json`):** `20261123_124416_146_oot_multiview`
+**Execução de Referência (`latest_suite.json`):** `20261125_134559_972_oot_multiview`
 
 ## Mapa de Incorporação no Manuscrito LaTeX
 

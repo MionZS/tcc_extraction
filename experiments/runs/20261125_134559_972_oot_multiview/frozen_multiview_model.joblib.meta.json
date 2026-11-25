@@ -1,0 +1,20 @@
+{
+  "target_name": "frozen_multiview_model.joblib",
+  "total_bytes": 46608632,
+  "total_mb": 44.45,
+  "chunk_size_mb": 25,
+  "num_parts": 2,
+  "full_sha256": "7eed8bd863abd2878220d0eb82d072a585d14a35ac113d4e58c42fdd3820d253",
+  "parts": [
+    {
+      "part_filename": "frozen_multiview_model.joblib.part00",
+      "bytes": 26214400,
+      "sha256": "cb9ac3cbe2be383d589dd99cd82aad1327c5ef7f4233e1a7dfb9cd6db7fe3ab1"
+    },
+    {
+      "part_filename": "frozen_multiview_model.joblib.part01",
+      "bytes": 20394232,
+      "sha256": "c02d9747bb1f177fa992cff4b0e209098ce555cb01a62db8819a60a2abcf448d"
+    }
+  ]
+}

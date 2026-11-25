@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-11-24T15:28:06.988629",
+  "generated_at": "2026-11-25T17:31:37.787691",
   "canonical_manuscript": "TCC_AMI_Consolidado.pdf",
-  "active_oot_run_id": "20261123_124416_146_oot_multiview",
+  "active_oot_run_id": "20261125_134559_972_oot_multiview",
   "figures": [
     {
       "figure_id": "fig_5_1a_isolation_forest_microcluster",
@@ -15,8 +15,8 @@
       },
       "sha256": {
         "png": "0cd319e77f87a4d3f4bd54fff2a00718c3c68e17dd16e09fa5dcab6bc5efeb56",
-        "svg": "063d5d64ce566b11c670d73b3beb567b20bdc9c07890317c5f962b395d048ff0",
-        "pdf": "d0a054b83a98023f890ebe06b40ec916a512fe4daa8d47d397cbe56d70c340a6",
+        "svg": "b7224df0c963d4defee145c0de1f2280bc6dcb5e3fdc96349b613f880edaa30c",
+        "pdf": "cdef7d53af95f8661f3958d7a4be464d19a2435df086d69eb91006485cacb994",
         "csv": "1d87c169667653d839914640f4815f90bf27c56184c5a04db056b00611ec525c"
       },
       "origin_data": {
@@ -54,8 +54,8 @@
       },
       "sha256": {
         "png": "5bb04a782639dc8d50d640f436affa93a658fe5d74055adcc3a3bbcf5a369878",
-        "svg": "f3454692944fd7e83d8fbf08c27aba168a666840fe6a919254cb77f45128ca5d",
-        "pdf": "9466b040dab0377d432d51270245ed1b9455763eacaa0cc33bd370c12069acd6",
+        "svg": "fbe0646a68b9004851f66adc4942586cc95bfb2bc6a8573e5aa37a76a4362e70",
+        "pdf": "7af127c96dc3e61b1beb387492ce455336827a3fcabf92a528670e8e5478561d",
         "csv": "2f55713af197e63cc5ba4e31532362e5d41aa596fdf534854f488a5688a813b6"
       },
       "origin_data": {
@@ -85,8 +85,8 @@
       },
       "sha256": {
         "png": "493077fd052015bfe8a50ce74c2e223e160da732bbe4eb6b346209506d852793",
-        "svg": "66d77c01e2e12d5406ebe94588be0db3180a8f68f5fc6a0b87dc6ac898c8c3a3",
-        "pdf": "de647a5cc546de2ef7f9ccc040a98099bcb8403201420aef5ae64a66138b8952",
+        "svg": "9b4fbdc5ec7058c04818eab012840577bf42ce85023f08bdc06910c678d3460a",
+        "pdf": "c37c22ee243cf4b7957636eaa04c2deda52160e1ffc5c673b2817c280dbcdd96",
         "csv": "6dea595a042f88994d76fb2d4aea5d2bc15ef3839566f41d9808521c8f8eef57"
       },
       "origin_data": {
@@ -105,36 +105,6 @@
       "interpretative_analysis_pt": "A comparação em percentis [0, 100]% elimina o viés de tamanho de amostra presente na posição ordinal bruta. No experimento controlado, a mudança para referência local apresenta concordância Jaccard Top-5% de 0.776, promovendo 7 casos locais em circuitos leves e atenuando 6 cargas elevadas nominais de circuito pesado."
     },
     {
-      "figure_id": "fig_caso_908xxx00_fa_ra_completo",
-      "section_target": "Estudo de Caso 1 — UC 908***00",
-      "title": "Série temporal completa FA/RA e perfil intradiário da UC 908***00 (02/08 a 19/11/2026)",
-      "files": {
-        "png": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.png",
-        "svg": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.svg",
-        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.pdf",
-        "csv": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo_data.csv"
-      },
-      "sha256": {
-        "png": "29625c8d8dcbab9c076e09a425134f8cef5ca8d28bdee1a1211c2b8c8fe2b787",
-        "svg": "dc18aa763fec422a6441265ce2f743046cfc65f40ca28d2a7b5d5f817e01e43c",
-        "pdf": "2009527741dcc476c3a1cbe7652b468fb50bdf55df6fe23ce13b946d99709b35",
-        "csv": "47655bf9da3b1dcf4ac90c7d943f186b7e60649735b52f0fa8b4a8316d1c196a"
-      },
-      "origin_data": {
-        "uc_day_features_rows": 102,
-        "calendar_days": 110,
-        "feeder_anon": "Circuito F-10"
-      },
-      "parameters": {
-        "cadence_minutes": 10,
-        "window_days_oot": 30,
-        "cutoff": "2026-11-19"
-      },
-      "run_id": "20261123_124416_146_oot_multiview",
-      "caption_academic_pt": "Série temporal completa observada para a UC 908***00 (02/08 a 19/11/2026, medidor NIO-435***63): (A) energia ativa direta (FA) e reversa (RA) diárias com atualização administrativa em 31/10; (B) cobertura ajustada à cadência de 10 min; (C) comparação intradiária pré/pós-evento.",
-      "interpretative_analysis_pt": "O registro longitudinal demonstra queda persistente de FA após 31/10 (mediana de ~18,05 para 5,72 kWh/dia) acompanhada por 12 dias de injeção reversa RA em novembro (até 31,27 kWh/dia). Como o medidor NIO-435***63 permaneceu o mesmo durante a atualização cadastral, a correção de ciclo de vida redirecionou a UC para a hipótese diagnóstica POSSIVEL_GD_NAO_CADASTRADA (escore 0,9601), sem afirmar causa ou tecnologia antes de vistoria."
-    },
-    {
       "figure_id": "fig_caso_291xxx96_horarios_registradores",
       "section_target": "Estudo de Caso 2 — UC 291***96",
       "title": "Horários de leitura e evolução acumulada dos registradores da UC 291***96 (01/08 a 19/11/2026)",
@@ -146,8 +116,8 @@
       },
       "sha256": {
         "png": "ae636309e59a924fe3b7a5779e5a5417d955fbd2060ef568c054e85f0dd9ffa1",
-        "svg": "e583b33f395fac1a0323379c8238ebe746133d5a87794945eef9ce40a8aa4d94",
-        "pdf": "17033780b2a6c7671317fb5c40a62f2ea780dc8bb111ab5c642acdc3dc2119e0",
+        "svg": "f8da6aaa3b66aad8cf091f91485205387547fd8b765c666b54f6d3d9ba8f881f",
+        "pdf": "671d18d81b1b2ba3d34a7d7752a1911e7acb60e67fb5cbe7a83462a9a495c74d",
         "csv": "5eae242c1a94325134ee6ce62bdf2599565ca39a906da4bdadebdf9fb76abc5c"
       },
       "origin_data": {
@@ -160,7 +130,7 @@
         "interval_cadence_minutes": 10,
         "cutoff": "2026-11-19"
       },
-      "run_id": "20261123_124416_146_oot_multiview",
+      "run_id": "20261125_134559_972_oot_multiview",
       "caption_academic_pt": "Auditoria temporal da UC 291***96 (NIO-423***54, 01/08 a 19/11/2026): (A) evolução monotônica de 314 leituras do registrador RA_TOTAL (764,601 a 2.967,725 kWh), delta médio diário e hiatos de comunicação; (B) distribuição horária das leituras intervalares (144/dia) e dos snapshots de registrador (00h/06h/12h/18h UTC).",
       "interpretative_analysis_pt": "Mesmo constando DATA_REMOCAO=2026-06-11 no cadastro CIS, o medidor transmitiu 144 intervalos/dia (Δt=10 min) e 314 leituras acumuladoras até 05/11/2026, preservando o cômputo acumulado durante o hiato de 15 dias (21/10–04/11). O apagão final entre 06 e 19/11 explica a ausência de cadência bruta em 19/11 ('None') e a cobertura OOT de 3,33%, segregando a UC em quarentena técnica sem despacho comercial."
     },
@@ -176,8 +146,8 @@
       },
       "sha256": {
         "png": "cbb0d11fd898b28c98c047a3cd4a42c2c696d9f6ef99208aa79d39ba0c3e0c45",
-        "svg": "4e7c95cb71b7e210b76a4b70e19c2cd6d3543891ee9062fc0ac0b16c9c0738ea",
-        "pdf": "f26974a34ea6fb21e3c2db30d9c2a47d677f9d7321c650e7ca3d4046331e0226",
+        "svg": "4fc5a94fcb4378c11d9e704a82622a507a52c330e868e37e5024da6646369bdb",
+        "pdf": "f906e8d2d6587d41de52833d23cc3b2a915d16f6ad096852b57a1daa532ce990",
         "csv": "093778e46ed804485d449fb4a483d5b6de0a74ec1132193d6048fce35b8a51ce"
       },
       "origin_data": {
@@ -191,11 +161,41 @@
         "legacy_hourly_denom": 12,
         "native_hourly_denom": 6,
         "daily_denom": 144,
-        "oot_score_nov19": 0.8656
+        "oot_score_nov19": 0.985
       },
-      "run_id": "20261123_124416_146_oot_multiview",
+      "run_id": "20261125_134559_972_oot_multiview",
       "caption_academic_pt": "Reconciliação empírica da cobertura da UC 685***20 (NIO-437***86, Δt=10 min): (A) série horária real observada (29/10 a 04/11/2026); (B) cobertura horária calculada sobre denominador fixo de 5 min (6/12 = 50,0%) versus denominador nativo de 10 min (6/6 = 100,0%); (C) série de 30 dias com média 4.298/4.320 = 99,49%.",
       "interpretative_analysis_pt": "A aparente divergência entre 50,0% (gráfico horário legado) e 99,49% (janela de 30 dias em uc_day_features) não decorre de perda de pacotes nem de alteração nos dados: o medidor operou em cadência nativa de 10 minutos (6 leituras/h; 144 leituras/dia). Ao dividir por 12 (grade fixa de 5 min), obtinha-se 50,0% constante sem nenhum gap físico; no cômputo diário consciente de cadência (denominador 144/dia), apenas 25/10 (141/144) e 26/10 (125/144) tiveram perdas parciais, resultando exatamente em 99,49%."
+    },
+    {
+      "figure_id": "fig_caso_908xxx00_fa_ra_completo",
+      "section_target": "Estudo de Caso 1 — UC 908***00",
+      "title": "Série temporal completa FA/RA e perfil intradiário da UC 908***00 (02/08 a 19/11/2026)",
+      "files": {
+        "png": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.png",
+        "svg": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.svg",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.pdf",
+        "csv": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo_data.csv"
+      },
+      "sha256": {
+        "png": "a3b4b4abb38316bf7b93635524aeeb7a7e96685efe4ebd20920ef037659f9886",
+        "svg": "82abdd93d06669c662e3fc5eb0d86043fb9b021ada13eaad1d84f02935f2543c",
+        "pdf": "154c4285e06a8f63d1819c619d7d04c62bad8fa6177f7e817cc7248bcbbf7b4e",
+        "csv": "47655bf9da3b1dcf4ac90c7d943f186b7e60649735b52f0fa8b4a8316d1c196a"
+      },
+      "origin_data": {
+        "uc_day_features_rows": 102,
+        "calendar_days": 110,
+        "feeder_anon": "Circuito F-10"
+      },
+      "parameters": {
+        "cadence_minutes": 10,
+        "window_days_oot": 30,
+        "cutoff": "2026-11-19"
+      },
+      "run_id": "20261125_134559_972_oot_multiview",
+      "caption_academic_pt": "Série temporal completa observada para a UC 908***00 (02/08 a 19/11/2026, medidor NIO-435***63): (A) energia ativa direta (FA) e reversa (RA) diárias com atualização administrativa em 31/10; (B) cobertura ajustada à cadência de 10 min; (C) comparação intradiária pré/pós-evento.",
+      "interpretative_analysis_pt": "O registro longitudinal demonstra queda persistente de FA após 31/10 (mediana de ~18,05 para 5,72 kWh/dia) acompanhada por 12 dias de injeção reversa RA em novembro (até 31,27 kWh/dia). Como o medidor NIO-435***63 permaneceu o mesmo durante a atualização cadastral, a correção de ciclo de vida redirecionou a UC para a hipótese diagnóstica POSSIVEL_GD_NAO_CADASTRADA (escore 0,9601), sem afirmar causa ou tecnologia antes de vistoria."
     },
     {
       "figure_id": "fig_4_4a_tui_menu_governanca",

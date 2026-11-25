@@ -1,0 +1,467 @@
+{
+  "generated_at": "2026-11-25",
+  "git_commit_code": "c1539b4",
+  "suite_index": "experiments/runs/latest_suite.json",
+  "runs": {
+    "audit": {
+      "run_dir": "experiments/runs/20261125_134532_048_audit",
+      "run_id": "20261125_134532_048_audit",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "audit",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      }
+    },
+    "daily_rules": {
+      "run_dir": "experiments/runs/20261125_134535_754_daily_rules",
+      "run_id": "20261125_134535_754_daily_rules",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "daily_rules",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      },
+      "metrics_sha256": "aa1ebe1fbb2d44c529dbca81659346ebc1426eccd35f70b7bfc857f3d0cec977"
+    },
+    "oot_multiview": {
+      "run_dir": "experiments/runs/20261125_134559_972_oot_multiview",
+      "run_id": "20261125_134559_972_oot_multiview",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "oot_multiview",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      },
+      "metrics_sha256": "b6f4a62a7e63bfaa54fde7dc2ae4981d1d522e542ae6fdd016708ce3d949a00c"
+    },
+    "ablation": {
+      "run_dir": "experiments/runs/20261125_134849_083_ablation_m0_m5",
+      "run_id": "20261125_134849_083_ablation_m0_m5",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "ablation_m0_m5",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      },
+      "metrics_sha256": "28c87aceff5d0eff7eb699b862eef0792cd467b9b5ad8496403d61290c19ba75"
+    },
+    "gating": {
+      "run_dir": "experiments/runs/20261125_134940_636_gating_sensitivity",
+      "run_id": "20261125_134940_636_gating_sensitivity",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "gating_sensitivity",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      },
+      "metrics_sha256": "542e08161238db4e1efb587b5c3f3d2ab5ce9de75de3e95ff81f4e6daafdac7d"
+    },
+    "score_stability": {
+      "run_dir": "experiments/runs/20261125_135109_678_score_stability",
+      "run_id": "20261125_135109_678_score_stability",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "score_stability",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      },
+      "metrics_sha256": "41e58b64a242ad1ba3f8006f05f3943983044315e54c512471e1643ffe208f6b"
+    },
+    "case_traces": {
+      "run_dir": "experiments/runs/20261125_135558_880_case_traces",
+      "run_id": "20261125_135558_880_case_traces",
+      "status": "validated",
+      "invariants_verified": true,
+      "git_commit": "c1539b4",
+      "config_sha256": "8e011bc82efb36aed53fb514015b39a9f6a826cf665e68fa84b9f167ced14e30",
+      "config": {
+        "experiment_id": "november_2026",
+        "data_source": "local_lake",
+        "scope": "study_area",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-19",
+        "timezone": "America/Sao_Paulo",
+        "unit_of_analysis": "uc_cutoff",
+        "pipeline_id": "case_traces",
+        "train": {
+          "end_date": "2026-10-31",
+          "artifact_id": "train_aug_sep_oct_2026_v1"
+        },
+        "inference": {
+          "frozen_preprocessing": true,
+          "frozen_model": true,
+          "frozen_thresholds": true,
+          "normalization_mode": "frozen_quantile"
+        },
+        "quality": {
+          "coverage_threshold": 0.7,
+          "min_window_coverage": 0.6,
+          "min_reliable_days": 15
+        },
+        "execution": {
+          "seed": 42,
+          "resume": true,
+          "overwrite": false
+        }
+      },
+      "environment": {
+        "python": "3.14.7",
+        "os": "Windows-11-10.0.26300-SP0",
+        "polars": "1.41.2",
+        "numpy": "2.5.3",
+        "sklearn": "1.9.1"
+      }
+    }
+  },
+  "frozen_model": {
+    "experiments\\runs\\20261125_134559_972_oot_multiview\\frozen_multiview_model.joblib.meta.json": {
+      "bytes": 630,
+      "sha256": "34185e7472b972a322d2505639a56d76479052d93150e6f2b4ec069f2b0a3d37"
+    },
+    "experiments\\runs\\20261125_134559_972_oot_multiview\\frozen_multiview_model.joblib.part00": {
+      "bytes": 26214400,
+      "sha256": "cb9ac3cbe2be383d589dd99cd82aad1327c5ef7f4233e1a7dfb9cd6db7fe3ab1"
+    },
+    "experiments\\runs\\20261125_134559_972_oot_multiview\\frozen_multiview_model.joblib.part01": {
+      "bytes": 20394232,
+      "sha256": "c02d9747bb1f177fa992cff4b0e209098ce555cb01a62db8819a60a2abcf448d"
+    },
+    "experiments\\runs\\20261125_134559_972_oot_multiview\\frozen_normalization_params.json": {
+      "bytes": 1738,
+      "sha256": "8d6d10b264299520844924e35074cbbfb0bae21130e2be8838d0f1cd529394f7"
+    }
+  },
+  "fact_tables": {
+    "oot_decisions": {
+      "path": "experiments/runs/20261125_134559_972_oot_multiview/decisions.parquet",
+      "bytes": 5032997,
+      "sha256": "2074d5b5ab9860a3601de73aabba20b5e4076cbb0fc07334bc28fba2923b3788"
+    },
+    "oot_calibrated_scores": {
+      "path": "experiments/runs/20261125_134559_972_oot_multiview/calibrated_scores.parquet",
+      "bytes": 1919223,
+      "sha256": "f1822e5afc7a2bc26ba7b97cefb1e3d5f78a0e81ab372b18dd3cf7325732b37c"
+    },
+    "oot_candidate_sets": {
+      "path": "experiments/runs/20261125_134559_972_oot_multiview/candidate_sets.parquet",
+      "bytes": 612764,
+      "sha256": "2c5762b54a7e1fc3227b85cb20ea4f0d49d3fb8cd13983cb8fbf531077217be3"
+    },
+    "daily_metrics_csv": {
+      "path": "experiments/runs/20261125_134535_754_daily_rules/daily_metrics.csv",
+      "bytes": 2193,
+      "sha256": "b4dec053750c1fdc9ca0320a01a76dee7069342e1f8702aaf37d013559cc976c"
+    },
+    "daily_decisions": {
+      "path": "experiments/runs/20261125_134535_754_daily_rules/decisions.parquet",
+      "bytes": 19707958,
+      "sha256": "143907466ec1889ab8b2e5496699d4b0dfd03dbcff2bcab30afda45dc97ebadb"
+    },
+    "ablation_funnel_csv": {
+      "path": "experiments/runs/20261125_134849_083_ablation_m0_m5/ablation_funnel.csv",
+      "bytes": 305,
+      "sha256": "6fa35f8a53cfc02d20307055e18eada36f3fbd45ad23532328c35d3a60a37097"
+    },
+    "ablation_subdetectors_csv": {
+      "path": "experiments/runs/20261125_134849_083_ablation_m0_m5/ablation_subdetectors.csv",
+      "bytes": 821,
+      "sha256": "264210d585a35714cb121e153a1f1144213139f2cd0acf8682decd1f8338cab9"
+    },
+    "gating_sensitivity_csv": {
+      "path": "experiments/runs/20261125_134940_636_gating_sensitivity/gating_sensitivity.csv",
+      "bytes": 478,
+      "sha256": "98f829a2f0ec23b3ebe0527313a401f2e6e2e9b7a280921bf8fe2b2d284ca836"
+    },
+    "score_stability_csv": {
+      "path": "experiments/runs/20261125_135109_678_score_stability/score_stability_comparison.csv",
+      "bytes": 189,
+      "sha256": "41c173f0f8a5fb9e15611aad36db7e2d5474a7c733d4c4c6b65ef5c0c3d45971"
+    },
+    "detector_audit_csv": {
+      "path": "experiments/runs/20261125_135109_678_score_stability/detector_individual_audit.csv",
+      "bytes": 450,
+      "sha256": "c020e531d470bd482b15aeb4c2e76414fe904e20a0b2fd5406f5d691fdac0e3b"
+    },
+    "case_traces_masked_csv": {
+      "path": "experiments/runs/20261125_135558_880_case_traces/case_traces_masked.csv",
+      "bytes": 9524,
+      "sha256": "664d99810736c727d3a258aa7ca861fe8fb5d10ea1950f480158ab9f328ba271"
+    }
+  },
+  "manuscript_figures": {
+    "catalog_sha256": "82d8d6438b6fbb76f1e99e76b6eb5d8acaee4bbe6bf639a4148adecadf533ead",
+    "figures": [
+      {
+        "figure_id": "fig_5_1a_isolation_forest_microcluster",
+        "run_id": "controlled_benchmark_v1_seed42",
+        "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1a_isolation_forest_microcluster.pdf",
+        "pdf_sha256": "cdef7d53af95f8661f3958d7a4be464d19a2435df086d69eb91006485cacb994"
+      },
+      {
+        "figure_id": "fig_5_1b_lof_escala_propria",
+        "run_id": "controlled_benchmark_v1_seed42",
+        "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria.pdf",
+        "pdf_sha256": "7af127c96dc3e61b1beb387492ce455336827a3fcabf92a528670e8e5478561d"
+      },
+      {
+        "figure_id": "fig_5_1c_contextualizacao_percentis",
+        "run_id": "controlled_benchmark_v1_seed42",
+        "pdf": "docs/manuscript_figures/ml_controlled_panels/fig_5_1c_contextualizacao_percentis.pdf",
+        "pdf_sha256": "c37c22ee243cf4b7957636eaa04c2deda52160e1ffc5c673b2817c280dbcdd96"
+      },
+      {
+        "figure_id": "fig_caso_291xxx96_horarios_registradores",
+        "run_id": "20261125_134559_972_oot_multiview",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_291xxx96_horarios_registradores.pdf",
+        "pdf_sha256": "671d18d81b1b2ba3d34a7d7752a1911e7acb60e67fb5cbe7a83462a9a495c74d"
+      },
+      {
+        "figure_id": "fig_caso_685xxx20_reconciliacao_cobertura",
+        "run_id": "20261125_134559_972_oot_multiview",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura.pdf",
+        "pdf_sha256": "f906e8d2d6587d41de52833d23cc3b2a915d16f6ad096852b57a1daa532ce990"
+      },
+      {
+        "figure_id": "fig_caso_908xxx00_fa_ra_completo",
+        "run_id": "20261125_134559_972_oot_multiview",
+        "pdf": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.pdf",
+        "pdf_sha256": "154c4285e06a8f63d1819c619d7d04c62bad8fa6177f7e817cc7248bcbbf7b4e"
+      },
+      {
+        "figure_id": "fig_4_4a_tui_menu_governanca",
+        "run_id": "20261123_124416_146_oot_multiview",
+        "pdf": null,
+        "pdf_sha256": null
+      },
+      {
+        "figure_id": "fig_4_4b_tui_calendario_auditoria",
+        "run_id": "20261123_124342_976_audit",
+        "pdf": null,
+        "pdf_sha256": null
+      },
+      {
+        "figure_id": "fig_4_4c_cockpit_carteira_candidatos",
+        "run_id": "20261123_124416_146_oot_multiview",
+        "pdf": null,
+        "pdf_sha256": null
+      },
+      {
+        "figure_id": "fig_4_4d_cockpit_raiox_uc_908xxx00",
+        "run_id": "20261123_124416_146_oot_multiview",
+        "pdf": null,
+        "pdf_sha256": null
+      }
+    ]
+  }
+}

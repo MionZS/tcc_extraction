@@ -1,0 +1,16 @@
+{
+  "pipeline_id": "daily_rules",
+  "start_date": "2026-11-01",
+  "end_date": "2026-11-19",
+  "n_cutoffs": 19,
+  "total_windows_evaluated": 1248501,
+  "distinct_ucs": 65908,
+  "last_day_total_pop": 65686,
+  "last_day_eligible": 62986,
+  "last_day_quarantine": 2497,
+  "last_day_other": 203,
+  "last_day_candidates": 4978,
+  "last_day_legacy_uncalibrated": 28368,
+  "mean_daily_candidates": 5387.74,
+  "runtime_sec": 23.33
+}

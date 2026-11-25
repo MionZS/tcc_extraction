@@ -10,8 +10,8 @@
   },
   "sha256": {
     "png": "ae636309e59a924fe3b7a5779e5a5417d955fbd2060ef568c054e85f0dd9ffa1",
-    "svg": "e583b33f395fac1a0323379c8238ebe746133d5a87794945eef9ce40a8aa4d94",
-    "pdf": "17033780b2a6c7671317fb5c40a62f2ea780dc8bb111ab5c642acdc3dc2119e0",
+    "svg": "f8da6aaa3b66aad8cf091f91485205387547fd8b765c666b54f6d3d9ba8f881f",
+    "pdf": "671d18d81b1b2ba3d34a7d7752a1911e7acb60e67fb5cbe7a83462a9a495c74d",
     "csv": "5eae242c1a94325134ee6ce62bdf2599565ca39a906da4bdadebdf9fb76abc5c"
   },
   "origin_data": {
@@ -24,7 +24,7 @@
     "interval_cadence_minutes": 10,
     "cutoff": "2026-11-19"
   },
-  "run_id": "20261123_124416_146_oot_multiview",
+  "run_id": "20261125_134559_972_oot_multiview",
   "caption_academic_pt": "Auditoria temporal da UC 291***96 (NIO-423***54, 01/08 a 19/11/2026): (A) evolução monotônica de 314 leituras do registrador RA_TOTAL (764,601 a 2.967,725 kWh), delta médio diário e hiatos de comunicação; (B) distribuição horária das leituras intervalares (144/dia) e dos snapshots de registrador (00h/06h/12h/18h UTC).",
   "interpretative_analysis_pt": "Mesmo constando DATA_REMOCAO=2026-06-11 no cadastro CIS, o medidor transmitiu 144 intervalos/dia (Δt=10 min) e 314 leituras acumuladoras até 05/11/2026, preservando o cômputo acumulado durante o hiato de 15 dias (21/10–04/11). O apagão final entre 06 e 19/11 explica a ausência de cadência bruta em 19/11 ('None') e a cobertura OOT de 3,33%, segregando a UC em quarentena técnica sem despacho comercial."
 }
