@@ -1,0 +1,97 @@
+\chapter{Resultados e discussão}\label{resultados-e-discussao}
+\section{Protocolo de comparação e proveniência}
+Os resultados apresentados neste capítulo correspondem a duas execuções retrospectivas consolidadas sobre a mesma base histórica: a inferência fora do período de ajuste (\texttt{OOT\_MULTIVIEW}, ajustada nos cortes de 31/08, 30/09 e 31/10/2026 com 189.341 amostras elegíveis e avaliada em 19/11/2026) e o monitoramento diário calibrado por regras (\texttt{DAILY\_RULES}, cobrindo 19 cortes diários entre 1\textordmasculine{} e 19/11/2026). Para garantir reprodutibilidade integral, todas as execuções foram versionadas com parâmetros de pré-processamento, quantis de normalização e limiares congelados no conjunto de ajuste. O funil sequencial e a ablação interna dos detectores possuem critérios próprios, descrevendo a composição da lista e a estabilidade dos escores.
+\section{Inferência multivisão fora do período de ajuste}
+Em 19 de novembro de 2026, avaliaram-se 65.686 UCs. A política de qualidade classificou 62.857 como elegíveis (95,69\%) e 2.829 em quarentena (4,31\%). O escore médio populacional foi 0,2944 e o percentil 95 atingiu 0,9115. A política multivisão selecionou 6.333 candidatos, definidos pela combinação do escore elétrico acima do limiar congelado ($\tau_{train}=0{,}5226$) com elegibilidade de cobertura ($G_i=1$) e ativação das regras diagnósticas de prioridade elétrica ou metrológica. O Isolation Forest (IF) de referência, com limiar congelado de 0,643, selecionou 3.122. A diferença de contagens mede seletividade sob políticas distintas.
+
+A Tabela \ref{classes} discrimina os destinos diagnósticos exclusivos atribuídos às 65.686 unidades. A soma das três categorias de caráter elétrico ou metrológico (anomalia elétrica, possível geração distribuída e falha metrológica: $4.155 + 1.451 + 748 = 6.354$ UCs) difere em apenas 21 unidades dos 6.333 candidatos selecionados porque a categorização diagnóstica cobre toda a coorte, ao passo que a elegibilidade à fila de candidatos aplica restrições adicionais de cobertura e materialidade. Já as 12.056 UCs classificadas em mudança de classe comportamental decorrem de transições de rótulo entre arquétipos de carga na janela comparada, não constituindo escore calibrado de anomalia nem integrando automaticamente a carteira de 6.333 candidatos.
+
+\begin{table}[htbp]\centering\small\caption{Distribuição das hipóteses diagnósticas no OOT de 19 de novembro}\label{classes}
+\begin{tabular}{>{\raggedright\arraybackslash}p{\dimexpr 0.8\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2\linewidth-2\tabcolsep\relax}}\toprule
+Hipótese ou estado analítico & UCs \\ \midrule
+Operação regular segundo os critérios da política & 44.403 \\
+Mudança de classe comportamental & 12.056 \\
+Anomalia elétrica compatível com hipótese de PNT & 4.155 \\
+Gargalo coletivo da rede de comunicação por rádio & 1.829 \\
+Possível geração distribuída sem correspondência cadastral & 1.451 \\
+Anomalia isolada de comunicação & 910 \\
+Hipótese de falha metrológica com registrador travado & 748 \\
+Início de perfil de nova UC & 71 \\
+Transição associada à troca de medidor & 63 \\
+Total & 65.686 \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir dos dados e métodos do estudo.
+\end{table}
+\section{Série diária calibrada e dinâmica das listas}
+A série DAILY\_RULES acumulou 1.248.501 janelas UC \ensuremath{\times} corte entre 1\textordmasculine{} e 19 de novembro. A média foi de 5.387,7 candidatos por dia. A lista passou por um máximo de 6.728 em 2 de novembro e um mínimo de 4.737 em 15 de novembro. No último corte, 4.978 UCs integraram a lista, das quais 4.342 permaneceram em relação à véspera e 636 ingressaram. Outras 588 saíram da lista do dia anterior. Assim, a variação líquida de 48 UCs reconciliou a passagem de 4.930 para 4.978.
+
+\begin{figure}[htbp]\centering\caption{Candidatos e transições da lista diária sob a regra calibrada, de 1\textordmasculine{} a 19 de novembro}\label{diaria}
+\includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/diaria.pdf}
+\par\small Fonte: elaboração própria com base nos 19 cortes diários calibrados.
+\end{figure}
+Na Figura \ref{diaria}, o primeiro ponto estabeleceu o estoque inicial de 6.404 candidatos. As barras de movimento começam no segundo dia, primeira data com comparação entre dois cortes observados. A saída da lista representa perda de pertinência ao critério do dia. A inferência OOT produziu 6.333 candidatos na mesma data final sob ajuste e política próprios. A diferença líquida de 1.355 entre as listas não identifica quais UCs trocaram de prioridade. A série histórica legada, próxima de 30 mil candidatos, utilizava uma regra de desequilíbrio de corrente sem restrição de materialidade e não corresponde à política calibrada da Figura \ref{diaria}. De 2 a 6 de novembro, a lista calibrada passou de 6.728 para 5.327; em 6/11, as 612 entradas e 735 saídas produziram saldo de $-123$. O movimento descreve a pertinência à regra diária, sem estabelecer a causa física de cada transição. A comparação de identidades entre o OOT e a série por regras exige a interseção nominal no mesmo corte.
+
+\section{Sensibilidade da cobertura, ablação e composição do Top-K}
+No ensaio de sensibilidade, manteve-se a coorte de 65.686 UCs e variou-se o limiar de cobertura entre 50\% e 90\%. A Tabela \ref{gating} apresenta a população elegível e a divisão dos candidatos elétricos do ensaio entre retenção e quarentena. A elevação de 70\% para 90\% reduziu os elegíveis de 62.857 para 59.091 e alterou a composição da lista. As contagens de sinalizações brutas variaram entre linhas. O desenho mede a resposta da política avaliada em cada limiar, e não apenas a aplicação de uma máscara sobre escores fixos. Os candidatos interceptados não constituem falsos negativos confirmados.
+
+\begin{table}[htbp]\centering\small\caption{Sensibilidade à cobertura no corte de 19 de novembro}\label{gating}
+\begin{tabular}{>{\raggedright\arraybackslash}p{\dimexpr 0.13\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.17\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.18\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.16\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.16\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2\linewidth-2\tabcolsep\relax}}\toprule
+Limiar & Elegíveis & Quarentena & Brutos & Retidos & Interceptados \\ \midrule
+50\% & 63.371 & 2.315 & 7.169 & 6.451 & 718 \\
+60\% & 63.111 & 2.575 & 7.126 & 6.295 & 831 \\
+70\% & 62.857 & 2.829 & 7.226 & 6.311 & 915 \\
+80\% & 61.530 & 4.156 & 7.423 & 6.246 & 1.177 \\
+90\% & 59.091 & 6.595 & 7.722 & 5.822 & 1.900 \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir dos dados e métodos do estudo.
+\end{table}
+A 70\%, o ensaio de cobertura e o OOT tiveram 5.917 candidatos comuns. Outros 416 foram exclusivos do OOT e 394 exclusivos do ensaio de cobertura. A diferença líquida de 22 ocultaria 810 pertinências exclusivas. Na comparação da ordenação com a referência sem filtro, a correlação de Spearman a 70\% foi 0,9952, com Jaccard de 0,804 no Top-5\%. A concordância global elevada permitiu mudanças relevantes na extremidade de interesse.
+
+\begin{figure}[htbp]\centering\caption{Resposta ao limiar de cobertura e funil sequencial no corte OOT}\label{funil}
+\includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/funil.pdf}
+\par\small Fonte: elaboração própria com base nos ensaios de cobertura e ablação de novembro.
+\end{figure}
+A Figura \ref{funil} apresenta as duas experiências no mesmo corte. No funil, M0 e M1 reuniram as mesmas 65.686 UCs, pois a coorte continha uma observação por unidade. M2 manteve 62.857 com cobertura adequada. M3 exigiu alimentador e preservou 58.857. M4 reteve 4.390 por critérios estatísticos e elétricos e M5 manteve as mesmas 4.390 após o filtro operacional. Os estágios formam conjuntos aninhados que admitem igualdade. A igualdade M4 = M5 caracteriza apenas o corte analisado e não demonstra redundância geral da etapa M5. As 1.943 UCs que completam a diferença para os 6.333 candidatos gerais não possuíam alimentador cadastrado para a análise contextual.
+
+No ensaio interno, fixou-se um orçamento de 2.000 posições. O índice de Jaccard entre duas listas é a cardinalidade da interseção dividida pela da união. Na Tabela \ref{ablacao}, 1.790 UCs comuns em duas listas de 2.000 implicaram união de 2.210 e índice de aproximadamente 0,8100. A substituição de 210 UCs correspondeu a 210 entradas e 210 saídas de identidade.
+
+\begin{table}[htbp]\centering\small\caption{Sensibilidade do ranking à retirada de detectores}\label{ablacao}
+\begin{tabular}{>{\raggedright\arraybackslash}p{\dimexpr 0.22\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.14\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.16\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.16\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.15\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.17\linewidth-2\tabcolsep\relax}}\toprule
+Variante & Spearman & Jaccard Top-5\% & Comuns & Trocas & Jaccard Top-2.000 \\ \midrule
+Comitê completo & 1,0000 & 1,0000 & 2.000 & 0 & 1,0000 \\
+Sem LOF & 0,9893 & 0,8326 & 1.790 & 210 & 0,8100 \\
+Sem PCA & 0,9968 & 0,8714 & 1.868 & 132 & 0,8762 \\
+Núcleo de quatro & 0,9859 & 0,7677 & 1.716 & 284 & 0,7513 \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir dos dados e métodos do estudo.
+\end{table}
+\section{Correlação, empates e estabilidade das escalas}
+Na comparação histórica de 66.099 UCs, o ajuste elétrico sobre 62.766 elegíveis empregou 16 atributos. A Figura \ref{correlacao} apresenta as correlações de postos entre seis detectores e o consenso dessa execução. IF e ECOD alcançaram 0,95, e ECOD e COPOD, 0,90. A correlação com o consenso foi 0,0202 para LOF e \ensuremath{-}0,2030 para PCA residual. A concordância mede ordenação compartilhada, e sua leitura exige examinar orientação, empates e saturação de cada componente.
+
+\begin{figure}[htbp]\centering\caption{Correlação de Spearman entre os detectores e o consenso na coorte histórica}\label{correlacao}
+\includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/correlacao.pdf}
+\par\small Fonte: elaboração própria com base nos coeficientes da coorte histórica.
+\end{figure}
+O LOF apresentou mediana, percentis 95 e 99 iguais a zero na precisão de quatro casas decimais, com Jaccard de 0,022 no Top-5\% contra o consenso, enquanto o ECOD alcançou 0,672 nessa última medida. Esse comportamento possui causa matemática identificada na arquitetura de pré-processamento e normalização: entre os 16 atributos elétricos utilizados, há variáveis nominais discretas e indicadores esparsos com zeros estruturais (como tensão nominal, demanda contratada, potência instalada e bandeira de consumo nulo). Em consequência, mais de 1\% das UCs compartilha distâncias aos $k=20$ vizinhos mais próximos praticamente nulas, fazendo com que $P_{01} \approx P_{99}$ no escore bruto do LOF; ao acionar o \emph{fallback} para os extremos mínimo e máximo de treino, um único pico extremo de densidade inversa eleva o denominador da escala min--max e comprime 99\% dos escores normalizados para próximo de zero. Já no ensaio OOT de três meses (189.341 amostras), a menor incidência relativa de empates preservou variação suficiente para alterar 210 posições no Top-2.000.
+
+De modo análogo, a correlação negativa do resíduo da PCA ($\rho = -0{,}2030$) decorre de dois fatores: (i) a aplicação de \texttt{RobustScaler} antes da PCA deixa variáveis esparsas com $\mathrm{IQR}=0$ sem padronização de variância, e (ii) o erro quadrático de reconstrução no subespaço de 10 componentes mede o \textbf{afastamento ortogonal às correlações lineares} entre atributos, e não a magnitude extrema nas caudas marginais capturada por IF, ECOD, COPOD e HBOS (que concentram 68\% do peso do consenso). Consumidores de grande porte com relações proporcionais preservadas apresentam escore elevado nos detectores marginais e resíduo ortogonal reduzido na PCA, invertendo a correlação de postos. Como remediação estrutural no detector composto, implementaram-se compressão logarítmica ($\ln(1 + \max(0, \mathrm{LOF}-1))$) com \emph{fallback} para $P_{99,9}$ no LOF e padronização por variância (\texttt{StandardScaler}) interna ao detector PCA para futuras campanhas.
+
+Na experiência de estabilidade sobre 65.686 UCs, a retirada do 1\% extremo deixou 65.029 observações. A normalização pelos extremos de cada lote produziu deslocamento médio absoluto de 0,033952 e máximo de 0,1865. Com os quantis de referência congelados, ambos foram zero nessa perturbação. O resultado demonstrou invariância à composição do lote no teste realizado. A distribuição de entrada pode mudar com a estação, a tecnologia de medição ou a expansão do parque.
+
+\section{Estudos de caso e anatomia da detecção}\label{estudo-de-caso-e-anatomia-da-detecuxe7uxe3o}
+O exame longitudinal integra grandezas elétricas, cobertura, vínculo histórico e hipótese diagnóstica. O par de UCs da análise exploratória mostrou que a energia agregada pode ocultar diferenças importantes de forma e dispersão. Os casos a seguir ilustram o exame das evidências de mudança e das inconsistências de qualidade.
+
+Na UC 908***00, o cadastro registrou atualização em 31 de outubro, embora as medições anteriores permanecessem vinculadas ao mesmo NIO. Houve intervalo de indisponibilidade de dois dias e mudança persistente por 20 dias. A FA passou de 18,05 para 5,72 kWh/dia, queda aproximada de 68,3\%. Registrou-se RA em 12 dias posteriores, entre 14 e 31 kWh/dia nos dias com injeção. O escore elétrico individual atingiu 0,9601. A Figura \ref{caso} distingue os dois patamares de FA do intervalo de RA observado.
+
+\begin{figure}[htbp]\centering\caption{Patamares de energia direta e faixa de energia reversa na UC 908***00}\label{caso}
+\includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/caso.pdf}
+\par\small Fonte: elaboração própria com base na reconstrução longitudinal da UC.
+\end{figure}
+A continuidade do NIO é compatível com a preservação do histórico do mesmo equipamento, sem sustentar, isoladamente, ausência de intervenção física. A combinação de mudança de patamar e fluxo reverso sustentou a hipótese de GD a confrontar com o cadastro. Alterações de carga, ligação e condições de medição também merecem exame.
+
+Na UC 291***96, a completude horária aparente atingiu 50\%, e a análise do registrador acumulado indicou integridade de 100\% no recorte examinado e consumo diário estável da ordem de 28 kWh. Se a cadência efetiva fosse de dez minutos, seis amostras por hora corresponderiam à metade das doze posições de uma grade de cinco minutos. A leitura sustentou investigação da medição e da comunicação antes da atribuição de falha.
+
+De modo análogo, na UC 685***20, a apuração horária em grade fixa de 168 horas entre 29 de outubro e 4 de novembro exibiu cobertura aparente de aproximadamente 50\%, enquanto a janela analítica no corte de 4 de novembro registrou cobertura de 99,49\% e escore de 0,6212. A divergência decorre da diferença de denominador entre a grade horária fixa e a janela diária consolidada, ilustrando a necessidade de alinhar canal, cadência, período e denominador antes de aplicar o limiar de 70\%.
+
+
+

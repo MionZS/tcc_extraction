@@ -26,7 +26,7 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import IsolationForest
 from sklearn.impute import SimpleImputer
 from sklearn.neighbors import LocalOutlierFactor
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import RobustScaler, StandardScaler
 
 try:
     import pyod  # type: ignore[import-untyped]
@@ -101,11 +101,13 @@ def _compute_norm_params(raw_scores: np.ndarray) -> dict[str, Any]:
     p50 = float(np.percentile(s, 50.0))
     p75 = float(np.percentile(s, 75.0))
     p99 = float(np.percentile(s, 99.0))
+    p999 = float(np.percentile(s, 99.9))
     return {
         "min": float(np.min(s)),
         "max": float(np.max(s)),
         "p01": p01,
         "p99": p99,
+        "p999": p999,
         "median": p50,
         "iqr": max(p75 - p25, 1e-9),
         "sorted_raw": np.sort(s),
@@ -130,9 +132,11 @@ def _normalize_with_params(
         ranks = np.searchsorted(sorted_ref, s, side="right")
         return np.clip(ranks.astype(float) / float(n_ref), 0.0, 1.0)
 
-    # Default: "frozen_quantile" (anchored at training P01 and P99, fallback to min/max if degenerate)
+    # Default: "frozen_quantile" (anchored at training P01 and P99, fallback to P99.9 then min/max if degenerate)
     lo = float(params["p01"])
     hi = float(params["p99"])
+    if hi - lo < 1e-12:
+        hi = float(params.get("p999", params["max"]))
     if hi - lo < 1e-12:
         lo = float(params["min"])
         hi = float(params["max"])
@@ -292,26 +296,31 @@ class RobustPCADetector:
     def __init__(self, variance_retained: float = 0.85, random_state: int = 42) -> None:
         self.variance_retained = variance_retained
         self.random_state = random_state
+        self.scaler_: StandardScaler | None = None
         self.pca_: PCA | None = None
 
     def fit(self, X: np.ndarray) -> "RobustPCADetector":
         n_samples, n_features = X.shape
         if n_features <= 1 or n_samples <= 2:
+            self.scaler_ = None
             self.pca_ = None
             return self
 
-        n_comp = max(1, min(n_features - 1, int(np.ceil(n_features * 0.6))))
+        self.scaler_ = StandardScaler()
+        X_std = self.scaler_.fit_transform(X)
+        n_comp = max(1, min(n_samples - 1, n_features - 1, int(np.ceil(n_features * 0.6))))
         self.pca_ = PCA(n_components=n_comp, random_state=self.random_state)
-        self.pca_.fit(X)
+        self.pca_.fit(X_std)
         return self
 
     def score_samples(self, X: np.ndarray) -> np.ndarray:
-        """Return L2 reconstruction error per sample."""
+        """Return L2 reconstruction error per sample in standardized feature space."""
         if self.pca_ is None:
             return np.linalg.norm(X, axis=1)
-        X_proj = self.pca_.transform(X)
+        X_eval = self.scaler_.transform(X) if self.scaler_ is not None else X
+        X_proj = self.pca_.transform(X_eval)
         X_rec = self.pca_.inverse_transform(X_proj)
-        return np.mean((X - X_rec) ** 2, axis=1)
+        return np.mean((X_eval - X_rec) ** 2, axis=1)
 
 
 class CompositeAnomalyDetector:
@@ -353,7 +362,7 @@ class CompositeAnomalyDetector:
             "pca": 0.12,
         }
 
-        self.imputer = SimpleImputer(strategy="median")
+        self.imputer = SimpleImputer(strategy="median", keep_empty_features=True)
         self.scaler = RobustScaler()
 
         self.iso_forest = IsolationForest(
@@ -391,7 +400,8 @@ class CompositeAnomalyDetector:
 
         return {
             "iso_forest": -self.iso_forest.score_samples(X_scaled),
-            "lof": -self.lof.score_samples(X_scaled),
+            # Log-compress raw LOF to prevent k-distance=0 tie spikes (1e10) from crushing P01-P99
+            "lof": np.log1p(np.maximum(-self.lof.score_samples(X_scaled) - 1.0, 0.0)),
             "ecod": self.ecod.score_samples(X_scaled),
             "copod": copod_det.score_samples(X_scaled),
             "hbos": hbos_det.score_samples(X_scaled),

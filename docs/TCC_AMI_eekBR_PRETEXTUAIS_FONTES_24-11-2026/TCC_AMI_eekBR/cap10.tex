@@ -1,0 +1,36 @@
+\chapter{Saídas como padrões de compatibilidade}\label{sauxeddas-como-padruxf5es-de-compatibilidade}
+
+A saída analítica evita diagnósticos causais não sustentados. Em vez de emitir ``irregularidade confirmada por evidência independente'', o sistema utiliza classes como:
+
+\begin{itemize}
+\item
+  padrão compatível com redução abrupta de carga;
+\item
+  padrão compatível com geração local;
+\item
+  padrão compatível com problema de medição;
+\item
+  padrão compatível com degradação de telemetria;
+\item
+  comportamento estatisticamente atípico;
+\item
+  comportamento corroborado ou não corroborado pela vizinhança.
+\end{itemize}
+
+A qualificação operacional ocorre por cruzamento de evidências.
+
+Exemplo:
+
+\begin{verbatim}
+queda persistente de FA
++ tensão estável
++ boa cobertura
++ ausência de mudança coletiva entre pares com vínculo conhecido
++ alarme físico próximo ao t*
+        -> prioridade elevada para análise
+\end{verbatim}
+
+A proposta de revisão humana é coerente com a necessidade de tornar o resultado acionável sem substituir a decisão de campo.
+
+
+
