@@ -6,7 +6,7 @@ O pipeline desacopla estritamente as ordens de serviço em dois destinos operaci
 
 1. **Fila de Vistoria de Campo Comercial / Perdas Não Técnicas (`DESTINO_OPERACIONAL = "VISTORIA_CAMPO_PERDAS"`):**
    - **Flag:** `IS_CANDIDATO_VISTORIA = True`
-   - **Critérios:** Telemetria com qualidade de dados suficiente (`COVERAGE_RELIABLE_DAYS >= 15` e `AVG_INTERVAL_COVERAGE >= 0.70`), UC não em iniciação de ciclo de vida (`is_new_uc_initiation = False`), score elétrico $\ge 0.5226$, e enquadramento em hipótese diagnóstica de desvio elétrico (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`).
+   - **Critérios:** Telemetria com qualidade de dados suficiente (`COVERAGE_RELIABLE_DAYS >= 15` e `AVG_INTERVAL_COVERAGE >= 0.70`), UC não em iniciação de ciclo de vida (`is_new_uc_initiation = False`), score elétrico $\ge 0.5131$, e enquadramento em hipótese diagnóstica de desvio elétrico (`ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT`, `POSSIVEL_GD_NAO_CADASTRADA`, `FALHA_METROLOGICA_MEDIDOR_TRAVADO`).
    - Falhas de telecomunicação nunca entram nesta fila.
 
 2. **Fila de Manutenção Técnica de Telecomunicações (`DESTINO_OPERACIONAL = "MANUTENCAO_TECNICA_TELECOM_*"`):**

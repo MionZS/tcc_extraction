@@ -2,7 +2,7 @@
 
 | Modo de Normalização | Avaliados | Remanescentes (-1%) | Deslocamento Médio | Deslocamento Máximo |
 |:---|---:|---:|---:|---:|
-| `batch_minmax` | 65,686 | 65,029 | 0.033952 | **0.1865** |
+| `batch_minmax` | 65,686 | 65,029 | 0.034047 | **0.2291** |
 | `frozen_quantile` | 65,686 | 65,029 | 0.0 | **0.0** |
 | `frozen_ecdf` | 65,686 | 65,686 | 0.0 | **0.0** |
 

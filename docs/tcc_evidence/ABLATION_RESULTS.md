@@ -7,8 +7,8 @@
 | M1: UCs Unicas na Coorte OOT | 65,686 | Sim |
 | M2: M1 & Cobertura >= 70% | 62,857 | Sim |
 | M3: M2 & Contextualizacao Topologica | 58,857 | Sim |
-| M4: M3 & Anomalia Estatistica/Eletrica | 4,390 | Sim |
-| M5: M4 & Candidato Operacional Vistoria | 4,390 | Sim |
+| M4: M3 & Anomalia Estatistica/Eletrica | 4,311 | Sim |
+| M5: M4 & Candidato Operacional Vistoria | 4,311 | Sim |
 
 - **Nota de Escopo ($M_0$ vs $M_1$):** $M_0$ contabiliza as 65.686 UCs avaliadas no corte único OOT de 19/11/2026 (portanto idêntico a $M_1$).
 - **Por que $M_4 = 4.390 \to M_5 = 4.390$:** O estágio $M_5$ aplica regras de negócio operacionais (exclusão de quarentena de ciclo de vida e classes benignas). Na coorte pontual de 19/11/2026, todas as 4.390 UCs anômalas em $M_4$ atenderam à política de negócio, tornando $M_5$ redundante nesta coorte específica. A avaliação longitudinal em outros cortes mensais é necessária antes de inferir suficiência geral dos filtros a montante.
@@ -17,10 +17,10 @@
 ## 2. Ablação Interna do Ensemble Elétrico sob Orçamento Fixo de Vistorias
 | Variante | Spearman vs Full-6 | Jaccard Top-5% | Top-2k Overlap | Top-2k Churn In | Top-2k Churn Out | Jaccard Top-2k | P95 | P99 |
 |:---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `full_6_detectors` | 1.0 | 1.0 | 2000 | 0 | 0 | 1.0 | 0.6348 | 0.8715 |
-| `no_lof_5_detectors` | 0.9893 | 0.8326 | 1790 | 210 | 210 | 0.81 | 0.703 | 0.9806 |
-| `no_pca_5_detectors` | 0.9968 | 0.8714 | 1868 | 132 | 132 | 0.8762 | 0.6692 | 0.9452 |
-| `core_4_detectors` | 0.9859 | 0.7677 | 1716 | 284 | 284 | 0.7513 | 0.7628 | 1.0 |
+| `full_6_detectors` | 1.0 | 1.0 | 2000 | 0 | 0 | 1.0 | 0.6394 | 0.906 |
+| `no_lof_5_detectors` | 0.9872 | 0.8283 | 1813 | 187 | 187 | 0.829 | 0.7052 | 1.0 |
+| `no_pca_5_detectors` | 0.9983 | 0.8764 | 1834 | 166 | 166 | 0.8467 | 0.6768 | 0.9549 |
+| `core_4_detectors` | 0.9841 | 0.7721 | 1746 | 254 | 254 | 0.7746 | 0.7654 | 1.0 |
 
 ### 3. Interpretação Metodológica e Custo Operacional Sob Capacidade Fixa
 - **O que o Jaccard mede:** A similaridade de Jaccard no Top 5% e no Top 2.000 mede **perturbação/sensibilidade do ranking**, e **NÃO melhoria de acurácia ou precisão**. Na ausência de laudos de campo (TOI), a rotação de UCs não autoriza inferir ganho de assertividade.
