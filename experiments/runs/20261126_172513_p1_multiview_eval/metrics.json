@@ -1,0 +1,464 @@
+{
+  "run_id": "20261126_172513_p1_multiview_eval",
+  "git_commit": "06f7f71",
+  "timestamp": "2026-11-26T17:25:58.590573",
+  "runtime_sec": 44.89,
+  "timings_sec": {
+    "s_elec": 11.04,
+    "s_behavior": 0.12,
+    "cpd_65k": 8.96,
+    "moe_14feeders": 15.69
+  },
+  "cpd_oot_summary": {
+    "total_oot_ucs": 65686,
+    "cpd_evaluable_ucs": 63719,
+    "cpd_not_evaluable_ucs": 1967,
+    "cpd_detected_any": 8801,
+    "cpd_detected_drop_ge30": 2758,
+    "cpd_detected_drop_any": 3272,
+    "cpd_detected_increase_any": 5529,
+    "runtime_sec": 8.96
+  },
+  "alarm_events_audit": {
+    "alarm_files": [],
+    "total_rows": 2351219,
+    "min_date": "2025-01-23 07:07:29",
+    "max_date": "2026-11-25 23:57:45",
+    "nov_2026_rows": 2086166,
+    "n_parquet_partitions": 41,
+    "csv_files": [
+      "alarms_aggregate_20260701-20260917.csv",
+      "alarms_aggregate_20260701-20260917_distinct_alarms.csv"
+    ]
+  },
+  "moe_comparison": {
+    "common_population_elig_with_feeder": 58820,
+    "n_feeder_specialists_trained_leakfree": 16,
+    "spearman_global_vs_moe_common": 0.967,
+    "mean_abs_percentile_shift": 5.14,
+    "p95_abs_percentile_shift": 15.85,
+    "top2k_global_vs_moe_jaccard": 0.7528,
+    "top2k_global_vs_moe_common": 1718,
+    "top2k_global_vs_moe_substitutions": 282,
+    "grid_disturbance_flagged_ucs": 0,
+    "spurious_non_isolated_flagged_ucs": 0,
+    "top2k_global_vs_moefilt_jaccard": 0.7528,
+    "top2k_global_vs_moefilt_substitutions": 282
+  },
+  "physical_rules_audit": [
+    {
+      "regra": "PRODIST Desequilíbrio Tensão (>20%)",
+      "acionamentos_oot": 58,
+      "sobreposicao_anom_eletrica": 57,
+      "exclusivos_sem_anom_eletrica": 1
+    },
+    {
+      "regra": "PRODIST Reversão Extrema (>85%)",
+      "acionamentos_oot": 66,
+      "sobreposicao_anom_eletrica": 32,
+      "exclusivos_sem_anom_eletrica": 34
+    },
+    {
+      "regra": "Regra Física GD (RA>=8% & >=2d)",
+      "acionamentos_oot": 1706,
+      "sobreposicao_anom_eletrica": 1434,
+      "exclusivos_sem_anom_eletrica": 272
+    },
+    {
+      "regra": "Desequilíbrio Corrente (>20% — gatilho atual +0,15)",
+      "acionamentos_oot": 30654,
+      "sobreposicao_anom_eletrica": 5453,
+      "exclusivos_sem_anom_eletrica": 25201
+    },
+    {
+      "regra": "Desequilíbrio Corrente Severo (>45%)",
+      "acionamentos_oot": 29904,
+      "sobreposicao_anom_eletrica": 5163,
+      "exclusivos_sem_anom_eletrica": 24741
+    },
+    {
+      "regra": "Medidor Travado / Consumo Nulo (FA<0,05 & Anom.)",
+      "acionamentos_oot": 546,
+      "sobreposicao_anom_eletrica": 545,
+      "exclusivos_sem_anom_eletrica": 0
+    },
+    {
+      "regra": "Tamper (s_tamper >= 0,70; 0 alarmes em Nov/2026)",
+      "acionamentos_oot": 0,
+      "sobreposicao_anom_eletrica": 0,
+      "exclusivos_sem_anom_eletrica": 0
+    }
+  ],
+  "ablation_base_a": [
+    {
+      "variante": "V0: Baseline IF (sem gate)",
+      "ucs_avaliadas": 65686,
+      "ucs_elegiveis": 65686,
+      "candidatos_tau_05131": 5478,
+      "top2k_jaccard_vs_V0": 1.0,
+      "top2k_jaccard_vs_V2": 0.6006,
+      "top2k_entradas_vs_V2": 499,
+      "top2k_saidas_vs_V2": 499,
+      "spearman_elig_vs_V0": 1.0,
+      "spearman_elig_vs_V2": 0.7958,
+      "top2k_quarentena_vazadas": 138,
+      "top2k_pnt": 783,
+      "top2k_gd": 1054,
+      "top2k_metro": 20,
+      "top2k_com_cpd_queda": 134,
+      "top2k_evento_rede": 0,
+      "tempo_computacional_s": 0.15
+    },
+    {
+      "variante": "V1: Ensemble 6 det. (sem gate)",
+      "ucs_avaliadas": 65686,
+      "ucs_elegiveis": 65686,
+      "candidatos_tau_05131": 6916,
+      "top2k_jaccard_vs_V0": 0.5905,
+      "top2k_jaccard_vs_V2": 0.7723,
+      "top2k_entradas_vs_V2": 257,
+      "top2k_saidas_vs_V2": 257,
+      "spearman_elig_vs_V0": 0.7958,
+      "spearman_elig_vs_V2": 1.0,
+      "top2k_quarentena_vazadas": 257,
+      "top2k_pnt": 604,
+      "top2k_gd": 1116,
+      "top2k_metro": 23,
+      "top2k_com_cpd_queda": 159,
+      "top2k_evento_rede": 0,
+      "tempo_computacional_s": 11.04
+    },
+    {
+      "variante": "V2: V1 + Gate Qualidade (>=70%)",
+      "ucs_avaliadas": 65686,
+      "ucs_elegiveis": 62857,
+      "candidatos_tau_05131": 6038,
+      "top2k_jaccard_vs_V0": 0.6006,
+      "top2k_jaccard_vs_V2": 1.0,
+      "top2k_entradas_vs_V2": 0,
+      "top2k_saidas_vs_V2": 0,
+      "spearman_elig_vs_V0": 0.7958,
+      "spearman_elig_vs_V2": 1.0,
+      "top2k_quarentena_vazadas": 0,
+      "top2k_pnt": 744,
+      "top2k_gd": 1227,
+      "top2k_metro": 29,
+      "top2k_com_cpd_queda": 152,
+      "top2k_evento_rede": 0,
+      "tempo_computacional_s": 11.04
+    },
+    {
+      "variante": "V3: V2 + Comportamento + MoE/Topol.",
+      "ucs_avaliadas": 65686,
+      "ucs_elegiveis": 62857,
+      "candidatos_tau_05131": 6255,
+      "top2k_jaccard_vs_V0": 0.5968,
+      "top2k_jaccard_vs_V2": 0.7241,
+      "top2k_entradas_vs_V2": 320,
+      "top2k_saidas_vs_V2": 320,
+      "spearman_elig_vs_V0": 0.8013,
+      "spearman_elig_vs_V2": 0.9695,
+      "top2k_quarentena_vazadas": 0,
+      "top2k_pnt": 933,
+      "top2k_gd": 1035,
+      "top2k_metro": 32,
+      "top2k_com_cpd_queda": 156,
+      "top2k_evento_rede": 0,
+      "tempo_computacional_s": 26.85
+    },
+    {
+      "variante": "V4: V3 + CPD (CUSUM 30d)",
+      "ucs_avaliadas": 65686,
+      "ucs_elegiveis": 62857,
+      "candidatos_tau_05131": 6450,
+      "top2k_jaccard_vs_V0": 0.5905,
+      "top2k_jaccard_vs_V2": 0.7167,
+      "top2k_entradas_vs_V2": 330,
+      "top2k_saidas_vs_V2": 330,
+      "spearman_elig_vs_V0": 0.8017,
+      "spearman_elig_vs_V2": 0.9676,
+      "top2k_quarentena_vazadas": 0,
+      "top2k_pnt": 937,
+      "top2k_gd": 1023,
+      "top2k_metro": 40,
+      "top2k_com_cpd_queda": 198,
+      "top2k_evento_rede": 0,
+      "tempo_computacional_s": 35.82
+    },
+    {
+      "variante": "V5: V4 + Regras Físicas/Multivisão",
+      "ucs_avaliadas": 65686,
+      "ucs_elegiveis": 62857,
+      "candidatos_tau_05131": 7986,
+      "top2k_jaccard_vs_V0": 0.586,
+      "top2k_jaccard_vs_V2": 0.719,
+      "top2k_entradas_vs_V2": 327,
+      "top2k_saidas_vs_V2": 327,
+      "spearman_elig_vs_V0": 0.7749,
+      "spearman_elig_vs_V2": 0.9683,
+      "top2k_quarentena_vazadas": 0,
+      "top2k_pnt": 936,
+      "top2k_gd": 1024,
+      "top2k_metro": 40,
+      "top2k_com_cpd_queda": 198,
+      "top2k_evento_rede": 0,
+      "tempo_computacional_s": 36.12
+    }
+  ],
+  "operational_portfolios_k2000": [
+    {
+      "politica_priorizacao": "P1: Escore Elétrico (OOT 25/11)",
+      "orcamento_K": 2000,
+      "jaccard_vs_eletrico_25_11": 1.0,
+      "substituicoes_vs_25_11": 0,
+      "fila_pnt_analise": 744,
+      "fila_gd_nao_cadastrada": 1227,
+      "fila_metrologica": 29,
+      "fila_outras_elegiveis": 0,
+      "fa_mediana_kwh_d_carteira": 13.64,
+      "cobertura_media_carteira_pct": 96.84,
+      "pct_com_cpd_queda": 7.6
+    },
+    {
+      "politica_priorizacao": "P2: Prioridade Multivisão (V5)",
+      "orcamento_K": 2000,
+      "jaccard_vs_eletrico_25_11": 0.719,
+      "substituicoes_vs_25_11": 327,
+      "fila_pnt_analise": 936,
+      "fila_gd_nao_cadastrada": 1024,
+      "fila_metrologica": 40,
+      "fila_outras_elegiveis": 0,
+      "fa_mediana_kwh_d_carteira": 17.85,
+      "cobertura_media_carteira_pct": 96.77,
+      "pct_com_cpd_queda": 9.9
+    },
+    {
+      "politica_priorizacao": "P3: Persistência + CPD",
+      "orcamento_K": 2000,
+      "jaccard_vs_eletrico_25_11": 0.6793,
+      "substituicoes_vs_25_11": 382,
+      "fila_pnt_analise": 750,
+      "fila_gd_nao_cadastrada": 1245,
+      "fila_metrologica": 5,
+      "fila_outras_elegiveis": 0,
+      "fa_mediana_kwh_d_carteira": 13.13,
+      "cobertura_media_carteira_pct": 97.23,
+      "pct_com_cpd_queda": 12.25
+    },
+    {
+      "politica_priorizacao": "P4: Materialidade Energética",
+      "orcamento_K": 2000,
+      "jaccard_vs_eletrico_25_11": 0.5486,
+      "substituicoes_vs_25_11": 583,
+      "fila_pnt_analise": 1187,
+      "fila_gd_nao_cadastrada": 797,
+      "fila_metrologica": 0,
+      "fila_outras_elegiveis": 16,
+      "fa_mediana_kwh_d_carteira": 32.08,
+      "cobertura_media_carteira_pct": 97.05,
+      "pct_com_cpd_queda": 7.2
+    },
+    {
+      "politica_priorizacao": "P5: Qualidade da Evidência",
+      "orcamento_K": 2000,
+      "jaccard_vs_eletrico_25_11": 0.6786,
+      "substituicoes_vs_25_11": 383,
+      "fila_pnt_analise": 956,
+      "fila_gd_nao_cadastrada": 998,
+      "fila_metrologica": 46,
+      "fila_outras_elegiveis": 0,
+      "fa_mediana_kwh_d_carteira": 18.42,
+      "cobertura_media_carteira_pct": 98.06,
+      "pct_com_cpd_queda": 9.5
+    },
+    {
+      "politica_priorizacao": "P6: Contexto Topológico (MoE)",
+      "orcamento_K": 2000,
+      "jaccard_vs_eletrico_25_11": 0.7197,
+      "substituicoes_vs_25_11": 326,
+      "fila_pnt_analise": 931,
+      "fila_gd_nao_cadastrada": 1038,
+      "fila_metrologica": 31,
+      "fila_outras_elegiveis": 0,
+      "fa_mediana_kwh_d_carteira": 17.94,
+      "cobertura_media_carteira_pct": 96.83,
+      "pct_com_cpd_queda": 7.6
+    }
+  ],
+  "operational_queues_separated": [
+    {
+      "fila_operacional": "1. Comunicação (Quarentena Telecom: Isolada + Coletiva)",
+      "ucs_oot": 2739,
+      "destino": "Equipe Telecom / Automação RF Mesh (NÃO fiscalização comercial)"
+    },
+    {
+      "fila_operacional": "2. Ciclo de Vida Cadastral (UC Nova / Troca Medidor)",
+      "ucs_oot": 136,
+      "destino": "Maturação cadastral / auditoria pós-troca (NÃO fiscalização comercial)"
+    },
+    {
+      "fila_operacional": "3. Manutenção Metrológica (Medidor Travado / FA~0)",
+      "ucs_oot": 515,
+      "destino": "Verificação de ocupação e calibração metrológica"
+    },
+    {
+      "fila_operacional": "4. Possível GD Não Cadastrada (Injeção Reversa RA)",
+      "ucs_oot": 1451,
+      "destino": "Auditoria documental CIS / parecer de acesso microgeração"
+    },
+    {
+      "fila_operacional": "5. Análise Técnica de Possível PNT (Anomalia Elétrica)",
+      "ucs_oot": 4087,
+      "destino": "Análise humana (Cockpit) -> eventual vistoria de campo sob K=2.000/mês"
+    },
+    {
+      "fila_operacional": "6. Monitoramento Comportamental / Operação Regular",
+      "ucs_oot": 56758,
+      "destino": "Acompanhamento passivo (sem despacho)"
+    }
+  ],
+  "case_studies": [
+    {
+      "uc_masked": "908***00",
+      "nios_masked": [
+        "NIO-435***63"
+      ],
+      "feeder_masked": "Circuito F-13",
+      "transformer_masked": null,
+      "coverage_oot": 0.8148,
+      "reliable_days_oot": 25,
+      "fa_median_kwh_d": 5.717,
+      "ra_ratio_max": 0.5069,
+      "ra_days": 12,
+      "trend_slope": -0.4434,
+      "eligibility": true,
+      "s_comm": 0.5558,
+      "s_elec_25_11": 1.0,
+      "moe_score_p1": 1.0,
+      "s_behavior_p1": 0.3908,
+      "s_tamper_slope_only": 0.0266,
+      "cpd_detected": true,
+      "cpd_timestamp": "2026-10-31",
+      "cpd_magnitude_pct": -69.06,
+      "cpd_direction": "QUEDA_DEGRAU",
+      "physical_rules": "REGRA_GD_REVERSA|DESBAL_CORRENTE>45%",
+      "topological_evidence": "MOE_F=1.000|G=1.000|W_F=0.88",
+      "categoria_25_11": "POSSIVEL_GD_NAO_CADASTRADA",
+      "candidato_25_11": true,
+      "priority_score_v5": 1.0,
+      "rank_v5": 574,
+      "rank_v2_25_11": 1,
+      "individual_norm_scores": {
+        "iso": 0.8039,
+        "lof": 0.9188,
+        "ecod": 0.8839,
+        "copod": 0.9741,
+        "hbos": 1.0,
+        "pca": 1.0
+      },
+      "decision_reason": "s_elec=1.000; moe=1.000; CPD_QUEDA(-69.1%@2026-10-31); FISICA(REGRA_GD_REVERSA|DESBAL_CORRENTE>45%); ALARMES_TAMPER_INDISPONIVEIS_NOV"
+    },
+    {
+      "uc_masked": "291***96",
+      "nios_masked": [
+        "NIO-423***54"
+      ],
+      "feeder_masked": "Circuito F-04",
+      "transformer_masked": null,
+      "coverage_oot": 0.0333,
+      "reliable_days_oot": 1,
+      "fa_median_kwh_d": 28.001,
+      "ra_ratio_max": 0.5139,
+      "ra_days": 1,
+      "trend_slope": 0.0,
+      "eligibility": false,
+      "s_comm": 1.0,
+      "s_elec_25_11": 0.8236,
+      "moe_score_p1": 0.9721,
+      "s_behavior_p1": 0.1095,
+      "s_tamper_slope_only": 0.0,
+      "cpd_detected": null,
+      "cpd_timestamp": null,
+      "cpd_magnitude_pct": null,
+      "cpd_direction": null,
+      "physical_rules": "DESBAL_CORRENTE>45%",
+      "topological_evidence": "MOE_F=0.993|G=0.824|W_F=0.88",
+      "categoria_25_11": "ANOMALIA_COMUNICACAO_ISOLADA",
+      "candidato_25_11": false,
+      "priority_score_v5": null,
+      "rank_v5": null,
+      "rank_v2_25_11": null,
+      "individual_norm_scores": {
+        "iso": 0.5633,
+        "lof": 0.6947,
+        "ecod": 0.7177,
+        "copod": 0.5576,
+        "hbos": 0.6113,
+        "pca": 1.0
+      },
+      "decision_reason": "QUARENTENA_COBERTURA(cov=0.03<0.70)"
+    },
+    {
+      "uc_masked": "685***20",
+      "nios_masked": [
+        "NIO-437***86"
+      ],
+      "feeder_masked": "Circuito F-14",
+      "transformer_masked": null,
+      "coverage_oot": 0.9949,
+      "reliable_days_oot": 30,
+      "fa_median_kwh_d": 82.599,
+      "ra_ratio_max": 0.0625,
+      "ra_days": 9,
+      "trend_slope": 1.3274,
+      "eligibility": true,
+      "s_comm": 0.0443,
+      "s_elec_25_11": 0.985,
+      "moe_score_p1": 0.9981,
+      "s_behavior_p1": 1.0,
+      "s_tamper_slope_only": 0.0,
+      "cpd_detected": false,
+      "cpd_timestamp": null,
+      "cpd_magnitude_pct": 0.0,
+      "cpd_direction": "ESTAVEL",
+      "physical_rules": "DESBAL_CORRENTE>45%",
+      "topological_evidence": "MOE_F=1.000|G=0.985|W_F=0.88",
+      "categoria_25_11": "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT",
+      "candidato_25_11": true,
+      "priority_score_v5": 1.0,
+      "rank_v5": 376,
+      "rank_v2_25_11": 304,
+      "individual_norm_scores": {
+        "iso": 1.0,
+        "lof": 0.1749,
+        "ecod": 1.0,
+        "copod": 1.0,
+        "hbos": 1.0,
+        "pca": 1.0
+      },
+      "decision_reason": "s_elec=0.985; moe=0.998; BEH_ALTO(1.00); FISICA(DESBAL_CORRENTE>45%); ALARMES_TAMPER_INDISPONIVEIS_NOV"
+    }
+  ],
+  "figures": {
+    "fig_p1_09": {
+      "pdf": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_09_arquitetura_multivisao_executada.pdf",
+      "png": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_09_arquitetura_multivisao_executada.png"
+    },
+    "fig_p1_15": {
+      "pdf": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_15_comparacao_global_vs_contextual_moe.pdf",
+      "png": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_15_comparacao_global_vs_contextual_moe.png"
+    },
+    "fig_p1_16a": {
+      "pdf": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_16a_ablacao_variantes_base_a.pdf",
+      "png": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_16a_ablacao_variantes_base_a.png"
+    },
+    "fig_p1_17": {
+      "pdf": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_17_trilhas_estudos_de_caso.pdf",
+      "png": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_17_trilhas_estudos_de_caso.png"
+    },
+    "fig_p1_18": {
+      "pdf": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_18_composicao_carteiras_operacionais_k2000.pdf",
+      "png": "docs\\tcc_evidence\\p1_multiview\\figures\\fig_p1_18_composicao_carteiras_operacionais_k2000.png"
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "descriptor_col": "CONTENT",
+  "alarms_in_oot_30d": 1706242,
+  "ucs_oot_with_any_alarm": 31338,
+  "ucs_oot_with_tamper_alarm": 1777,
+  "real_s_tamper_ge_070": 1377,
+  "overlap_tamper_and_elec_anom": 496,
+  "exclusive_tamper_not_elec_anom": 881,
+  "real_s_tamper_mean": 0.0187,
+  "real_s_tamper_p95": 0.009,
+  "real_s_tamper_p99": 0.7002,
+  "real_s_tamper_max": 1.0,
+  "top_categories": [
+    {
+      "event": "(20010495)Current unbalance start",
+      "count": 558246
+    },
+    {
+      "event": "(2001045D)Current unbalance end",
+      "count": 557361
+    },
+    {
+      "event": "(20010129)Terminal cover closed",
+      "count": 136923
+    },
+    {
+      "event": "(20010128)Terminal cover opened",
+      "count": 136740
+    },
+    {
+      "event": "iommsPowerOn",
+      "count": 56831
+    },
+    {
+      "event": "iommsOffline",
+      "count": 39869
+    },
+    {
+      "event": "iommsOnline",
+      "count": 33480
+    },
+    {
+      "event": "iommsPowerDown",
+      "count": 24123
+    },
+    {
+      "event": "(2001044E)Reverse Current L1 start",
+      "count": 13687
+    },
+    {
+      "event": "(2001044F)Reverse Current L1 end",
+      "count": 13534
+    },
+    {
+      "event": "(20010457)Under voltage L1 end",
+      "count": 10787
+    },
+    {
+      "event": "(20010456)Under voltage L1 start",
+      "count": 10230
+    }
+  ],
+  "top_tamper_events": [
+    {
+      "event": "(20010129)Terminal cover closed",
+      "count": 136923
+    },
+    {
+      "event": "(20010128)Terminal cover opened",
+      "count": 136740
+    },
+    {
+      "event": "(2001044E)Reverse Current L1 start",
+      "count": 13687
+    },
+    {
+      "event": "(2001044F)Reverse Current L1 end",
+      "count": 13534
+    },
+    {
+      "event": "(20010452)Reverse Current L3 start",
+      "count": 7675
+    },
+    {
+      "event": "(20010453)Reverse Current L3 end",
+      "count": 7654
+    },
+    {
+      "event": "(20010130)Module cover closed",
+      "count": 6384
+    },
+    {
+      "event": "(2001012F)Module cover removed",
+      "count": 6349
+    },
+    {
+      "event": "(200101FE)Recover from disconencted but power is detected",
+      "count": 5910
+    },
+    {
+      "event": "(20010450)Reverse Current L2 start",
+      "count": 5874
+    },
+    {
+      "event": "(20010451)Reverse Current L2 end",
+      "count": 5668
+    },
+    {
+      "event": "(20010449)Reverse Phase sequence of Voltage start",
+      "count": 2766
+    }
+  ]
+}

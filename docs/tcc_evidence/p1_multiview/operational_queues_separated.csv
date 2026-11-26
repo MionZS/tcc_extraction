@@ -1,0 +1,7 @@
+fila_operacional;ucs_oot;destino
+1. Comunicação (Quarentena Telecom: Isolada + Coletiva);2739;Equipe Telecom / Automação RF Mesh (NÃO fiscalização comercial)
+2. Ciclo de Vida Cadastral (UC Nova / Troca Medidor);136;Maturação cadastral / auditoria pós-troca (NÃO fiscalização comercial)
+3. Manutenção Metrológica (Medidor Travado / FA~0);515;Verificação de ocupação e calibração metrológica
+4. Possível GD Não Cadastrada (Injeção Reversa RA);1451;Auditoria documental CIS / parecer de acesso microgeração
+5. Análise Técnica de Possível PNT (Anomalia Elétrica);4087;Análise humana (Cockpit) -> eventual vistoria de campo sob K=2.000/mês
+6. Monitoramento Comportamental / Operação Regular;56758;Acompanhamento passivo (sem despacho)

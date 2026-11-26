@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "passed": 254,
+  "failed": 8,
+  "skipped": 0,
+  "duration_sec": 19.56,
+  "summary_tail": "tests/test_composite_model.py::test_composite_detector_rule_violation\n  d:\\Projects\\tcc_extraction\\.venv\\Lib\\site-packages\\sklearn\\decomposition\\_pca.py:646: RuntimeWarning: invalid value encountered in divide\n    explained_variance_ratio_ = explained_variance_ / total_var\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nFAILED tests/test_demo_ml_methods.py::test_load_real_benchmark_raises_without_real_data\nFAILED tests/test_demo_ml_methods.py::test_demo_ml_methods_end_to_end_on_real_schema_lake\nFAILED tests/test_evidence_miner.py::test_anomaly_evidence_miner_identifies_clusters_and_hypotheses\nFAILED tests/test_retroactive_cleaner.py::test_retroactive_cleaner_reconciles_nio_filters_noise_and_quarantines_mesh\nFAILED tests/test_semantic_layers_and_model_pipeline.py::test_window_features_and_training_dataset_pipeline\nFAILED tests/test_sequential_and_cockpit.py::test_sequential_training_pipeline_end_to_end\nFAILED tests/test_voltage_classifier.py::test_extract_voltage_classifier_features_basic\nFAILED tests/test_voltage_classifier.py::test_diagnose_discrepancy_row_noise_sources\n8 failed, 254 passed, 1 warning in 18.07s"
+}

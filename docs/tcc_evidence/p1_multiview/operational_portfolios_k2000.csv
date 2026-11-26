@@ -1,0 +1,7 @@
+politica_priorizacao;orcamento_K;jaccard_vs_eletrico_25_11;substituicoes_vs_25_11;fila_pnt_analise;fila_gd_nao_cadastrada;fila_metrologica;fila_outras_elegiveis;fa_mediana_kwh_d_carteira;cobertura_media_carteira_pct;pct_com_cpd_queda
+P1: Escore Elétrico (OOT 25/11);2000;1.0;0;744;1227;29;0;13.64;96.84;7.6
+P2: Prioridade Multivisão (V5);2000;0.719;327;936;1024;40;0;17.85;96.77;9.9
+P3: Persistência + CPD;2000;0.6793;382;750;1245;5;0;13.13;97.23;12.25
+P4: Materialidade Energética;2000;0.5486;583;1187;797;0;16;32.08;97.05;7.2
+P5: Qualidade da Evidência;2000;0.6786;383;956;998;46;0;18.42;98.06;9.5
+P6: Contexto Topológico (MoE);2000;0.7197;326;931;1038;31;0;17.94;96.83;7.6

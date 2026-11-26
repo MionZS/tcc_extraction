@@ -1,0 +1,11 @@
+modo_regra;bonus;ucs_com_flag_elig;pct_elig_com_flag;delta_medio_score_vs_b0;spearman_vs_ref_25_11;top2k_jaccard_vs_ref_25_11;top2k_substituicoes_vs_ref_25_11;top2k_com_flag;cands_tau_fixo_05131;score_p95
+regra_efetiva_25_11_incl_c_imb;0.0;29398;46.77;0.0;0.9223;0.8824;125;1837;3438;0.5343
+regra_efetiva_25_11_incl_c_imb;0.075;29398;46.77;0.035;0.9835;0.9598;41;1921;4392;0.5898
+regra_efetiva_25_11_incl_c_imb;0.15;29398;46.77;0.0699;1.0;1.0;0;1962;6039;0.6549
+regra_efetiva_25_11_incl_c_imb;0.225;29398;46.77;0.1045;0.9875;0.9782;22;1984;8612;0.7216
+regra_efetiva_25_11_incl_c_imb;0.3;29398;46.77;0.1384;0.9714;0.9685;32;1994;12276;0.7931
+regra_estrita_tensao_e_reversao;0.0;89;0.14;0.0;0.9223;0.8824;125;50;3438;0.5343
+regra_estrita_tensao_e_reversao;0.075;89;0.14;0.0001;0.9223;0.8771;131;57;3449;0.5348
+regra_estrita_tensao_e_reversao;0.15;89;0.14;0.0002;0.9223;0.8674;142;68;3460;0.5355
+regra_estrita_tensao_e_reversao;0.225;89;0.14;0.0002;0.9223;0.8579;153;80;3460;0.5355
+regra_estrita_tensao_e_reversao;0.3;89;0.14;0.0003;0.9223;0.8519;160;89;3460;0.5355

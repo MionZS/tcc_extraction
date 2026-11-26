@@ -1,0 +1,24 @@
+tipo;cenario;intensidade;componente_avaliado;n_ucs;delta_cov_medio;delta_s_comm_medio;delta_s_elec_medio;delta_pca_medio;delta_fa_mediana_kwh;taxa_quarentena_pct;taxa_anom_eletrica_sem_gate_pct;taxa_anom_eletrica_com_gate_pct;taxa_cpd_queda_qualquer_pct;taxa_cpd_localizacao_3d_pct;cpd_erro_mediano_dias;cpd_atraso_mediano_dias;cpd_erro_mag_pp_mediano;beh_24h_delta_l2_medio;beh_24h_taxa_deteccao_p95_pct;beh_24h_mudanca_cluster_pct;taxa_categoria_prevista_pct
+comm_gap_random;Lacuna aleatória 10%;0.1;S_comm / Gating;100;-0.0993;0.2449;-0.0078;-0.0086;-2.432;0.0;31.0;31.0;4.0;0.0;14.5;14.5;;0.0018;5.0;12.0;0.0
+comm_gap_random;Lacuna aleatória 20%;0.2;S_comm / Gating;100;-0.1981;0.4275;-0.0175;-0.0261;-4.651;0.0;26.0;26.0;4.0;0.0;14.5;14.5;;0.0033;5.0;14.0;0.0
+comm_gap_random;Lacuna aleatória 30%;0.3;S_comm / Gating;100;-0.2975;0.7984;-0.01;-0.0335;-6.058;61.0;24.0;9.0;9.0;0.0;13.0;13.0;;0.0057;5.0;14.0;63.0
+comm_gap_random;Lacuna aleatória 50%;0.5;S_comm / Gating;100;-0.4959;0.8245;-0.0629;-0.0549;-11.912;100.0;19.0;0.0;0.0;0.0;;;;0.0112;8.0;15.0;100.0
+comm_gap_burst;Bloco consecutivo 20% (6d);0.2;S_comm / Gating;100;-0.0001;0.4048;-0.002;0.0104;-0.214;0.0;28.0;28.0;3.0;0.0;17.0;-17.0;;0.0111;9.0;16.0;0.0
+comm_gap_burst;Bloco consecutivo 30% (9d);0.3;S_comm / Gating;100;-0.0008;0.492;0.0014;0.0101;-0.276;0.0;27.0;27.0;4.0;1.0;12.5;-12.5;;0.02;18.0;16.0;0.0
+comm_gap_burst;Bloco consecutivo 50% (15d);0.5;S_comm / Gating;100;-0.0002;0.7817;0.029;0.004;-0.537;0.0;31.0;31.0;9.0;1.0;6.0;-6.0;;0.0522;35.0;50.0;0.0
+sustained_drop;Queda sustentada -10%;0.1;CPD / S_elec;100;0.0;0.0;-0.0025;-0.006;-1.184;0.0;28.0;28.0;6.0;4.0;3.0;1.0;23.46;0.0;5.0;13.0;30.0
+sustained_drop;Queda sustentada -20%;0.2;CPD / S_elec;100;0.0;0.0;0.0123;-0.029;-2.388;0.0;30.0;30.0;15.0;11.0;1.0;0.0;10.54;0.0;5.0;13.0;39.0
+sustained_drop;Queda sustentada -30%;0.3;CPD / S_elec;100;0.0;0.0;0.0393;-0.0485;-3.797;0.0;36.0;36.0;49.0;44.0;0.0;0.0;3.44;0.0;5.0;13.0;71.0
+sustained_drop;Queda sustentada -50%;0.5;CPD / S_elec;100;0.0;0.0;0.1063;-0.0385;-7.686;0.0;43.0;43.0;87.0;82.0;0.0;0.0;3.05;0.0;5.0;13.0;94.0
+regime_duration;Mudança -40% (3 dias);3;CPD / Persistência;100;0.0;0.0;0.017;0.0034;-0.545;0.0;29.0;29.0;25.0;22.0;2.0;-2.0;6.99;0.0002;5.0;14.0;47.0
+regime_duration;Mudança -40% (7 dias);7;CPD / Persistência;100;0.0;0.0;0.0532;0.0073;-1.679;0.0;35.0;35.0;58.0;48.0;0.0;0.0;3.47;0.0011;6.0;15.0;74.0
+regime_duration;Mudança -40% (14 dias);14;CPD / Persistência;100;0.0;0.0;0.0691;-0.0421;-4.689;0.0;41.0;41.0;71.0;70.0;0.0;0.0;3.72;0.0001;5.0;13.0;84.0
+isolated_event;Evento isolado 1d (0,1x);0.1;Contraste S_elec vs CPD;100;0.0;0.0;0.0024;0.0035;-0.243;0.0;32.0;32.0;4.0;1.0;7.0;-4.0;;0.0008;6.0;14.0;32.0
+isolated_event;Evento isolado 1d (3,5x);3.5;Contraste S_elec vs CPD;100;0.0;0.0;0.0024;0.0014;0.112;0.0;32.0;32.0;3.0;2.0;3.0;1.0;;0.0023;6.0;12.0;32.0
+time_shift;Deslocamento rotina +1h;1;S_behavior (24h);100;0.0;0.0;0.0;0.0;0.0;0.0;32.0;32.0;6.0;1.0;7.5;-4.0;;0.0368;22.0;25.0;22.0
+time_shift;Deslocamento rotina +2h;2;S_behavior (24h);100;0.0;0.0;0.0;0.0;0.0;0.0;32.0;32.0;6.0;1.0;7.5;-4.0;;0.0632;39.0;39.0;39.0
+time_shift;Deslocamento rotina +4h;4;S_behavior (24h);100;0.0;0.0;0.0;0.0;0.0;0.0;32.0;32.0;6.0;1.0;7.5;-4.0;;0.0896;52.0;49.0;52.0
+shape_flatten;Achatamento forma (kWh fixo);0.8;PCA / Forma Diária;100;0.0;0.0;0.0325;0.0077;0.0;0.0;35.0;35.0;6.0;1.0;7.5;-4.0;;0.035;21.0;50.0;21.0
+reverse_flow_gd;Injeção reversa solar (GD);0.3;Regra GD / S_elec;100;0.0;0.0;0.4912;0.7043;-1.281;0.0;100.0;100.0;26.0;21.0;0.0;0.0;;0.0492;34.0;24.0;100.0
+zero_load_normal_voltage;Carga zero c/ tensão normal;1.0;Medidor Travado / S_elec;100;0.0;0.0;0.2797;0.2024;-16.38;0.0;72.0;72.0;97.0;96.0;0.0;0.0;;0.1797;100.0;50.0;72.0
+phase_unbalance;Desequilíbrio fase (-75% L1);0.75;Desbal. Corrente / S_elec;100;0.0;0.0;0.0575;-0.0463;-4.64;0.0;38.0;38.0;66.0;62.0;0.0;0.0;;0.0;5.0;13.0;84.0

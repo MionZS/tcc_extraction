@@ -1,0 +1,8 @@
+regra;acionamentos_oot;sobreposicao_anom_eletrica;exclusivos_sem_anom_eletrica
+PRODIST Desequilíbrio Tensão (>20%);58;57;1
+PRODIST Reversão Extrema (>85%);66;32;34
+Regra Física GD (RA>=8% & >=2d);1706;1434;272
+Desequilíbrio Corrente (>20% — gatilho atual +0,15);30654;5453;25201
+Desequilíbrio Corrente Severo (>45%);29904;5163;24741
+Medidor Travado / Consumo Nulo (FA<0,05 & Anom.);546;545;0
+"Tamper (s_tamper >= 0,70; 0 alarmes em Nov/2026)";0;0;0

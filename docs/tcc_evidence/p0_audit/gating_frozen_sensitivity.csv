@@ -1,0 +1,6 @@
+coverage_threshold_pct;total_ucs;eligible_ucs;eligible_pct;quarantine_ucs;quarantine_pct;raw_anomalies_frozen_model;candidates_retained;anomalies_intercepted_quarantine;retained_vs_ref70;excluded_vs_ref70;newly_eligible_vs_ref70;jaccard_cands_vs_ref70;top2k_jaccard_vs_ref70;top2k_substitutions_vs_ref70;category_gate_flips_vs_ref70;frozen_threshold_used
+50;65686;63371;96.48;2315;3.52;6916;6215;701;6038;0;177;0.9715;0.938;64;514;0.5131
+60;65686;63111;96.08;2575;3.92;6916;6114;802;6038;0;76;0.9876;0.9802;20;254;0.5131
+70;65686;62857;95.69;2829;4.31;6916;6038;878;6038;0;0;1.0;1.0;0;0;0.5131
+80;65686;61530;93.67;4156;6.33;6916;5821;1095;5821;217;0;0.9641;0.955;46;1327;0.5131
+90;65686;59091;89.96;6595;10.04;6916;5379;1537;5379;659;0;0.8909;0.8425;171;3766;0.5131

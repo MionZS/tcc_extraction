@@ -1,0 +1,7 @@
+variante;ucs_avaliadas;ucs_elegiveis;candidatos_tau_05131;top2k_jaccard_vs_V0;top2k_jaccard_vs_V2;top2k_entradas_vs_V2;top2k_saidas_vs_V2;spearman_elig_vs_V0;spearman_elig_vs_V2;top2k_quarentena_vazadas;top2k_pnt;top2k_gd;top2k_metro;top2k_com_cpd_queda;top2k_evento_rede;tempo_computacional_s
+V0: Baseline IF (sem gate);65686;65686;5478;1.0;0.6006;499;499;1.0;0.7958;138;783;1054;20;134;0;0.15
+V1: Ensemble 6 det. (sem gate);65686;65686;6916;0.5905;0.7723;257;257;0.7958;1.0;257;604;1116;23;159;0;11.04
+V2: V1 + Gate Qualidade (>=70%);65686;62857;6038;0.6006;1.0;0;0;0.7958;1.0;0;744;1227;29;152;0;11.04
+V3: V2 + Comportamento + MoE/Topol.;65686;62857;6255;0.5968;0.7241;320;320;0.8013;0.9695;0;933;1035;32;156;0;26.85
+V4: V3 + CPD (CUSUM 30d);65686;62857;6450;0.5905;0.7167;330;330;0.8017;0.9676;0;937;1023;40;198;0;35.82
+V5: V4 + Regras Físicas/Multivisão;65686;62857;7986;0.586;0.719;327;327;0.7749;0.9683;0;936;1024;40;198;0;36.12

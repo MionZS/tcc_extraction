@@ -1,0 +1,45 @@
+{
+  "run_id": "20261126_172513_p1_multiview_eval",
+  "pipeline_id": "p1_multiview_eval",
+  "git_commit": "06f7f71",
+  "status": "validated",
+  "created_at": "2026-11-26T17:25:58.594534",
+  "artifacts": {
+    "ablation_base_a_oot.csv": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\ablation_base_a_oot.csv",
+      "sha256": "9deb3672fe5f6721034f28ea3f0ff0b784e936efbd691c0c523a7572a461aa54"
+    },
+    "case_studies_multiview.json": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\case_studies_multiview.json",
+      "sha256": "240fdc7e00e00af88d1467fe5a2fc9628ca21827405454350ba6a1c807a9dd92"
+    },
+    "metrics.json": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\metrics.json",
+      "sha256": "1e91f73fca61925261f7ac4af60e38bd84f1c9295fa388a7d39248bfe652a054"
+    },
+    "moe_feeder_evaluation.csv": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\moe_feeder_evaluation.csv",
+      "sha256": "0d9aacf686c4a6596a5cfc2312c6c495b57305b75c99112cb6ba699a814b5ff3"
+    },
+    "multiview_evidence_oot.parquet": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\multiview_evidence_oot.parquet",
+      "sha256": "c677924620384e72707ba5365388d3035d102579a930b58a2644d386fe6ef6fe"
+    },
+    "operational_portfolios_k2000.csv": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\operational_portfolios_k2000.csv",
+      "sha256": "7d7b8c42f973bc22d61211c3d222daa94077b278408e85f2520b33847c591b1f"
+    },
+    "operational_queues_separated.csv": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\operational_queues_separated.csv",
+      "sha256": "abf71061290e01cdb9e1cc1fd8bde3ac6540e42bcbe2cbf112ec32d5cceac604"
+    },
+    "physical_rules_and_tamper_audit.csv": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\physical_rules_and_tamper_audit.csv",
+      "sha256": "e60459af50105bea7c39f1a1e442ddb17bd308070165b1f4cf1efb6dd5e4a077"
+    },
+    "provenance_traces_sample.json": {
+      "path": "experiments\\runs\\20261126_172513_p1_multiview_eval\\provenance_traces_sample.json",
+      "sha256": "eec7a2439463f4a433d6a61d0816cc4245739fe5f5c20e89fdf489a0d2fa22c1"
+    }
+  }
+}

@@ -1,0 +1,357 @@
+{
+  "run_id": "20261126_172200_p0_audit_sensitivity",
+  "git_commit": "06f7f71",
+  "timestamp": "2026-11-26T17:23:00.008236",
+  "runtime_sec": 60.06,
+  "source_suite": {
+    "audit": "experiments/runs/20261125_134532_048_audit",
+    "daily_rules": "experiments/runs/20261125_134535_754_daily_rules",
+    "oot_multiview": "experiments/runs/20261125_134559_972_oot_multiview",
+    "ablation": "experiments/runs/20261125_134849_083_ablation_m0_m5",
+    "gating": "experiments/runs/20261125_134940_636_gating_sensitivity",
+    "score_stability": "experiments/runs/20261125_135109_678_score_stability",
+    "case_traces": "experiments/runs/20261125_135558_880_case_traces"
+  },
+  "reconciliation": {
+    "n_cad": 69907,
+    "n_hier": 69907,
+    "n_tr_rows": 262769,
+    "n_tr_ucs": 66192,
+    "n_train_clean": 189341,
+    "n_oot": 65686,
+    "n_oot_elig": 62857,
+    "n_oot_quar": 2829,
+    "n_oot_clean_flag": 63081,
+    "clean_only_not_rel": 236,
+    "rel_only_not_clean": 12,
+    "n_oot_cand": 6037,
+    "n_oot_elec_anom": 6037,
+    "n_oot_is_anom": 6037,
+    "n_oot_topo_m3": 58857,
+    "n_oot_topo_cand": 4311,
+    "n_daily_win": 1248501,
+    "mean_daily_cand": 5387.74,
+    "n_daily_19_cand": 4978,
+    "n_inter_oot_daily": 2069,
+    "n_oot_excl": 3968,
+    "n_daily_excl": 2909,
+    "gd16_outside_queue": {
+      "count": 16,
+      "categories": [
+        {
+          "CATEGORIA_DIAGNOSTICA": "POSSIVEL_GD_NAO_CADASTRADA",
+          "count": 16
+        }
+      ],
+      "all_reliable": true,
+      "any_elec_anomaly": false,
+      "s_elec_min": 0.2799,
+      "s_elec_max": 0.5091,
+      "frozen_threshold": 0.5131,
+      "ra_ratio_min": 0.0903,
+      "ra_days_min": 4,
+      "explanation": "As 16 UCs pertencem integralmente a POSSIVEL_GD_NAO_CADASTRADA: atenderam à regra física de injeção reversa (ra_ratio >= 0,08 e ra_days >= 2) com telemetria confiável (cobertura >= 70%), porém obtiveram escore elétrico s_elec abaixo do limiar congelado (0,2799 a 0,5091 < 0,5131). Como IS_CANDIDATO_VISTORIA exige is_anomaly == True (equivalente a is_elec_anomaly == True nesta coorte), elas recebem hipótese diagnóstica de GD sem ingresso automático na fila de 6.037 candidatas."
+    },
+    "ref70_exact_match_oot_cands": false,
+    "ref70_diff_count": 1
+  },
+  "correlation_audit": {
+    "alignment_max_abs_diff": {
+      "iso": 0.0,
+      "lof": 0.0,
+      "ecod": 0.0,
+      "copod": 0.0,
+      "hbos": 0.0,
+      "pca": 0.0,
+      "s_elec": 0.0
+    },
+    "symmetric_spearman_elig": true,
+    "diagonal_is_one": true,
+    "min_pairwise_spearman_elig": 0.1022,
+    "if_ecod_spearman_all": 0.9639,
+    "if_ecod_spearman_elig": 0.9626,
+    "if_ecod_pearson_elig": 0.9445,
+    "any_negative_pairwise": false
+  },
+  "frozen_model_weights": {
+    "iso_forest": 0.22,
+    "lof": 0.2,
+    "ecod": 0.18,
+    "copod": 0.18,
+    "hbos": 0.1,
+    "pca": 0.12
+  },
+  "frozen_threshold_elec": 0.513072,
+  "rule_violation_breakdown_oot": {
+    "total_flagged_all": 30694,
+    "total_flagged_elig": 29398,
+    "v_imb_gt_20_elig": 57,
+    "c_imb_gt_020_elig": 29360,
+    "ra_ratio_gt_085_elig": 32,
+    "strict_v_or_ra_elig": 89
+  },
+  "gating_frozen_summary": [
+    {
+      "coverage_threshold_pct": 50,
+      "total_ucs": 65686,
+      "eligible_ucs": 63371,
+      "eligible_pct": 96.48,
+      "quarantine_ucs": 2315,
+      "quarantine_pct": 3.52,
+      "raw_anomalies_frozen_model": 6916,
+      "candidates_retained": 6215,
+      "anomalies_intercepted_quarantine": 701,
+      "retained_vs_ref70": 6038,
+      "excluded_vs_ref70": 0,
+      "newly_eligible_vs_ref70": 177,
+      "jaccard_cands_vs_ref70": 0.9715,
+      "top2k_jaccard_vs_ref70": 0.938,
+      "top2k_substitutions_vs_ref70": 64,
+      "category_gate_flips_vs_ref70": 514,
+      "frozen_threshold_used": 0.5131
+    },
+    {
+      "coverage_threshold_pct": 60,
+      "total_ucs": 65686,
+      "eligible_ucs": 63111,
+      "eligible_pct": 96.08,
+      "quarantine_ucs": 2575,
+      "quarantine_pct": 3.92,
+      "raw_anomalies_frozen_model": 6916,
+      "candidates_retained": 6114,
+      "anomalies_intercepted_quarantine": 802,
+      "retained_vs_ref70": 6038,
+      "excluded_vs_ref70": 0,
+      "newly_eligible_vs_ref70": 76,
+      "jaccard_cands_vs_ref70": 0.9876,
+      "top2k_jaccard_vs_ref70": 0.9802,
+      "top2k_substitutions_vs_ref70": 20,
+      "category_gate_flips_vs_ref70": 254,
+      "frozen_threshold_used": 0.5131
+    },
+    {
+      "coverage_threshold_pct": 70,
+      "total_ucs": 65686,
+      "eligible_ucs": 62857,
+      "eligible_pct": 95.69,
+      "quarantine_ucs": 2829,
+      "quarantine_pct": 4.31,
+      "raw_anomalies_frozen_model": 6916,
+      "candidates_retained": 6038,
+      "anomalies_intercepted_quarantine": 878,
+      "retained_vs_ref70": 6038,
+      "excluded_vs_ref70": 0,
+      "newly_eligible_vs_ref70": 0,
+      "jaccard_cands_vs_ref70": 1.0,
+      "top2k_jaccard_vs_ref70": 1.0,
+      "top2k_substitutions_vs_ref70": 0,
+      "category_gate_flips_vs_ref70": 0,
+      "frozen_threshold_used": 0.5131
+    },
+    {
+      "coverage_threshold_pct": 80,
+      "total_ucs": 65686,
+      "eligible_ucs": 61530,
+      "eligible_pct": 93.67,
+      "quarantine_ucs": 4156,
+      "quarantine_pct": 6.33,
+      "raw_anomalies_frozen_model": 6916,
+      "candidates_retained": 5821,
+      "anomalies_intercepted_quarantine": 1095,
+      "retained_vs_ref70": 5821,
+      "excluded_vs_ref70": 217,
+      "newly_eligible_vs_ref70": 0,
+      "jaccard_cands_vs_ref70": 0.9641,
+      "top2k_jaccard_vs_ref70": 0.955,
+      "top2k_substitutions_vs_ref70": 46,
+      "category_gate_flips_vs_ref70": 1327,
+      "frozen_threshold_used": 0.5131
+    },
+    {
+      "coverage_threshold_pct": 90,
+      "total_ucs": 65686,
+      "eligible_ucs": 59091,
+      "eligible_pct": 89.96,
+      "quarantine_ucs": 6595,
+      "quarantine_pct": 10.04,
+      "raw_anomalies_frozen_model": 6916,
+      "candidates_retained": 5379,
+      "anomalies_intercepted_quarantine": 1537,
+      "retained_vs_ref70": 5379,
+      "excluded_vs_ref70": 659,
+      "newly_eligible_vs_ref70": 0,
+      "jaccard_cands_vs_ref70": 0.8909,
+      "top2k_jaccard_vs_ref70": 0.8425,
+      "top2k_substitutions_vs_ref70": 171,
+      "category_gate_flips_vs_ref70": 3766,
+      "frozen_threshold_used": 0.5131
+    }
+  ],
+  "weight_sensitivity_count": 23,
+  "bonus_sensitivity_summary": [
+    {
+      "modo_regra": "regra_efetiva_25_11_incl_c_imb",
+      "bonus": 0.0,
+      "ucs_com_flag_elig": 29398,
+      "pct_elig_com_flag": 46.77,
+      "delta_medio_score_vs_b0": 0.0,
+      "spearman_vs_ref_25_11": 0.9223,
+      "top2k_jaccard_vs_ref_25_11": 0.8824,
+      "top2k_substituicoes_vs_ref_25_11": 125,
+      "top2k_com_flag": 1837,
+      "cands_tau_fixo_05131": 3438,
+      "score_p95": 0.5343
+    },
+    {
+      "modo_regra": "regra_efetiva_25_11_incl_c_imb",
+      "bonus": 0.075,
+      "ucs_com_flag_elig": 29398,
+      "pct_elig_com_flag": 46.77,
+      "delta_medio_score_vs_b0": 0.035,
+      "spearman_vs_ref_25_11": 0.9835,
+      "top2k_jaccard_vs_ref_25_11": 0.9598,
+      "top2k_substituicoes_vs_ref_25_11": 41,
+      "top2k_com_flag": 1921,
+      "cands_tau_fixo_05131": 4392,
+      "score_p95": 0.5898
+    },
+    {
+      "modo_regra": "regra_efetiva_25_11_incl_c_imb",
+      "bonus": 0.15,
+      "ucs_com_flag_elig": 29398,
+      "pct_elig_com_flag": 46.77,
+      "delta_medio_score_vs_b0": 0.0699,
+      "spearman_vs_ref_25_11": 1.0,
+      "top2k_jaccard_vs_ref_25_11": 1.0,
+      "top2k_substituicoes_vs_ref_25_11": 0,
+      "top2k_com_flag": 1962,
+      "cands_tau_fixo_05131": 6039,
+      "score_p95": 0.6549
+    },
+    {
+      "modo_regra": "regra_efetiva_25_11_incl_c_imb",
+      "bonus": 0.225,
+      "ucs_com_flag_elig": 29398,
+      "pct_elig_com_flag": 46.77,
+      "delta_medio_score_vs_b0": 0.1045,
+      "spearman_vs_ref_25_11": 0.9875,
+      "top2k_jaccard_vs_ref_25_11": 0.9782,
+      "top2k_substituicoes_vs_ref_25_11": 22,
+      "top2k_com_flag": 1984,
+      "cands_tau_fixo_05131": 8612,
+      "score_p95": 0.7216
+    },
+    {
+      "modo_regra": "regra_efetiva_25_11_incl_c_imb",
+      "bonus": 0.3,
+      "ucs_com_flag_elig": 29398,
+      "pct_elig_com_flag": 46.77,
+      "delta_medio_score_vs_b0": 0.1384,
+      "spearman_vs_ref_25_11": 0.9714,
+      "top2k_jaccard_vs_ref_25_11": 0.9685,
+      "top2k_substituicoes_vs_ref_25_11": 32,
+      "top2k_com_flag": 1994,
+      "cands_tau_fixo_05131": 12276,
+      "score_p95": 0.7931
+    },
+    {
+      "modo_regra": "regra_estrita_tensao_e_reversao",
+      "bonus": 0.0,
+      "ucs_com_flag_elig": 89,
+      "pct_elig_com_flag": 0.14,
+      "delta_medio_score_vs_b0": 0.0,
+      "spearman_vs_ref_25_11": 0.9223,
+      "top2k_jaccard_vs_ref_25_11": 0.8824,
+      "top2k_substituicoes_vs_ref_25_11": 125,
+      "top2k_com_flag": 50,
+      "cands_tau_fixo_05131": 3438,
+      "score_p95": 0.5343
+    },
+    {
+      "modo_regra": "regra_estrita_tensao_e_reversao",
+      "bonus": 0.075,
+      "ucs_com_flag_elig": 89,
+      "pct_elig_com_flag": 0.14,
+      "delta_medio_score_vs_b0": 0.0001,
+      "spearman_vs_ref_25_11": 0.9223,
+      "top2k_jaccard_vs_ref_25_11": 0.8771,
+      "top2k_substituicoes_vs_ref_25_11": 131,
+      "top2k_com_flag": 57,
+      "cands_tau_fixo_05131": 3449,
+      "score_p95": 0.5348
+    },
+    {
+      "modo_regra": "regra_estrita_tensao_e_reversao",
+      "bonus": 0.15,
+      "ucs_com_flag_elig": 89,
+      "pct_elig_com_flag": 0.14,
+      "delta_medio_score_vs_b0": 0.0002,
+      "spearman_vs_ref_25_11": 0.9223,
+      "top2k_jaccard_vs_ref_25_11": 0.8674,
+      "top2k_substituicoes_vs_ref_25_11": 142,
+      "top2k_com_flag": 68,
+      "cands_tau_fixo_05131": 3460,
+      "score_p95": 0.5355
+    },
+    {
+      "modo_regra": "regra_estrita_tensao_e_reversao",
+      "bonus": 0.225,
+      "ucs_com_flag_elig": 89,
+      "pct_elig_com_flag": 0.14,
+      "delta_medio_score_vs_b0": 0.0002,
+      "spearman_vs_ref_25_11": 0.9223,
+      "top2k_jaccard_vs_ref_25_11": 0.8579,
+      "top2k_substituicoes_vs_ref_25_11": 153,
+      "top2k_com_flag": 80,
+      "cands_tau_fixo_05131": 3460,
+      "score_p95": 0.5355
+    },
+    {
+      "modo_regra": "regra_estrita_tensao_e_reversao",
+      "bonus": 0.3,
+      "ucs_com_flag_elig": 89,
+      "pct_elig_com_flag": 0.14,
+      "delta_medio_score_vs_b0": 0.0003,
+      "spearman_vs_ref_25_11": 0.9223,
+      "top2k_jaccard_vs_ref_25_11": 0.8519,
+      "top2k_substituicoes_vs_ref_25_11": 160,
+      "top2k_com_flag": 89,
+      "cands_tau_fixo_05131": 3460,
+      "score_p95": 0.5355
+    }
+  ],
+  "figures": {
+    "fig_p0_01": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_01_reconciliacao_populacional.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_01_reconciliacao_populacional.png"
+    },
+    "fig_p0_02": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_02_correlacao_detectores_revisada.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_02_correlacao_detectores_revisada.png"
+    },
+    "fig_p0_03": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_03_distribuicao_scores_individuais.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_03_distribuicao_scores_individuais.png"
+    },
+    "fig_p0_04": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_04_sensibilidade_gating_congelado.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_04_sensibilidade_gating_congelado.png"
+    },
+    "fig_p0_05": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_05_sensibilidade_pesos.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_05_sensibilidade_pesos.png"
+    },
+    "fig_p0_06": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_06_variacao_bonus_corroboracao.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_06_variacao_bonus_corroboracao.png"
+    },
+    "fig_p0_07": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_07_comparacao_carteiras_topk.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_07_comparacao_carteiras_topk.png"
+    },
+    "fig_p0_08": {
+      "pdf": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_08_matriz_participacao_especialistas.pdf",
+      "png": "docs\\tcc_evidence\\p0_audit\\figures\\fig_p0_08_matriz_participacao_especialistas.png"
+    }
+  }
+}

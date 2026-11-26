@@ -1,0 +1,7 @@
+variante;n_base_b;orcamento_K_fixo;recall_pert_eletricas_pct;precisao_controlada_pct;f1_controlado_pct;vazamento_lacunas_comm_pct;recall_quedas_cpd_pct;recall_shift_rotina_4h_pct;acionamento_referencia_pct
+V0: Baseline IF (sem gate);800;400;68.25;68.25;68.25;31.5;43.0;32.0;32.0
+V1: Ensemble 6 det. (sem gate);800;400;66.75;66.75;66.75;32.0;45.0;34.0;35.0
+V2: V1 + Gate Qualidade (>=70%);800;400;69.25;69.25;69.25;22.0;50.0;39.0;40.0
+V3: V2 + Comportamento 24h;800;400;68.5;68.5;68.5;23.5;46.5;44.0;35.0
+V4: V3 + CPD (CUSUM);800;400;76.0;76.0;76.0;18.0;54.0;30.0;30.0
+V5: V4 + Regras Físicas (Multivisão);800;400;76.0;76.0;76.0;18.0;54.0;30.0;30.0

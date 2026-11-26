@@ -1,0 +1,78 @@
+{
+  "run_id": "20261126_172200_p0_audit_sensitivity",
+  "pipeline_id": "p0_audit_sensitivity",
+  "git_commit": "06f7f71",
+  "status": "validated",
+  "created_at": "2026-11-26T17:23:00.016013",
+  "inputs": {
+    "audit": "experiments/runs/20261125_134532_048_audit",
+    "daily_rules": "experiments/runs/20261125_134535_754_daily_rules",
+    "oot_multiview": "experiments/runs/20261125_134559_972_oot_multiview",
+    "ablation": "experiments/runs/20261125_134849_083_ablation_m0_m5",
+    "gating": "experiments/runs/20261125_134940_636_gating_sensitivity",
+    "score_stability": "experiments/runs/20261125_135109_678_score_stability",
+    "case_traces": "experiments/runs/20261125_135558_880_case_traces"
+  },
+  "artifacts": {
+    "bonus_sensitivity.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\bonus_sensitivity.csv",
+      "sha256": "14ef03eb4b8fce51f52c99634ee9499ebf71594369bf0a16375f3333d1d925b9"
+    },
+    "category_reconciliation.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\category_reconciliation.csv",
+      "sha256": "42afc7aebfeb9d82ffc5ae40bf9c5c3713498126bdf13ad8357fff1fd8e962af"
+    },
+    "corr_pearson_norm_eligible.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\corr_pearson_norm_eligible.csv",
+      "sha256": "3d8e753aecf51fc5aed4e4626d547137206229ccb3ac310e71a831a2c737045c"
+    },
+    "corr_spearman_norm_all.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\corr_spearman_norm_all.csv",
+      "sha256": "55737469b7bb5acc0a17dce85ee882b103c12d1efba5b84a5fb1f7312a2082f7"
+    },
+    "corr_spearman_norm_eligible.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\corr_spearman_norm_eligible.csv",
+      "sha256": "5c87b760e21836c3e091c170e274c088b3d34cb81d84ec0744cdc70f2dbd7f9e"
+    },
+    "corr_spearman_raw_eligible.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\corr_spearman_raw_eligible.csv",
+      "sha256": "a5fc4de867edee09fcaa41b5101545830c0bf94a17b9f5f1727ae85eb23f7282"
+    },
+    "detector_distributions.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\detector_distributions.csv",
+      "sha256": "74070d6d8abbe1c67b3c3a8f2a52a9126c1d3906a40654e92d80137ed66d8572"
+    },
+    "feeder_reconciliation.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\feeder_reconciliation.csv",
+      "sha256": "c0c1a9cc2d06c898752e317932dc491d29d7efe3104caae526337d15310dec9d"
+    },
+    "gating_frozen_by_feeder.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\gating_frozen_by_feeder.csv",
+      "sha256": "177e1c58e25984643c814861b5506938dc1e748996e6f24e89e9b33483e1dec7"
+    },
+    "gating_frozen_by_profile.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\gating_frozen_by_profile.csv",
+      "sha256": "fc500081a3486a7dfa32a6d58e8cfc2fde77eb95577f70e50cc7ff96bcb12ea1"
+    },
+    "gating_frozen_sensitivity.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\gating_frozen_sensitivity.csv",
+      "sha256": "1c5acef4b20796f8b01905c7e41c296c18bbca221dafb4782ab4e251e90b86e8"
+    },
+    "metrics.json": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\metrics.json",
+      "sha256": "5b5320376cd7506d95c3536bf9b60f4d76e8001f47e32073fab272c4d74a8707"
+    },
+    "reconciliation_table.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\reconciliation_table.csv",
+      "sha256": "f9f10bcc843d272e88a028a0e31b6360e07e80c7758ae47200e9ae0e6fee0e63"
+    },
+    "specialist_participation_matrix.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\specialist_participation_matrix.csv",
+      "sha256": "8584c1147d3d35868d7eee80d448fbaa07ed38ff9e21e9c96a4afd5f79368c4c"
+    },
+    "weight_sensitivity.csv": {
+      "path": "experiments\\runs\\20261126_172200_p0_audit_sensitivity\\weight_sensitivity.csv",
+      "sha256": "343fe8bcf2d9f07548d64ff7f95cce210a4b3a82cd01a2750309161fc0093245"
+    }
+  }
+}
