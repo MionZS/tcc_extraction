@@ -78,3 +78,21 @@
 | Circuito F-10 | 1 | 0 | 0 | 0 | 0 |
 | None | 0 | 4.713 | 0 | 0 | 0 |
 | None | 0 | 0 | 4.640 | 4.000 | 1.726 |
+
+
+## 4. Auditoria Numérica Detalhada: 6.038 (Ensaio Congelado) vs. 6.037 (Carteira OOT)
+
+O indicador `ref70_diff_count = 1` em `docs/tcc_evidence/p0_audit/p0_summary.json` isola a única unidade consumidora com comportamento diferenciado entre a partição numérica direta e a carteira de vistoria pós-regras de negócio:
+
+- **UC:** `109855540`
+- **Telemetria:** Cobertura de $93,61\%$ (29 dias confiáveis de 30).
+- **Decomposição do Escore:**
+  - Ensemble não supervisionado ponderado: $0{,}363082$
+  - Bônus por flag de violação de regra: $+0{,}150000$
+  - Escore elétrico consolidado não arredondado: $S_{elec} = 0{,}513082$
+  - Limiar de corte congelado exato no treino: $\tau_{exact} = 0{,}513072$
+  - Diferença sobre o limiar: $+0{,}000010$ ($10^{-5}$)
+- **Motivo da Diferenciação:**
+  - No artefato OOT (`experiments/runs/20261125_134559_972_oot_multiview/decisions.parquet`), a UC foi atribuída à categoria `MUDANCA_CLASSE_COMPORTAMENTAL` (trajetória de queda abrupta de consumo de C3 para C1) e, sob a árvore de decisão operacional, recebeu `IS_CANDIDATO_VISTORIA = False` (retendo 6.037 candidatas).
+  - No ensaio de sensibilidade do gating congelado, que avalia estritamente a partição física do filtro de qualidade sobre os escores numéricos elegíveis ($S_{elec} \ge \tau_{frozen}$ com cobertura $\ge 70\%$ e excluindo apenas novas UCs), a unidade satisfez a desigualdade numérica ($0{,}513082 \ge 0{,}513072$) e foi contabilizada entre os 6.038 casos retidos.
+  - As demais 6.037 UCs coincidem estritamente entre os dois conjuntos (`ref70_exact_match_oot_cands` com simetria 100%).
