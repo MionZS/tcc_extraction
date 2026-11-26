@@ -78,7 +78,7 @@ Também pode ser monitorada a mudança da distribuição de arquétipos entre ja
 
 \(S_{behavior}\) não deve diagnosticar férias, troca de morador, veículo elétrico, geração ou fraude. A sequência de classes permite investigar se a rotina intradiária mudou de forma persistente; não constitui um escore de risco calibrado. A explicação é buscada em cadastro, troca de titularidade, GD, topologia, alarmes e demais especialistas.
 
-Essa camada complementa o CPD (baseado em detecção sequencial de mudanças de nível, como CUSUM \autocite{page1954} e métodos *offline* \autocite{truong2020}). O CPD identifica mudanças de nível ou distribuição ao longo do tempo; \(S_{behavior}\) identifica mudanças na composição dos tipos de dia, inclusive quando a energia diária total permanece aproximadamente constante.
+Essa camada complementa o CPD (baseado em detecção sequencial de mudanças de nível, como CUSUM \autocite{page1954} e métodos \textit{offline} \autocite{truong2020}). O CPD identifica mudanças de nível ou distribuição ao longo do tempo; \(S_{behavior}\) identifica mudanças na composição dos tipos de dia, inclusive quando a energia diária total permanece aproximadamente constante.
 
 \subsection{Especialistas por alimentador}\label{especialistas-por-alimentador}
 
@@ -110,7 +110,7 @@ Quando \(b_m-a_m<10^{-12}\) (amplitude degenerada por empates em cauda), adota-s
 
 com pesos \(\mathbf w=(0{,}22;0{,}20;0{,}18;0{,}18;0{,}10;0{,}12)\) e \(R_i\in\{0,1\}\) representando a ativação da regra elétrica crítica da política. Os pesos e o bônus são escolhas heurísticas de projeto, não estimativas de parâmetros de um modelo supervisionado. Sua sensibilidade individual é avaliada nos ensaios de ablação. O bônus de \(0{,}15\) não é peso de detector. As regras permanecem condições de triagem e não confirmação de violação regulatória ou fraude.
 
-A validação temporal definiu o limiar de referência \(\tau_{train}=0{,}5131\) na execução consolidada pós-saneamento (\texttt{20261125\_134559\_972\_oot\_multiview}; frente a \(0{,}5226\) na execução preliminar de 23/11), obtido exclusivamente no conjunto de ajuste anterior ao corte. A seleção deve ser lida conjuntamente com qualidade, regras diagnósticas e política operacional; logo, \(S_{elec,i}\ge\tau_{train}\) isoladamente não é sinônimo de candidato final. Esse limiar permanece congelado na avaliação fora do tempo.
+A validação temporal definiu o limiar de referência \(\tau_{train}=0{,}5131\) na execução consolidada pós-saneamento (frente a \(0{,}5226\) na campanha preliminar), obtido exclusivamente no conjunto de ajuste anterior ao corte. A seleção deve ser lida conjuntamente com qualidade, regras diagnósticas e política operacional; logo, \(S_{elec,i}\ge\tau_{train}\) isoladamente não é sinônimo de candidato final. Esse limiar permanece congelado na avaliação fora do tempo.
 
 A configuração preliminar de quatro detectores pode ser escrita, para comparação, como:
 
@@ -197,7 +197,7 @@ Exemplo: com \(n_f\ge1000\) e apenas alimentador/global disponíveis, os pesos n
 
 Como ilustração da \textbf{configuração histórica de quatro detectores}, considere uma UC hipotética com quatro escores elétricos normalizados, nesta ordem: \(0{,}80\), \(0{,}60\), \(0{,}30\) e \(0{,}40\). Seu consenso de quatro detectores é \(0{,}545\). Se uma regra física crítica é ativada, o bônus eleva a pontuação a \(0{,}745\). Se, entretanto, a qualidade vale \(q=0{,}65\), a declaração elétrica permanece \textbf{não confiável} pelo gate de \(0{,}70\). O escore existe, mas a fila deve indicar insuficiência de evidência elétrica.
 
-Se houver dois alarmes, inclinação \(b=-2\) nas unidades de entrada e troca recente de medidor, o escore heurístico de eventos será aproximadamente \(0{,}737\). Pela precedência literal das regras do código, isso pode levar à categoria interna de investigação de tamper antes do teste de qualidade. Essa decisão deve ser mostrada ao operador como \textbf{sinal físico a investigar com ressalva de telemetria}, não como prova de manipulação. O exemplo evidencia por que explicitar precedência, pesos e estado de confiabilidade é mais importante do que relatar apenas o valor final.
+Se houver dois alarmes, inclinação \(b=-2\ \mathrm{kWh/dia^2}\) e troca recente de medidor, o escore heurístico de eventos será aproximadamente \(0{,}737\). Pela precedência literal das regras do código, isso pode levar à categoria interna de investigação de tamper antes do teste de qualidade. Essa decisão deve ser mostrada ao operador como \textbf{sinal físico a investigar com ressalva de telemetria}, não como prova de manipulação. O exemplo evidencia por que explicitar precedência, pesos e estado de confiabilidade é mais importante do que relatar apenas o valor final.
 
 \subsection{Sensibilidade, estabilidade e critérios de reprodutibilidade}\label{sensibilidade-estabilidade-e-crituxe9rios-de-reprodutibilidade}
 

@@ -10,7 +10,7 @@ from urllib.parse import quote_plus
 import oracledb
 from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy.engine import Engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, QueuePool
 
 DatabaseTarget = Literal["orca", "cis", "geo"]
 ConfigKey = Literal["ORCA", "CIS", "GEO"]
@@ -119,8 +119,18 @@ def load_database_config(target: DatabaseTarget = "orca") -> dict[str, str]:
 
 
 
-def create_engine(target: DatabaseTarget = "orca") -> Engine:
-    """Create a new SQLAlchemy engine connected to ORCA, CIS, or GEO Oracle DB."""
+def create_engine(
+    target: DatabaseTarget = "orca",
+    *,
+    pool_size: int = 5,
+    max_overflow: int = 0,
+) -> Engine:
+    """Create a SQLAlchemy engine connected to ORCA, CIS, or GEO Oracle DB.
+
+    Uses a bounded QueuePool (default 5 persistent sessions) so parallel workers
+    reuse sessions instead of opening a new Oracle session per batch.
+    Pass ``pool_size=0`` to disable pooling (NullPool).
+    """
     config = _read_db_config(target)
 
     user = quote_plus(config["user"])
@@ -131,8 +141,17 @@ def create_engine(target: DatabaseTarget = "orca") -> Engine:
 
     url = f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service}"
 
+    if pool_size <= 0:
+        return _sa_create_engine(
+            url,
+            pool_pre_ping=True,
+            poolclass=NullPool,
+        )
+
     return _sa_create_engine(
         url,
         pool_pre_ping=True,
-        poolclass=NullPool,
+        poolclass=QueuePool,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
     )

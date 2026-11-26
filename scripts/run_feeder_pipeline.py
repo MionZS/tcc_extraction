@@ -300,8 +300,11 @@ def main() -> int:
                     text(mdm_sql_text),
                     {"DAYS_BACK": args.days_back, "UCS": bind_list},
                 )
-                cols = [str(c).upper() for c in result.keys()]
-                b_rows = result.fetchall()
+                try:
+                    cols = [str(c).upper() for c in result.keys()]
+                    b_rows = result.fetchall()
+                finally:
+                    result.close()
                 if b_rows:
                     b_df = _rows_to_frame(b_rows, cols)
                     b_df.write_parquet(b_path, compression="zstd")

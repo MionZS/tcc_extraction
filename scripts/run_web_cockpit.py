@@ -1053,9 +1053,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- Presets and Advanced Filter Bar -->
     <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center;">
       <span style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Atalhos de Investigação:</span>
-      <button class="preset-btn" id="btnPresetCandidates" onclick="applyPreset('candidatos_vistoria')" style="border-color: #ef4444; color: #fca5a5; font-weight:700;">🎯 Candidatos a Vistoria (Campo)</button>
-      <button class="preset-btn" id="btnPresetPureFraud" onclick="applyPreset('pure_fraud')">🚨 Fraude / Desbalanço Elétrico</button>
-      <button class="preset-btn" id="btnPresetReverseFlow" onclick="applyPreset('reverse_flow')">☀️ Injeção / GD Clandestina</button>
+      <button class="preset-btn" id="btnPresetCandidates" onclick="applyPreset('candidatos_vistoria')" style="border-color: #ef4444; color: #fca5a5; font-weight:700;">🎯 Candidatos Priorizados (Triagem)</button>
+      <button class="preset-btn" id="btnPresetPureFraud" onclick="applyPreset('pure_fraud')">🚨 Anomalia Elétrica (Hipótese PNT)</button>
+      <button class="preset-btn" id="btnPresetReverseFlow" onclick="applyPreset('reverse_flow')">☀️ Fluxo Reverso / Hipótese GD</button>
       <button class="preset-btn" id="btnPresetClassShift" onclick="applyPreset('class_shift')">🔄 Mudança de Classe Comportamental</button>
       <button class="preset-btn" id="btnPresetNewUc" onclick="applyPreset('new_uc')">🆕 UCs Novas (Idade ≤ 30d)</button>
       <button class="preset-btn" id="btnPresetReplaced" onclick="applyPreset('meter_replaced')">🔧 Troca Recente de Medidor</button>
@@ -1075,8 +1075,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
       <select id="categorySelect" class="select-filter" onchange="onFilterChange()">
         <option value="">Todas as Categorias Diagnósticas</option>
-        <option value="CANDIDATOS_A_VISTORIA">🎯 Candidatos a Vistoria de Campo (Prioridade OS)</option>
-        <option value="ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT">🚨 Anomalia Elétrica / Fraude PNT (PyOD ML)</option>
+        <option value="CANDIDATOS_A_VISTORIA">🎯 Candidatos Priorizados (Triagem Analítica)</option>
+        <option value="ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT">🚨 Anomalia Elétrica — Hipótese PNT (PyOD ML)</option>
         <option value="POSSIVEL_GD_NAO_CADASTRADA">☀️ Possível GD Não Cadastrada / Injeção</option>
         <option value="FALHA_METROLOGICA_MEDIDOR_TRAVADO">⚠️ Falha Metrológica / Medidor Travado</option>
         <option value="MUDANCA_CLASSE_COMPORTAMENTAL">🔄 Mudança de Classe Comportamental</option>
@@ -2209,7 +2209,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         xTicks2 += `<text x="${xOf(i).toFixed(1)}" y="${H2 - 6}" text-anchor="middle" fill="${axisFill}" font-size="9.5">${pts[i].label}</text>`;
       }
 
-      const unit = data.granularity === 'hourly' ? 'kWh/h' : 'kWh/dia';
+      const unit = data.granularity === 'hourly' ? 'kWh' : 'kWh/dia';
       const avgCovPct = (pts.reduce((acc, p) => acc + (p.coverage || 0), 0) / Math.max(pts.length, 1) * 100).toFixed(1);
       const missingPct = ((missingCount / Math.max(pts.length, 1)) * 100).toFixed(1);
 
@@ -2231,7 +2231,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       box.innerHTML = `
         <div style="font-size:11.5px;color:${metaHeaderColor};margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-          <span>Mediana Base: <b>${data.baseline_median} ${unit}</b> · MAD: <b>${data.baseline_mad}</b> · Slope: <b>${data.slope_kwh_day ?? '-'} kWh/dia</b></span>
+          <span>Mediana Base: <b>${data.baseline_median} ${unit}</b> · MAD: <b>${data.baseline_mad}</b> · Inclinação: <b>${data.slope_kwh_day ?? '-'} kWh/dia²</b></span>
           <span style="color:${stepTxtColor}">${stepTxt}</span>
         </div>
 

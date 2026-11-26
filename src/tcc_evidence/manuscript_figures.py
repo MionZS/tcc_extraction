@@ -591,8 +591,8 @@ def generate_controlled_ml_panels() -> list[dict[str, Any]]:
     ax2.set_xlim(-0.04, 1.06)
     ax2.legend(loc="upper left", fontsize=7.4, framealpha=0.94)
 
-    plt.suptitle("Experimento Controlado (k=35 > 18): Resgate de Densidade Local e Microagrupamento pelo LOF", fontsize=11.5, fontweight="bold", y=1.01)
-    plt.tight_layout()
+    plt.suptitle("Experimento Controlado (k=35 > 18): Resgate de Densidade Local e Microagrupamento pelo LOF", fontsize=11.0, fontweight="bold", y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
     files_lof = _save_matplotlib_formats(fig, ml_dir / "fig_5_1b_lof_escala_propria")
     shutil.copy2(ml_dir / "fig_5_1b_lof_escala_propria.png", mirror_dir / "06_lof.png")
     csv_lof = _write_csv_rows(
@@ -688,8 +688,8 @@ def generate_controlled_ml_panels() -> list[dict[str, Any]]:
     ax2.set_ylabel("Deslocamento de Percentil (P_local − P_global) [p.p.]")
     ax2.set_title("B. Reordenação Relativa Normalizada por Circuito (Δ Percentil)", fontweight="bold")
 
-    plt.suptitle("Experimento Controlado Multi-Circuito (N=1.000): Contextualização em Escala Percentílica [0, 100]%", fontsize=11.5, fontweight="bold", y=1.01)
-    plt.tight_layout()
+    plt.suptitle("Experimento Controlado Multi-Circuito (N=1.000): Contextualização em Escala Percentílica [0, 100]%", fontsize=11.0, fontweight="bold", y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
     files_ctx = _save_matplotlib_formats(fig, ml_dir / "fig_5_1c_contextualizacao_percentis")
     shutil.copy2(ml_dir / "fig_5_1c_contextualizacao_percentis.png", mirror_dir / "09_ablation_funnel.png")
     csv_ctx = _write_csv_rows(
@@ -1015,18 +1015,18 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
     ax_int.plot(hrs, post_fa_med_h, color="#64748b", lw=1.9, linestyle="-.", label="Pós-Evento (03–19/11) FA")
     ax_int.plot(hrs, post_ra_med_h, color="#059669", lw=2.3, linestyle="--", label="Pós-Evento (03–19/11) RA Reversa")
     ax_int.fill_between(hrs, 0, post_ra_med_h, color="#10b981", alpha=0.18)
-    ax_int.set_title("C. Perfil Intradiário Horário Médio (10 min agregado)", fontweight="bold")
+    ax_int.set_title("C. Perfil Intradiário Horário Mediano (10 min agregado)", fontweight="bold")
     ax_int.set_xlabel("Hora do Dia (h)")
-    ax_int.set_ylabel("Energia Horária Mediana (kWh/h)")
+    ax_int.set_ylabel("Energia Horária Mediana (kWh)")
     ax_int.set_xticks(range(0, 24, 3))
     ax_int.legend(loc="upper left", fontsize=7.8)
 
     oot_908 = oot_by_uc["90850700"]
     plt.suptitle(
         f"Estudo de Caso Real 1 — UC 908***00 ({feeder_map.get(str(oot_908.get('meta__feeder')), 'Circuito F-XX')}) | Score OOT: {oot_908['ANOMALY_SCORE']:.4f} | Hipótese: {oot_908['CATEGORIA_DIAGNOSTICA']}",
-        fontsize=11.5, fontweight="bold", y=1.01,
+        fontsize=11.0, fontweight="bold", y=0.98,
     )
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.03, 1, 0.94])
     files_908 = _save_matplotlib_formats(fig, cases_dir / "fig_caso_908xxx00_fa_ra_completo")
     files_908["csv"] = _write_csv_rows(cases_dir / "fig_caso_908xxx00_fa_ra_completo_data.csv", csv_rows_908)
     meta_908 = _write_figure_meta(
@@ -1234,7 +1234,7 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
 
     hrs_ts = [r["hour_ts"] for r in h_rows_685]
     hrs_fa = [r["fa_kwh"] for r in h_rows_685]
-    ax_h.plot(hrs_ts, hrs_fa, color="#0f172a", lw=1.8, label="Consumo Horário Observado FA (kWh/h, 168h)")
+    ax_h.plot(hrs_ts, hrs_fa, color="#0f172a", lw=1.8, label="Consumo Horário Observado FA (kWh, 168h)")
     # Baseline mediana por hora do dia na janela
     by_hod: dict[int, list[float]] = {h: [] for h in range(24)}
     for r in h_rows_685:
@@ -1242,7 +1242,7 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
     base_h = [float(np.median(by_hod[r["hour_ts"].hour])) for r in h_rows_685]
     ax_h.plot(hrs_ts, base_h, color="#0284c7", linestyle="--", lw=1.5, label="Referência Mediana por Hora do Dia")
     ax_h.set_title("A. Série Horária Real (29/10 a 04/11/2026) — 168 Horas Contínuas sem Lacunas Físicas (6 leituras/h a Δt=10 min)", fontweight="bold")
-    ax_h.set_ylabel("Energia Ativa FA (kWh/h)")
+    ax_h.set_ylabel("Energia Ativa Horária FA (kWh)")
     ax_h.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m %Hh"))
     ax_h.legend(loc="upper left", fontsize=8.2)
 
@@ -1273,9 +1273,9 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
     oot_685 = oot_by_uc["68546220"]
     plt.suptitle(
         f"Estudo de Caso Real 3 — UC 685***20 ({feeder_map.get(str(oot_685.get('meta__feeder')), 'Circuito F-XX')}) | Reconciliação de Cobertura (50,0% Horária Legada vs 100,0% Nativa vs 99,49% Janela 30d)",
-        fontsize=11.0, fontweight="bold", y=1.01,
+        fontsize=10.5, fontweight="bold", y=0.98,
     )
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.02, 1, 0.94])
     files_685 = _save_matplotlib_formats(fig, cases_dir / "fig_caso_685xxx20_reconciliacao_cobertura")
     shutil.copy2(cases_dir / "fig_caso_685xxx20_reconciliacao_cobertura.png", eda_mirror_dir / "acompanhamento_semanal_outlier.png")
     files_685["csv"] = _write_csv_rows(cases_dir / "fig_caso_685xxx20_reconciliacao_cobertura_data.csv", csv_rows_685)
@@ -1375,7 +1375,7 @@ def _render_tui_rich_svgs(
     ))
 
     # --- SVG 2: Calendário Real de Continuidade + Auditoria da Suíte ---
-    rec_console_2 = Console(record=True, width=116, force_terminal=True, color_system="truecolor")
+    rec_console_2 = Console(record=True, width=138, force_terminal=True, color_system="truecolor")
     orig_cont_console = continuity_mod.console
     try:
         continuity_mod.console = rec_console_2
@@ -1462,9 +1462,17 @@ def generate_platform_interface_captures(run_dirs: dict[str, Path], feeder_map: 
             overview_png = plat_dir / "cockpit_visao_geral.png"
             page.screenshot(path=str(overview_png), full_page=False)
 
-            # 3. Fig 4.4c — Carteira de Candidatos à Vistoria filtrada (preset candidatos_vistoria -> 6.333 UCs)
+            oot_metrics = json.loads((run_dirs["oot_multiview"] / "metrics.json").read_text(encoding="utf-8"))
+            cand_n = int(oot_metrics.get("oot_candidates_vistoria", 6037))
+            cand_us = f"{cand_n:,}"
+            cand_br = cand_us.replace(",", ".")
+
+            # 3. Fig 4.4c — Carteira de Candidatos Priorizados filtrada (preset candidatos_vistoria)
             page.click("#btnPresetCandidates")
-            page.wait_for_function("document.getElementById('pageInfo').innerText.includes('6,333') || document.getElementById('pageInfo').innerText.includes('6.333')", timeout=30000)
+            page.wait_for_function(
+                f"document.getElementById('pageInfo').innerText.includes('{cand_us}') || document.getElementById('pageInfo').innerText.includes('{cand_br}')",
+                timeout=30000,
+            )
             # Recolher o painel superior e rolar ao topo para enquadrar KPIs + presets + tabela ordenada de candidatos
             page.evaluate("toggleDashboardPanel(true); window.scrollTo(0, 0);")
             page.wait_for_timeout(350)
@@ -1475,12 +1483,12 @@ def generate_platform_interface_captures(run_dirs: dict[str, Path], feeder_map: 
                 plat_dir / "fig_4_4c_cockpit_carteira_candidatos.meta.json",
                 figure_id="fig_4_4c_cockpit_carteira_candidatos",
                 section_target="4.4 — Capturas Reais da Plataforma (Cockpit Carteira Filtrada)",
-                title="Cockpit Analítico Web — Carteira priorizada de candidatos à vistoria (6.333 UCs, 19/11/2026)",
+                title=f"Cockpit Analítico Web — Carteira priorizada de candidatos ({cand_br} UCs, 19/11/2026)",
                 files={"png": cand_png.relative_to(PROJECT_ROOT).as_posix(), "overview_png": overview_png.relative_to(PROJECT_ROOT).as_posix()},
-                origin_data={"source": "oot_multiview/decisions.parquet", "total_ucs": 65686, "candidates": 6333, "possivel_gd": 1451, "quarantine_telecom": 2829},
+                origin_data={"source": "oot_multiview/decisions.parquet", "total_ucs": 65686, "candidates": cand_n, "possivel_gd": 1451, "quarantine_telecom": 2829},
                 parameters={"preset": "candidatos_vistoria", "theme": "light", "anonymized": True, "viewport": "1720x1000@2x"},
                 run_id=oot_run_id,
-                caption_academic_pt="Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261123_124416_146_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.333 candidatas à vistoria; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela priorizada pelo preset de investigação.",
+                caption_academic_pt=f"Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`{oot_run_id}`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; {cand_br} candidatas priorizadas; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela ordenada pelo preset de investigação.",
                 interpretative_analysis_pt="A interface web traduz diretamente os contratos analíticos para a triagem humana (Etapa 6 do fluxo): cada linha preserva identificador mascarado, circuito anonimizado, score composto, hipótese diagnóstica e persistência em dias consecutivos sem alterar ou executar ordens de serviço de campo.",
             ))
 

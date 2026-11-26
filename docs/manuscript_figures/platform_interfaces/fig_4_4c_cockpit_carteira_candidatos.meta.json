@@ -1,19 +1,19 @@
 {
   "figure_id": "fig_4_4c_cockpit_carteira_candidatos",
   "section_target": "4.4 — Capturas Reais da Plataforma (Cockpit Carteira Filtrada)",
-  "title": "Cockpit Analítico Web — Carteira priorizada de candidatos à vistoria (6.333 UCs, 19/11/2026)",
+  "title": "Cockpit Analítico Web — Carteira priorizada de candidatos (6.037 UCs, 19/11/2026)",
   "files": {
     "png": "docs/manuscript_figures/platform_interfaces/fig_4_4c_cockpit_carteira_candidatos.png",
     "overview_png": "docs/manuscript_figures/platform_interfaces/cockpit_visao_geral.png"
   },
   "sha256": {
-    "png": "be4888de4a59a3dc534bdb3356876b0852a17713fbfbbf5154753e857718c76d",
-    "overview_png": "775c3660c7b1f7e802295b184a23059303345eda33087a1042cd03c8a55b472b"
+    "png": "ebea4eb26376164b38454c2ae940431fbeea329c2cf20c62358e003b1a806c4a",
+    "overview_png": "df5582ae40f20c009158a216b6d3c1c788d68b7d8ccdc4508536fd597a7d822c"
   },
   "origin_data": {
     "source": "oot_multiview/decisions.parquet",
     "total_ucs": 65686,
-    "candidates": 6333,
+    "candidates": 6037,
     "possivel_gd": 1451,
     "quarantine_telecom": 2829
   },
@@ -23,7 +23,7 @@
     "anonymized": true,
     "viewport": "1720x1000@2x"
   },
-  "run_id": "20261123_124416_146_oot_multiview",
-  "caption_academic_pt": "Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261123_124416_146_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.333 candidatas à vistoria; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela priorizada pelo preset de investigação.",
+  "run_id": "20261125_134559_972_oot_multiview",
+  "caption_academic_pt": "Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261125_134559_972_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.037 candidatas priorizadas; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela ordenada pelo preset de investigação.",
   "interpretative_analysis_pt": "A interface web traduz diretamente os contratos analíticos para a triagem humana (Etapa 6 do fluxo): cada linha preserva identificador mascarado, circuito anonimizado, score composto, hipótese diagnóstica e persistência em dias consecutivos sem alterar ou executar ordens de serviço de campo."
 }

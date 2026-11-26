@@ -44,19 +44,19 @@ O Isolation Forest separa observações por partições aleatórias, atribuindo 
 
 As Figuras \ref{fig:ml-iforest-microcluster}, \ref{fig:ml-lof-escala-propria} e \ref{fig:ml-contextualizacao-percentis} detalham, no experimento controlado ($N=1.000$, \texttt{seed=42}, \texttt{RobustScaler} e normalização quantílica $P_{01}$--$P_{99}$), os três mecanismos complementares: (i) o efeito de mascaramento no \emph{Isolation Forest} ($200$ árvores, contaminação $0{,}078$) sobre o microagrupamento compacto ($n=18$, mediana normalizada $0{,}500$ abaixo de $P_{95}=0{,}564$, frente a $1{,}000$ nos outliers globais); (ii) o resgate pelo LOF ($k=35 > 18$) em escala bruta logarítmica própria ($-\mathrm{NOF}$, mediana $2{,}39$ no microagrupamento e $3{,}15$ no outlier local acima de $P_{95}=1{,}99$, frente a $1{,}05$ no grupo normal); e (iii) a contextualização por circuito em percentis empíricos $[0,100]\%$ (Jaccard Top-5\% de $0{,}776$, promovendo 7 casos em circuitos leves e atenuando 6 cargas elevadas nominais em circuitos pesados).
 
-\begin{figure}[htbp]\centering\caption{Experimento controlado ($N=1.000$, \texttt{seed=42}): projeção PCA dos escores efetivamente calculados pelo \emph{Isolation Forest} e distribuição por coorte geradora, ilustrando a atenuação no microagrupamento compacto ($n=18$)}\label{fig:ml-iforest-microcluster}
+\begin{figure}[htbp]\centering\caption{Experimento controlado ($N=1.000$, semente 42): projeção PCA dos escores efetivamente calculados pelo \emph{Isolation Forest} e distribuição por coorte geradora, ilustrando a atenuação no microagrupamento compacto ($n=18$)}\label{fig:ml-iforest-microcluster}
 \includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/fig_5_1a_isolation_forest_microcluster.pdf}
-\par\small Fonte: elaboração própria (\texttt{controlled\_benchmark\_v1\_seed42}).
+\par\small Fonte: elaboração própria a partir do experimento controlado.
 \end{figure}
 
 \begin{figure}[htbp]\centering\caption{Respostas do \emph{Local Outlier Factor} ($k=35 > 18$) no experimento controlado ($N=1.000$): (A) escala bruta logarítmica própria ($-\mathrm{NOF}$) e normalizada $P_{01}$--$P_{99}$ $[0,1]$; (B) espaço de decisão conjunto com \emph{Isolation Forest}}\label{fig:ml-lof-escala-propria}
 \includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/fig_5_1b_lof_escala_propria.pdf}
-\par\small Fonte: elaboração própria (\texttt{controlled\_benchmark\_v1\_seed42}).
+\par\small Fonte: elaboração própria a partir do experimento controlado.
 \end{figure}
 
 \begin{figure}[htbp]\centering\caption{Contextualização por circuito elétrico no experimento controlado ($N=1.000$) em percentis empíricos $[0,100]\%$: (A) percentil global versus local intra-circuito com limiar $P_{95}$; (B) deslocamento líquido de percentil ($\Delta P$) por perfil}\label{fig:ml-contextualizacao-percentis}
 \includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/fig_5_1c_contextualizacao_percentis.pdf}
-\par\small Fonte: elaboração própria (\texttt{controlled\_benchmark\_v1\_seed42}).
+\par\small Fonte: elaboração própria a partir do experimento controlado.
 \end{figure}
 
 
