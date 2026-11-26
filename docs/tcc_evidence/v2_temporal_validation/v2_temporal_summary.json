@@ -1,0 +1,240 @@
+{
+  "run_id": "20261126_190338_p1_v2_temporal_validation",
+  "git_commit": "05d39cb",
+  "timestamp": "2026-11-26T19:06:05.933477",
+  "runtime_sec": 147.45,
+  "tau_v1": 0.5131,
+  "tau_v2": 0.5131,
+  "v1_vs_v2_multicutoff": [
+    {
+      "execucao": "v1 (19/11 — Ref. 25/11)",
+      "total_ucs": 65686,
+      "elegiveis": 62857,
+      "quarentena": 2829,
+      "rule_violation_flag_n": 30694,
+      "rule_violation_flag_pct": 46.73,
+      "is_elec_anomaly": 6037,
+      "s_tamper_ge_070": 0,
+      "candidatos_vistoria": 6037,
+      "cat_pnt": 4087,
+      "cat_gd": 1451,
+      "cat_metro": 515
+    },
+    {
+      "execucao": "v1 (25/11 — +6 dias)",
+      "total_ucs": 65640,
+      "elegiveis": 62274,
+      "quarentena": 3366,
+      "rule_violation_flag_n": 30649,
+      "rule_violation_flag_pct": 46.69,
+      "is_elec_anomaly": 6059,
+      "s_tamper_ge_070": 0,
+      "candidatos_vistoria": 6059,
+      "cat_pnt": 4132,
+      "cat_gd": 1437,
+      "cat_metro": 503
+    },
+    {
+      "execucao": "v2 (19/11 — Saneada)",
+      "total_ucs": 65686,
+      "elegiveis": 62686,
+      "quarentena": 3000,
+      "rule_violation_flag_n": 124,
+      "rule_violation_flag_pct": 0.19,
+      "is_elec_anomaly": 3455,
+      "s_tamper_ge_070": 1377,
+      "candidatos_vistoria": 4298,
+      "cat_pnt": 2468,
+      "cat_gd": 1449,
+      "cat_metro": 417
+    },
+    {
+      "execucao": "v2 (25/11 — Saneada +6d)",
+      "total_ucs": 65640,
+      "elegiveis": 62185,
+      "quarentena": 3455,
+      "rule_violation_flag_n": 122,
+      "rule_violation_flag_pct": 0.19,
+      "is_elec_anomaly": 3466,
+      "s_tamper_ge_070": 1375,
+      "candidatos_vistoria": 4300,
+      "cat_pnt": 2493,
+      "cat_gd": 1435,
+      "cat_metro": 406
+    }
+  ],
+  "temporal_persistence_6d": [
+    {
+      "modelo": "v1 congelada (19/11 -> 25/11)",
+      "ucs_comuns_elegiveis": 62207,
+      "spearman_19_vs_25": 0.9688,
+      "cands_19": 6037,
+      "cands_25": 6059,
+      "cands_persistentes": 5358,
+      "taxa_persistencia_cands_pct": 88.75,
+      "jaccard_cands": 0.7952,
+      "top2k_persistentes": 1797,
+      "taxa_persistencia_top2k_pct": 89.85,
+      "jaccard_top2k": 0.8157,
+      "novas_entradas_top2k": 203,
+      "saidas_top2k": 203
+    },
+    {
+      "modelo": "v2 saneada (19/11 -> 25/11)",
+      "ucs_comuns_elegiveis": 62115,
+      "spearman_19_vs_25": 0.9484,
+      "cands_19": 4298,
+      "cands_25": 4300,
+      "cands_persistentes": 3933,
+      "taxa_persistencia_cands_pct": 91.51,
+      "jaccard_cands": 0.8431,
+      "top2k_persistentes": 1760,
+      "taxa_persistencia_top2k_pct": 88.0,
+      "jaccard_top2k": 0.7857,
+      "novas_entradas_top2k": 240,
+      "saidas_top2k": 240
+    },
+    {
+      "modelo": "v1 vs v2 no mesmo corte (19/11)",
+      "ucs_comuns_elegiveis": 62686,
+      "spearman_19_vs_25": 0.9041,
+      "cands_19": 6037,
+      "cands_25": 4298,
+      "cands_persistentes": 3526,
+      "taxa_persistencia_cands_pct": 58.41,
+      "jaccard_cands": 0.5178,
+      "top2k_persistentes": 1848,
+      "taxa_persistencia_top2k_pct": 92.4,
+      "jaccard_top2k": 0.8587,
+      "novas_entradas_top2k": 152,
+      "saidas_top2k": 152
+    }
+  ],
+  "daily_monitoring_25d_summary": {
+    "n_days": 25,
+    "mean_candidates": 9408.6,
+    "day_19": {
+      "cutoff": "2026-11-19",
+      "total_ucs": 65686,
+      "elegiveis_60_12d": 63489,
+      "quarentena": 2197,
+      "candidatos_regras_25d": 9209,
+      "jaccard_vs_dia_anterior": 0.9893
+    },
+    "day_25": {
+      "cutoff": "2026-11-25",
+      "total_ucs": 65640,
+      "elegiveis_60_12d": 63453,
+      "quarentena": 2187,
+      "candidatos_regras_25d": 9188,
+      "jaccard_vs_dia_anterior": 0.9885
+    }
+  },
+  "case_studies_extended_25_11": [
+    {
+      "uc_masked": "908***00",
+      "dias_observados_20_25_nov": 6,
+      "fa_media_20_25_nov": 4.55,
+      "ra_media_20_25_nov": 14.72,
+      "cov_media_20_25_nov": 0.9502,
+      "alarmes_tamper_30d_25_11": 0,
+      "v1_25_score": 0.9327,
+      "v1_25_categoria": "POSSIVEL_GD_NAO_CADASTRADA",
+      "v2_25_score": 0.7827,
+      "v2_25_s_tamper": 0.0184,
+      "v2_25_categoria": "POSSIVEL_GD_NAO_CADASTRADA",
+      "v2_25_candidata": true,
+      "cpd_ate_25_11": {
+        "index": 8,
+        "date": "2026-10-31",
+        "pre_median": 18.123,
+        "post_median": 4.893,
+        "delta_abs": -13.23,
+        "delta_pct": -73.0,
+        "cusum_peak": 59.799,
+        "direction": "QUEDA_DEGRAU"
+      }
+    },
+    {
+      "uc_masked": "291***96",
+      "dias_observados_20_25_nov": 0,
+      "fa_media_20_25_nov": 0.0,
+      "ra_media_20_25_nov": 0.0,
+      "cov_media_20_25_nov": 0.0,
+      "alarmes_tamper_30d_25_11": 2,
+      "v1_25_score": 1.0,
+      "v1_25_categoria": "ANOMALIA_COMUNICACAO_ISOLADA",
+      "v2_25_score": 1.0,
+      "v2_25_s_tamper": 0.4667,
+      "v2_25_categoria": "ANOMALIA_COMUNICACAO_ISOLADA",
+      "v2_25_candidata": false,
+      "cpd_ate_25_11": null
+    },
+    {
+      "uc_masked": "685***20",
+      "dias_observados_20_25_nov": 6,
+      "fa_media_20_25_nov": 71.59,
+      "ra_media_20_25_nov": 0.0,
+      "cov_media_20_25_nov": 0.9421,
+      "alarmes_tamper_30d_25_11": 0,
+      "v1_25_score": 1.0,
+      "v1_25_categoria": "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT",
+      "v2_25_score": 0.8937,
+      "v2_25_s_tamper": 0.0,
+      "v2_25_categoria": "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT",
+      "v2_25_candidata": true,
+      "cpd_ate_25_11": null
+    }
+  ],
+  "v1_vs_v2_gate_perturbation_check": [
+    {
+      "cenario": "Lacuna aleatória 30%",
+      "v1_quarentena_pct": 61.0,
+      "v2_quarentena_pct": 78.0,
+      "v1_vazamento_eletrico_pct": 9.0,
+      "v2_vazamento_eletrico_pct": 3.0
+    },
+    {
+      "cenario": "Lacuna aleatória 50%",
+      "v1_quarentena_pct": 100.0,
+      "v2_quarentena_pct": 100.0,
+      "v1_vazamento_eletrico_pct": 0.0,
+      "v2_vazamento_eletrico_pct": 0.0
+    },
+    {
+      "cenario": "Bloco consecutivo 20% (6d)",
+      "v1_quarentena_pct": 0.0,
+      "v2_quarentena_pct": 0.0,
+      "v1_vazamento_eletrico_pct": 28.0,
+      "v2_vazamento_eletrico_pct": 18.0
+    },
+    {
+      "cenario": "Bloco consecutivo 30% (9d)",
+      "v1_quarentena_pct": 0.0,
+      "v2_quarentena_pct": 0.0,
+      "v1_vazamento_eletrico_pct": 27.0,
+      "v2_vazamento_eletrico_pct": 17.0
+    },
+    {
+      "cenario": "Bloco consecutivo 50% (15d)",
+      "v1_quarentena_pct": 0.0,
+      "v2_quarentena_pct": 100.0,
+      "v1_vazamento_eletrico_pct": 31.0,
+      "v2_vazamento_eletrico_pct": 0.0
+    }
+  ],
+  "figures": {
+    "fig_v2_01": {
+      "pdf": "docs\\tcc_evidence\\v2_temporal_validation\\figures\\fig_v2_01_persistencia_temporal_19_25_nov.pdf",
+      "png": "docs\\tcc_evidence\\v2_temporal_validation\\figures\\fig_v2_01_persistencia_temporal_19_25_nov.png"
+    },
+    "fig_v2_02": {
+      "pdf": "docs\\tcc_evidence\\v2_temporal_validation\\figures\\fig_v2_02_comparacao_v1_vs_v2_auditoria.pdf",
+      "png": "docs\\tcc_evidence\\v2_temporal_validation\\figures\\fig_v2_02_comparacao_v1_vs_v2_auditoria.png"
+    },
+    "fig_v2_03": {
+      "pdf": "docs\\tcc_evidence\\v2_temporal_validation\\figures\\fig_v2_03_evolucao_casos_reais_ate_25_nov.pdf",
+      "png": "docs\\tcc_evidence\\v2_temporal_validation\\figures\\fig_v2_03_evolucao_casos_reais_ate_25_nov.png"
+    }
+  }
+}

@@ -57,3 +57,11 @@ Este documento reúne exclusivamente **fatos, números verificados, figuras e ap
 - **Capítulo 12:** Atualizar referência à sensibilidade congelada e ao protocolo de perturbações controladas.
 - **Capítulo 13:** Incorporar tabela de reconciliação, sensibilidade de pesos/gating/bônus, matriz de correlações revisada, tabela central Baseline × Ensemble × Multivisão e achados dos experimentos controlados.
 - **Capítulo 15 (Conclusões):** Registrar explicitamente os dois achados de auditoria (gatilho de `c_imb > 0,20` no bônus `+0,15` e path particionado de `alarm_events`) como aprendizados de engenharia e trabalho futuro imediato.
+## 5. Adendo Opção A — Validação Temporal (`19/11 → 25/11/2026`) e Variante `v2` Saneada
+
+- **Persistência real de +6 dias (`19/11 → 25/11`):** Na `v1` congelada, `89,8%` do Top-2.000 (`1.797/2.000`, Spearman `0,9688`) e `88,8%` dos candidatos persistiram após 6 dias reais; na `v2` saneada, `88,0%` do Top-2.000 (Spearman `0,9484`).
+- **Impacto das 3 correções na `v2` (corte 19/11 / corte 25/11):**
+  - Regra PRODIST estrita reduziu disparos do bônus `+0,15` de `46,73%` para **`0,19%`** das UCs.
+  - Leitura particionada de `alarm_events` ativou **`1.377` UCs** (`19/11`) e **`1.375` UCs** (`25/11`) com `S_tamper >= 0,70`.
+  - Gate endurecido (`cov >= 70%` e `reliable_days >= 18`) zerou o vazamento elétrico no bloco consecutivo de 15 dias ausentes de **`31,0%` (`v1`) para `0,0%` (`v2`)**.
+- **Relatório e figuras prontas:** `docs/tcc_evidence/VALIDACAO_TEMPORAL_V2_25_11.md` e `docs/tcc_evidence/v2_temporal_validation/figures/fig_v2_01..03.pdf`.

@@ -124,20 +124,25 @@ class ElectricalAnomalyDetector(BaseEstimator):
         self,
         *,
         min_quality_threshold: float = 0.70,
+        min_reliable_days: int | None = None,
         contamination: float = 0.05,
         normalization_mode: str = "frozen_quantile",
         freeze_threshold: bool = True,
+        strict_voltage_imbalance_rule: bool = False,
         random_state: int = 42,
     ):
         self.min_quality_threshold = min_quality_threshold
+        self.min_reliable_days = min_reliable_days
         self.contamination = contamination
         self.normalization_mode = normalization_mode
         self.freeze_threshold = freeze_threshold
+        self.strict_voltage_imbalance_rule = strict_voltage_imbalance_rule
         self.random_state = random_state
         self.detector = CompositeAnomalyDetector(
             contamination=contamination,
             normalization_mode=normalization_mode,
             freeze_threshold=freeze_threshold,
+            strict_voltage_imbalance_rule=strict_voltage_imbalance_rule,
             random_state=random_state,
         )
         self.fitted_ = False
@@ -153,6 +158,7 @@ class ElectricalAnomalyDetector(BaseEstimator):
         X: np.ndarray,
         data_quality: np.ndarray | Sequence[float],
         raw_dataframe: pl.DataFrame | None = None,
+        reliable_days: np.ndarray | Sequence[int] | None = None,
     ) -> dict[str, Any]:
         """Compute electrical anomaly score S_elec conditioned on data quality.
 
@@ -168,6 +174,14 @@ class ElectricalAnomalyDetector(BaseEstimator):
 
         dq_arr = np.asarray(data_quality, dtype=float)
         is_reliable = dq_arr >= self.min_quality_threshold
+        min_rel_d = getattr(self, "min_reliable_days", None)
+        if min_rel_d is not None:
+            if reliable_days is not None:
+                rd_arr = np.asarray(reliable_days, dtype=float)
+                is_reliable = is_reliable & (rd_arr >= float(min_rel_d))
+            elif raw_dataframe is not None and "x__coverage_reliable_days" in raw_dataframe.columns:
+                rd_arr = raw_dataframe["x__coverage_reliable_days"].fill_null(0).to_numpy()
+                is_reliable = is_reliable & (rd_arr >= float(min_rel_d))
 
         res = self.detector.predict_composite(X, raw_dataframe=raw_dataframe)
         raw_scores = res["consensus_score"]
@@ -291,14 +305,18 @@ class MultiViewAnomalyPipeline:
         *,
         contamination: float = 0.05,
         min_quality_threshold: float = 0.70,
+        min_reliable_days: int | None = None,
         normalization_mode: str = "frozen_quantile",
         freeze_threshold: bool = True,
+        strict_voltage_imbalance_rule: bool = False,
         random_state: int = 42,
     ):
         self.contamination = contamination
         self.min_quality_threshold = min_quality_threshold
+        self.min_reliable_days = min_reliable_days
         self.normalization_mode = normalization_mode
         self.freeze_threshold = freeze_threshold
+        self.strict_voltage_imbalance_rule = strict_voltage_imbalance_rule
         self.random_state = random_state
 
         self.comm_detector = CommunicationAnomalyDetector(
@@ -308,9 +326,11 @@ class MultiViewAnomalyPipeline:
         )
         self.elec_detector = ElectricalAnomalyDetector(
             min_quality_threshold=min_quality_threshold,
+            min_reliable_days=min_reliable_days,
             contamination=contamination,
             normalization_mode=normalization_mode,
             freeze_threshold=freeze_threshold,
+            strict_voltage_imbalance_rule=strict_voltage_imbalance_rule,
             random_state=random_state,
         )
         self.tamper_detector = TamperAnomalyDetector()

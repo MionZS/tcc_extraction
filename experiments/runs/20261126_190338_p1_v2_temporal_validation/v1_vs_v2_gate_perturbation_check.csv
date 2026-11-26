@@ -1,0 +1,6 @@
+cenario;v1_quarentena_pct;v2_quarentena_pct;v1_vazamento_eletrico_pct;v2_vazamento_eletrico_pct
+Lacuna aleatória 30%;61.0;78.0;9.0;3.0
+Lacuna aleatória 50%;100.0;100.0;0.0;0.0
+Bloco consecutivo 20% (6d);0.0;0.0;28.0;18.0
+Bloco consecutivo 30% (9d);0.0;0.0;27.0;17.0
+Bloco consecutivo 50% (15d);0.0;100.0;31.0;0.0

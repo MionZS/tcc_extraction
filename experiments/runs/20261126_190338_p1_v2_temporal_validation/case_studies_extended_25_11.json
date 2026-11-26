@@ -1,0 +1,56 @@
+[
+  {
+    "uc_masked": "908***00",
+    "dias_observados_20_25_nov": 6,
+    "fa_media_20_25_nov": 4.55,
+    "ra_media_20_25_nov": 14.72,
+    "cov_media_20_25_nov": 0.9502,
+    "alarmes_tamper_30d_25_11": 0,
+    "v1_25_score": 0.9327,
+    "v1_25_categoria": "POSSIVEL_GD_NAO_CADASTRADA",
+    "v2_25_score": 0.7827,
+    "v2_25_s_tamper": 0.0184,
+    "v2_25_categoria": "POSSIVEL_GD_NAO_CADASTRADA",
+    "v2_25_candidata": true,
+    "cpd_ate_25_11": {
+      "index": 8,
+      "date": "2026-10-31",
+      "pre_median": 18.123,
+      "post_median": 4.893,
+      "delta_abs": -13.23,
+      "delta_pct": -73.0,
+      "cusum_peak": 59.799,
+      "direction": "QUEDA_DEGRAU"
+    }
+  },
+  {
+    "uc_masked": "291***96",
+    "dias_observados_20_25_nov": 0,
+    "fa_media_20_25_nov": 0.0,
+    "ra_media_20_25_nov": 0.0,
+    "cov_media_20_25_nov": 0.0,
+    "alarmes_tamper_30d_25_11": 2,
+    "v1_25_score": 1.0,
+    "v1_25_categoria": "ANOMALIA_COMUNICACAO_ISOLADA",
+    "v2_25_score": 1.0,
+    "v2_25_s_tamper": 0.4667,
+    "v2_25_categoria": "ANOMALIA_COMUNICACAO_ISOLADA",
+    "v2_25_candidata": false,
+    "cpd_ate_25_11": null
+  },
+  {
+    "uc_masked": "685***20",
+    "dias_observados_20_25_nov": 6,
+    "fa_media_20_25_nov": 71.59,
+    "ra_media_20_25_nov": 0.0,
+    "cov_media_20_25_nov": 0.9421,
+    "alarmes_tamper_30d_25_11": 0,
+    "v1_25_score": 1.0,
+    "v1_25_categoria": "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT",
+    "v2_25_score": 0.8937,
+    "v2_25_s_tamper": 0.0,
+    "v2_25_categoria": "ANOMALIA_ELETRICA_SUSPEITA_FRAUDE_PNT",
+    "v2_25_candidata": true,
+    "cpd_ate_25_11": null
+  }
+]

@@ -1,0 +1,5 @@
+execucao;total_ucs;elegiveis;quarentena;rule_violation_flag_n;rule_violation_flag_pct;is_elec_anomaly;s_tamper_ge_070;candidatos_vistoria;cat_pnt;cat_gd;cat_metro
+v1 (19/11 — Ref. 25/11);65686;62857;2829;30694;46.73;6037;0;6037;4087;1451;515
+v1 (25/11 — +6 dias);65640;62274;3366;30649;46.69;6059;0;6059;4132;1437;503
+v2 (19/11 — Saneada);65686;62686;3000;124;0.19;3455;1377;4298;2468;1449;417
+v2 (25/11 — Saneada +6d);65640;62185;3455;122;0.19;3466;1375;4300;2493;1435;406

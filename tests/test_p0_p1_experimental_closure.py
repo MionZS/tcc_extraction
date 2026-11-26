@@ -226,3 +226,54 @@ def test_p1_multiview_contract_lgpd_and_figures_integrity() -> None:
         for f_info in p1_pert["figures"].values():
             assert (PROJECT_ROOT / f_info["pdf"]).exists()
             assert (PROJECT_ROOT / f_info["pdf"]).stat().st_size > 5000
+
+
+def test_v2_hardened_gate_strict_prodist_and_temporal_validation() -> None:
+    """Verify opt-in v2 strict_voltage_imbalance_rule, min_reliable_days gate, and Option A temporal validation."""
+    from src.models.specialized_detectors import MultiViewAnomalyPipeline
+
+    rng = np.random.default_rng(42)
+    X_c = rng.normal(0.0, 1.0, size=(80, 4))
+    X_e = rng.normal(0.0, 1.0, size=(80, 6))
+    pipe_v2 = MultiViewAnomalyPipeline(
+        min_quality_threshold=0.70,
+        min_reliable_days=18,
+        strict_voltage_imbalance_rule=True,
+        random_state=42,
+    ).fit(X_comm=X_c, X_elec=X_e)
+
+    # Synthetic eval dataframe with high current_imbalance (should NOT trigger strict PRODIST voltage rule!)
+    # and a consecutive-blackout UC (cov=0.95 on observed days, but only 15 reliable days -> MUST be quarantined!)
+    raw_df = pl.DataFrame({
+        "x__hist_current_imbalance_max": [0.80] * 10,
+        "x__hist_voltage_imbalance_max": [2.0] * 9 + [25.0],  # only last row violates voltage > 20%
+        "x__coverage_reliable_days": [15, 10, 25, 25, 25, 25, 25, 25, 25, 25],
+    })
+    res = pipe_v2.score(
+        X_comm=X_c[:10],
+        X_elec=X_e[:10],
+        data_quality=np.full(10, 0.95),
+        tamper_alarms=np.zeros(10),
+        raw_dataframe=raw_df,
+    )
+    # Only row 9 triggered strict voltage rule (not rows 0..8 despite c_imb=0.80!)
+    assert int(res["rule_violation_flag"].sum()) == 1
+    assert bool(res["rule_violation_flag"][9]) is True
+    # Rows 0 and 1 had reliable_days < 18 -> MUST be quarantined even with cov=0.95!
+    assert bool(res["is_reliable_elec"][0]) is False
+    assert bool(res["is_reliable_elec"][1]) is False
+    assert bool(res["is_reliable_elec"][2]) is True
+
+    # If Option A temporal validation artifact exists, validate its invariants
+    v2_sum_p = PROJECT_ROOT / "docs" / "tcc_evidence" / "v2_temporal_validation" / "v2_temporal_summary.json"
+    if v2_sum_p.exists():
+        v2s = json.loads(v2_sum_p.read_text(encoding="utf-8"))
+        assert len(v2s["v1_vs_v2_multicutoff"]) == 4
+        assert len(v2s["figures"]) == 3
+        for f_info in v2s["figures"].values():
+            assert (PROJECT_ROOT / f_info["pdf"]).exists()
+            assert (PROJECT_ROOT / f_info["pdf"]).stat().st_size > 5000
+        # Consecutive 15d blackout MUST have 0% electrical leakage under v2 gate
+        burst15 = [r for r in v2s["v1_vs_v2_gate_perturbation_check"] if "15d" in r["cenario"]][0]
+        assert burst15["v2_vazamento_eletrico_pct"] == 0.0
+        assert burst15["v2_quarentena_pct"] == 100.0

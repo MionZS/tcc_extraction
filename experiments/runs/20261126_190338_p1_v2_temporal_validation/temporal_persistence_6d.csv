@@ -1,0 +1,4 @@
+modelo;ucs_comuns_elegiveis;spearman_19_vs_25;cands_19;cands_25;cands_persistentes;taxa_persistencia_cands_pct;jaccard_cands;top2k_persistentes;taxa_persistencia_top2k_pct;jaccard_top2k;novas_entradas_top2k;saidas_top2k
+v1 congelada (19/11 -> 25/11);62207;0.9688;6037;6059;5358;88.75;0.7952;1797;89.85;0.8157;203;203
+v2 saneada (19/11 -> 25/11);62115;0.9484;4298;4300;3933;91.51;0.8431;1760;88.0;0.7857;240;240
+v1 vs v2 no mesmo corte (19/11);62686;0.9041;6037;4298;3526;58.41;0.5178;1848;92.4;0.8587;152;152

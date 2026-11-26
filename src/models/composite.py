@@ -344,6 +344,7 @@ class CompositeAnomalyDetector:
         weights: dict[str, float] | None = None,
         normalization_mode: str = "frozen_quantile",
         freeze_threshold: bool = True,
+        strict_voltage_imbalance_rule: bool = False,
         random_state: int = 42,
     ):
         self.contamination = float(np.clip(contamination, 0.001, 0.45))
@@ -351,6 +352,7 @@ class CompositeAnomalyDetector:
         self.lof_neighbors = lof_neighbors
         self.normalization_mode = normalization_mode
         self.freeze_threshold = freeze_threshold
+        self.strict_voltage_imbalance_rule = strict_voltage_imbalance_rule
         self.random_state = random_state
 
         self.weights = weights or {
@@ -549,7 +551,11 @@ class CompositeAnomalyDetector:
                         crit_sag_swell = plausible_meas & ((v_pu < 0.70) | (v_pu > 1.25))
                         rule_flags |= crit_sag_swell
 
-            v_imb_cols = [c for c in raw_dataframe.columns if "VOLTAGE_IMBALANCE" in c.upper() or "IMBALANCE_MAX" in c.upper()]
+            strict_v_rule = bool(getattr(self, "strict_voltage_imbalance_rule", False))
+            if strict_v_rule:
+                v_imb_cols = [c for c in raw_dataframe.columns if "VOLTAGE_IMBALANCE" in c.upper()]
+            else:
+                v_imb_cols = [c for c in raw_dataframe.columns if "VOLTAGE_IMBALANCE" in c.upper() or "IMBALANCE_MAX" in c.upper()]
             for vic in v_imb_cols:
                 if raw_dataframe[vic].dtype.is_numeric():
                     imb_arr = raw_dataframe[vic].fill_null(0.0).to_numpy()

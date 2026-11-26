@@ -1,0 +1,34 @@
+{
+  "run_id": "20261126_190338_p1_v2_temporal_validation",
+  "pipeline_id": "p1_v2_temporal_validation",
+  "git_commit": "05d39cb",
+  "status": "validated",
+  "created_at": "2026-11-26T19:06:05.939291",
+  "v1_reference_untouched": true,
+  "artifacts": {
+    "case_studies_extended_25_11.json": {
+      "path": "experiments\\runs\\20261126_190338_p1_v2_temporal_validation\\case_studies_extended_25_11.json",
+      "sha256": "45c1968ac0663ff119a5013ab6004f3b81b87396057955f31042c8e02887602f"
+    },
+    "daily_monitoring_25d_nov.csv": {
+      "path": "experiments\\runs\\20261126_190338_p1_v2_temporal_validation\\daily_monitoring_25d_nov.csv",
+      "sha256": "0a6ce251207a2cf596920c569f5e0933d0c2f452f2496e5b71fbf9aee51c7438"
+    },
+    "metrics.json": {
+      "path": "experiments\\runs\\20261126_190338_p1_v2_temporal_validation\\metrics.json",
+      "sha256": "217f46f6a5de050f9edc4ac0b9e217bd470205a3e47d95aeab862b5f6547043e"
+    },
+    "temporal_persistence_6d.csv": {
+      "path": "experiments\\runs\\20261126_190338_p1_v2_temporal_validation\\temporal_persistence_6d.csv",
+      "sha256": "0aad9bcecc9e0c95dd7ae8edac46d6e58cbc4192e94255cdb96b9ac8cb29caed"
+    },
+    "v1_vs_v2_gate_perturbation_check.csv": {
+      "path": "experiments\\runs\\20261126_190338_p1_v2_temporal_validation\\v1_vs_v2_gate_perturbation_check.csv",
+      "sha256": "08f8f95a42f2833761db28c7e060863d93b27170ec1e90f31950525ac95d3bdf"
+    },
+    "v1_vs_v2_multicutoff.csv": {
+      "path": "experiments\\runs\\20261126_190338_p1_v2_temporal_validation\\v1_vs_v2_multicutoff.csv",
+      "sha256": "ed1870bb04274e15de6f433dfd3655d334f7cffd7bfbf8b597f8c03a8a77a978"
+    }
+  }
+}
