@@ -637,14 +637,17 @@ def run_pipeline(
                         text(mdm_sql_text),
                         {"DAYS_BACK": curr_days_back, "UCS": bind_list},
                     )
-                    cols = [str(c).upper() for c in result.keys()]
+                    try:
+                        cols = [str(c).upper() for c in result.keys()]
 
-                    progress.update(
-                        worker_tasks[w_id],
-                        description=f"[bold green]⚡ Worker #{w_id + 1:02d}[/]: Lote #{b_idx:04d} [yellow]Baixando registros...[/]",
-                        completed=60,
-                    )
-                    b_rows = result.fetchall()
+                        progress.update(
+                            worker_tasks[w_id],
+                            description=f"[bold green]⚡ Worker #{w_id + 1:02d}[/]: Lote #{b_idx:04d} [yellow]Baixando registros...[/]",
+                            completed=60,
+                        )
+                        b_rows = result.fetchall()
+                    finally:
+                        result.close()
 
                     if b_rows:
                         progress.update(

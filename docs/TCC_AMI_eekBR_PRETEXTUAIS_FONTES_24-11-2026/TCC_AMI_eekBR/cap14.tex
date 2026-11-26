@@ -9,10 +9,10 @@ A Figura \ref{episodios} apresenta os destinos propostos para a triagem e o regi
 \includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/episodios.pdf}
 \par\small Fonte: elaboração própria.
 \end{figure}
-Adotou-se o mês $n$ como período da projeção. $B_n$ representa o estoque ao início do mês, $E_n$ as entradas únicas de episódios, $R_n$ as conclusões efetivas que consomem capacidade de inspeção, $X_n$ as baixas administrativas sem inspeção e $K_n$ a capacidade mensal. $R_n$ e $X_n$ são conjuntos disjuntos de baixas. A Equação \eqref{backlog} conserva o estoque e impede baixas superiores à demanda. Uma saída da lista diária só altera o estoque de episódios se houver decisão explícita de encerramento.
+Adotou-se o mês $n$ como período da projeção. $B_n$ representa o estoque ao início do mês, $A_n$ as entradas únicas de episódios, $R_n$ as conclusões efetivas que consomem capacidade de inspeção, $X_n$ as baixas administrativas sem inspeção e $K_n$ a capacidade mensal. $R_n$ e $X_n$ são conjuntos disjuntos de baixas. A Equação \eqref{backlog} conserva o estoque e impede baixas superiores à demanda. Uma saída da lista diária só altera o estoque de episódios se houver decisão explícita de encerramento.
 
 \begin{equation}\label{backlog}
-B_{n+1}=B_n+E_n-R_n-X_n,\quad 0\leq R_n\leq K_n,\quad R_n+X_n\leq B_n+E_n
+B_{n+1}=B_n+A_n-R_n-X_n,\quad 0\leq R_n\leq K_n,\quad R_n+X_n\leq B_n+A_n
 \end{equation}
 Para capacidade positiva, a razão entre estoque acrescido de entradas e capacidade descreve a pressão bruta de atendimento. Valores acima da unidade indicam que o conjunto excede as vagas disponíveis naquele período. A seleção pode considerar persistência, qualidade e convergência de indícios. O aumento de rigor também altera as classes e os circuitos que obtêm acesso à revisão e deve permanecer rastreável.
 
@@ -39,7 +39,7 @@ Se os primeiros k casos inspecionados tiverem desfecho conclusivo, y indica conf
 \begin{equation}\label{yield}
 \mathrm{Yield}@k=\frac{1}{k}\sum_{j=1}^{k}y_{(j)},\qquad \mathrm{Lift}@k=\frac{\mathrm{Yield}_{\mathrm{modelo}}@k}{\mathrm{Yield}_{\mathrm{base}}@k}
 \end{equation}
-Para uma UC i presente nas duas políticas com datas comparáveis, a Equação \eqref{tempo} define a antecedência. O valor positivo corresponde à decisão antecipada pelo modelo. Um desfecho ainda não observado até o fim do horizonte é censurado. A hipótese original de aumento de cinco pontos percentuais no rendimento ($\Delta Y = 0{,}05$) constitui meta de projeto sujeita à pactuação em piloto e depende do denominador adotado: se medido sobre a política mensal completa ($K = 2.000$), corresponde a $\Delta N = K\,\Delta Y = 100$ vistorias positivas adicionais; se medido exclusivamente sobre as $K_{\mathrm{ML}} \le 0{,}40 K = 800$ vagas reservadas ao modelo, corresponde a $\Delta N = K_{\mathrm{ML}}\,\Delta Y = 40$ vistorias.
+Para uma UC i presente nas duas políticas com datas comparáveis, a Equação \eqref{tempo} define a antecedência. O valor positivo corresponde à decisão antecipada pelo modelo. Um desfecho ainda não observado até o fim do horizonte é censurado. A hipótese original de aumento de cinco pontos percentuais no rendimento ($\Delta Y = 0{,}05$) constitui meta de projeto sujeita à pactuação em piloto e depende do denominador adotado: se medido sobre a política mensal completa ($K = 2.000$), corresponde a $\Delta N = K\,\Delta Y = 100$ vistorias positivas adicionais; se medido exclusivamente sobre as $K_{\mathrm{novo},n} \le 0{,}40 K_n = 800$ vagas reservadas ao modelo, corresponde a $\Delta N = K_{\mathrm{novo},n}\,\Delta Y = 40$ vistorias.
 
 \begin{equation}\label{tempo}
 \Delta t_i=t_{\mathrm{base},i}-t_{\mathrm{modelo},i}

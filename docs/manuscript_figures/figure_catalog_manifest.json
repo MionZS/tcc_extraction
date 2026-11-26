@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T17:31:37.787691",
+  "generated_at": "2026-11-26T14:39:10.265635",
   "canonical_manuscript": "TCC_AMI_Consolidado.pdf",
   "active_oot_run_id": "20261125_134559_972_oot_multiview",
   "figures": [
@@ -15,8 +15,8 @@
       },
       "sha256": {
         "png": "0cd319e77f87a4d3f4bd54fff2a00718c3c68e17dd16e09fa5dcab6bc5efeb56",
-        "svg": "b7224df0c963d4defee145c0de1f2280bc6dcb5e3fdc96349b613f880edaa30c",
-        "pdf": "cdef7d53af95f8661f3958d7a4be464d19a2435df086d69eb91006485cacb994",
+        "svg": "2c0e7c7dc10f9eda1b268d9df5b3a9c89795e8a478a4802452b55b59c0f9f720",
+        "pdf": "21240d749e85bbd2c1a7cdbc848768387df26bf92d02989a6d62df6b96143057",
         "csv": "1d87c169667653d839914640f4815f90bf27c56184c5a04db056b00611ec525c"
       },
       "origin_data": {
@@ -53,9 +53,9 @@
         "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1b_lof_escala_propria_data.csv"
       },
       "sha256": {
-        "png": "5bb04a782639dc8d50d640f436affa93a658fe5d74055adcc3a3bbcf5a369878",
-        "svg": "fbe0646a68b9004851f66adc4942586cc95bfb2bc6a8573e5aa37a76a4362e70",
-        "pdf": "7af127c96dc3e61b1beb387492ce455336827a3fcabf92a528670e8e5478561d",
+        "png": "343e3094ade103db0f61b99e2080f31eca662bb92fe73f84206e5db7ce0572e3",
+        "svg": "e7282e30517022c7c29d591b28d18ad4fa4283ed834a1a1e369240b5dce6f5fe",
+        "pdf": "4221b4922ef73a076cbbbcab25e798c2272dc666e79405b8ef4e06fb377ba50a",
         "csv": "2f55713af197e63cc5ba4e31532362e5d41aa596fdf534854f488a5688a813b6"
       },
       "origin_data": {
@@ -84,9 +84,9 @@
         "csv": "docs/manuscript_figures/ml_controlled_panels/fig_5_1c_contextualizacao_percentis_data.csv"
       },
       "sha256": {
-        "png": "493077fd052015bfe8a50ce74c2e223e160da732bbe4eb6b346209506d852793",
-        "svg": "9b4fbdc5ec7058c04818eab012840577bf42ce85023f08bdc06910c678d3460a",
-        "pdf": "c37c22ee243cf4b7957636eaa04c2deda52160e1ffc5c673b2817c280dbcdd96",
+        "png": "5972cbc63fdf1f0ae4fe04078b3fff52f7694cd73ef59432baf83c15b3e86a3b",
+        "svg": "7d78ebea8d6f692cd3386bc377b571ae00427100b9d6e0fd7414ef2c745f64e8",
+        "pdf": "00eb2f0c2d113bbe2a447c2ed130a3f7e6237cec3dc98a551d5f7d0a2eb262b7",
         "csv": "6dea595a042f88994d76fb2d4aea5d2bc15ef3839566f41d9808521c8f8eef57"
       },
       "origin_data": {
@@ -116,8 +116,8 @@
       },
       "sha256": {
         "png": "ae636309e59a924fe3b7a5779e5a5417d955fbd2060ef568c054e85f0dd9ffa1",
-        "svg": "f8da6aaa3b66aad8cf091f91485205387547fd8b765c666b54f6d3d9ba8f881f",
-        "pdf": "671d18d81b1b2ba3d34a7d7752a1911e7acb60e67fb5cbe7a83462a9a495c74d",
+        "svg": "7530cff153891b45385fdf9c01c5cc8a488aa6f0a606168d2a0c81b839d2e920",
+        "pdf": "0bd7cb3fbf557c2cd2c7dd21180a49c347bdfe053cf741f69cacb8e9340c4c21",
         "csv": "5eae242c1a94325134ee6ce62bdf2599565ca39a906da4bdadebdf9fb76abc5c"
       },
       "origin_data": {
@@ -145,9 +145,9 @@
         "csv": "docs/manuscript_figures/real_case_studies/fig_caso_685xxx20_reconciliacao_cobertura_data.csv"
       },
       "sha256": {
-        "png": "cbb0d11fd898b28c98c047a3cd4a42c2c696d9f6ef99208aa79d39ba0c3e0c45",
-        "svg": "4fc5a94fcb4378c11d9e704a82622a507a52c330e868e37e5024da6646369bdb",
-        "pdf": "f906e8d2d6587d41de52833d23cc3b2a915d16f6ad096852b57a1daa532ce990",
+        "png": "90899bff6a1bbdd6fff865c852be29b4093c0b42395d0f820351f660d838d4f6",
+        "svg": "faaa9899fbebbcc3b8b5ac5e46f03825537641d1dbc9c19e50b48376a64fd2f2",
+        "pdf": "6eaa42692a0ef0f0cf29561c9711d3dcd66e2df120ef2515a2543ac77c00ad30",
         "csv": "093778e46ed804485d449fb4a483d5b6de0a74ec1132193d6048fce35b8a51ce"
       },
       "origin_data": {
@@ -178,9 +178,9 @@
         "csv": "docs/manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo_data.csv"
       },
       "sha256": {
-        "png": "a3b4b4abb38316bf7b93635524aeeb7a7e96685efe4ebd20920ef037659f9886",
-        "svg": "82abdd93d06669c662e3fc5eb0d86043fb9b021ada13eaad1d84f02935f2543c",
-        "pdf": "154c4285e06a8f63d1819c619d7d04c62bad8fa6177f7e817cc7248bcbbf7b4e",
+        "png": "e2fcf1cbd44988e38b2ee4920e86fc3a0476d5fa10152e871dc26d972a5d1936",
+        "svg": "ddbc8ded6a6b347457a72d10fd086c6e48c8152b39d6edee0c562bb66b51ec55",
+        "pdf": "a8bcf10bea0df983e3bc5d93b10e28f0273fedc504d03d296abc43984782b8d2",
         "csv": "47655bf9da3b1dcf4ac90c7d943f186b7e60649735b52f0fa8b4a8316d1c196a"
       },
       "origin_data": {
@@ -206,13 +206,13 @@
         "png": "docs/manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.png"
       },
       "sha256": {
-        "svg": "0763d07e984571167115e77d88125ddee8907925a224202ae871427835809ad7",
-        "png": "733a39ce8215a9bbb43995ff5cd79633be3a0b711005970fd264218c14126bdb"
+        "svg": "817cab35cfbd71141fed71f945b44ebba37a5825ba81d43f7f592b8895fd6ea7",
+        "png": "d7e343d832f1249408c6ae773ed142c699562f933f3190c32f4088cc50921934"
       },
       "origin_data": {
         "training_rows": 262769,
-        "hierarchy_rows": 69895,
-        "context_rows": 69895,
+        "hierarchy_rows": 69907,
+        "context_rows": 69907,
         "oot_rows": 65686
       },
       "parameters": {
@@ -220,7 +220,7 @@
         "theme": "ACADEMIC_LIGHT_TERMINAL_THEME",
         "anonymized": true
       },
-      "run_id": "20261123_124416_146_oot_multiview",
+      "run_id": "20261125_134559_972_oot_multiview",
       "caption_academic_pt": "Captura vetorial (Rich SVG) da interface de terminal (TUI) executada sobre os artefatos reais do Data Lake e da execução OOT validada, apresentando dimensões das camadas e distribuição anonimizada por circuito elétrico.",
       "interpretative_analysis_pt": "A interface TUI materializa os contratos entre engenharia de dados e inferência: antes de acionar modelos, o operador audita cardinalidades de training_dataset, hierarquia elétrica, contexto cadastral e partições da suíte validada sem consultar sistemas externos em tempo de execução."
     },
@@ -233,8 +233,8 @@
         "png": "docs/manuscript_figures/platform_interfaces/fig_4_4b_tui_calendario_auditoria.png"
       },
       "sha256": {
-        "svg": "93c31e1b23faf6bfb7fc9131f5227db808c80818b7ea87cebe9e71c17786121d",
-        "png": "aa82649c97b9707860c041f25eab47b16702456cdce168f34dd93bf22465039a"
+        "svg": "b33c0afc15615abe79262aa32ed3c602cb105eadd0f3b1af3a936beedf000fa7",
+        "png": "70b3d01d0917806b4628f53e9ada0517866cd1ec33f93795797c3e2852cae6fb"
       },
       "origin_data": {
         "period": "2026-08-01..2026-11-19",
@@ -245,26 +245,26 @@
         "console_renderer": "rich.Console(record=True)",
         "theme": "ACADEMIC_LIGHT_TERMINAL_THEME"
       },
-      "run_id": "20261123_124342_976_audit",
+      "run_id": "20261125_134532_048_audit",
       "caption_academic_pt": "Saída vetorial (Rich SVG) de `render_continuity_calendar` cobrindo 111 dias de partições (01/08 a 19/11/2026) em formatos Parquet e CSV, acompanhada da tabela de rastreabilidade dos manifestos em `latest_suite.json`.",
       "interpretative_analysis_pt": "A auditoria visual de continuidade confirma disponibilidade contínua de 111/111 dias no recorte experimental e integridade sincronizada entre cópias Parquet e CSV, pré-requisito para execução retrospectiva sem vazamento temporal."
     },
     {
       "figure_id": "fig_4_4c_cockpit_carteira_candidatos",
       "section_target": "4.4 — Capturas Reais da Plataforma (Cockpit Carteira Filtrada)",
-      "title": "Cockpit Analítico Web — Carteira priorizada de candidatos à vistoria (6.333 UCs, 19/11/2026)",
+      "title": "Cockpit Analítico Web — Carteira priorizada de candidatos (6.037 UCs, 19/11/2026)",
       "files": {
         "png": "docs/manuscript_figures/platform_interfaces/fig_4_4c_cockpit_carteira_candidatos.png",
         "overview_png": "docs/manuscript_figures/platform_interfaces/cockpit_visao_geral.png"
       },
       "sha256": {
-        "png": "be4888de4a59a3dc534bdb3356876b0852a17713fbfbbf5154753e857718c76d",
-        "overview_png": "775c3660c7b1f7e802295b184a23059303345eda33087a1042cd03c8a55b472b"
+        "png": "ebea4eb26376164b38454c2ae940431fbeea329c2cf20c62358e003b1a806c4a",
+        "overview_png": "df5582ae40f20c009158a216b6d3c1c788d68b7d8ccdc4508536fd597a7d822c"
       },
       "origin_data": {
         "source": "oot_multiview/decisions.parquet",
         "total_ucs": 65686,
-        "candidates": 6333,
+        "candidates": 6037,
         "possivel_gd": 1451,
         "quarantine_telecom": 2829
       },
@@ -274,8 +274,8 @@
         "anonymized": true,
         "viewport": "1720x1000@2x"
       },
-      "run_id": "20261123_124416_146_oot_multiview",
-      "caption_academic_pt": "Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261123_124416_146_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.333 candidatas à vistoria; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela priorizada pelo preset de investigação.",
+      "run_id": "20261125_134559_972_oot_multiview",
+      "caption_academic_pt": "Captura do Cockpit Analítico Web em execução sobre os resultados da suíte validada (`20261125_134559_972_oot_multiview`, tema claro anonimizado): cards reconciliados (65.686 UCs totais; 6.037 candidatas priorizadas; 1.451 possíveis GD; 2.829 em quarentena técnica) e tabela ordenada pelo preset de investigação.",
       "interpretative_analysis_pt": "A interface web traduz diretamente os contratos analíticos para a triagem humana (Etapa 6 do fluxo): cada linha preserva identificador mascarado, circuito anonimizado, score composto, hipótese diagnóstica e persistência em dias consecutivos sem alterar ou executar ordens de serviço de campo."
     },
     {
@@ -287,7 +287,7 @@
         "svg": "docs/manuscript_figures/platform_interfaces/fig_4_4d_cockpit_raiox_uc_908xxx00_chart.svg"
       },
       "sha256": {
-        "png": "168a51a843a2a75b98f93e5ae13b462d85b5bc533975b536836d1ede45391bad",
+        "png": "b4eb131befc16a0771af44ba4e1b740f73e790283fd538405c7d0887683e16b1",
         "svg": "6d190013c5151062d59bf640010cacdadcc89552e79163d11e62cfc10466aed6"
       },
       "origin_data": {
@@ -302,7 +302,7 @@
         "anonymized": true,
         "playwright_viewport": "1720x1000@2x"
       },
-      "run_id": "20261123_124416_146_oot_multiview",
+      "run_id": "20261125_134559_972_oot_multiview",
       "caption_academic_pt": "Captura do painel lateral de inspeção ('Gráfico & Raio-X') no Cockpit Web para a UC 908***00 em resolução diária (30 dias até 19/11/2026): curva superior com queda de energia ativa direta (FA), ascensão de injeção reversa (RA) e marcação CUSUM; gráfico inferior com barras diárias de cobertura frente ao limiar de 70%.",
       "interpretative_analysis_pt": "O painel individual integra métricas sumárias (escore 0,9601, persistência de 22 dias na tabela OOT, trajetória de classe comportamental) aos gráficos vetoriais sob demanda, permitindo ao analista verificar que a contração de FA não decorre de ausência de telemetria."
     }

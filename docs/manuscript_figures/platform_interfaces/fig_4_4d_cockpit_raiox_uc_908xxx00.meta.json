@@ -7,7 +7,7 @@
     "svg": "docs/manuscript_figures/platform_interfaces/fig_4_4d_cockpit_raiox_uc_908xxx00_chart.svg"
   },
   "sha256": {
-    "png": "168a51a843a2a75b98f93e5ae13b462d85b5bc533975b536836d1ede45391bad",
+    "png": "b4eb131befc16a0771af44ba4e1b740f73e790283fd538405c7d0887683e16b1",
     "svg": "6d190013c5151062d59bf640010cacdadcc89552e79163d11e62cfc10466aed6"
   },
   "origin_data": {
@@ -22,7 +22,7 @@
     "anonymized": true,
     "playwright_viewport": "1720x1000@2x"
   },
-  "run_id": "20261123_124416_146_oot_multiview",
+  "run_id": "20261125_134559_972_oot_multiview",
   "caption_academic_pt": "Captura do painel lateral de inspeção ('Gráfico & Raio-X') no Cockpit Web para a UC 908***00 em resolução diária (30 dias até 19/11/2026): curva superior com queda de energia ativa direta (FA), ascensão de injeção reversa (RA) e marcação CUSUM; gráfico inferior com barras diárias de cobertura frente ao limiar de 70%.",
   "interpretative_analysis_pt": "O painel individual integra métricas sumárias (escore 0,9601, persistência de 22 dias na tabela OOT, trajetória de classe comportamental) aos gráficos vetoriais sob demanda, permitindo ao analista verificar que a contração de FA não decorre de ausência de telemetria."
 }

@@ -7,13 +7,13 @@
     "png": "docs/manuscript_figures/platform_interfaces/fig_4_4a_tui_menu_governanca.png"
   },
   "sha256": {
-    "svg": "0763d07e984571167115e77d88125ddee8907925a224202ae871427835809ad7",
-    "png": "733a39ce8215a9bbb43995ff5cd79633be3a0b711005970fd264218c14126bdb"
+    "svg": "817cab35cfbd71141fed71f945b44ebba37a5825ba81d43f7f592b8895fd6ea7",
+    "png": "d7e343d832f1249408c6ae773ed142c699562f933f3190c32f4088cc50921934"
   },
   "origin_data": {
     "training_rows": 262769,
-    "hierarchy_rows": 69895,
-    "context_rows": 69895,
+    "hierarchy_rows": 69907,
+    "context_rows": 69907,
     "oot_rows": 65686
   },
   "parameters": {
@@ -21,7 +21,7 @@
     "theme": "ACADEMIC_LIGHT_TERMINAL_THEME",
     "anonymized": true
   },
-  "run_id": "20261123_124416_146_oot_multiview",
+  "run_id": "20261125_134559_972_oot_multiview",
   "caption_academic_pt": "Captura vetorial (Rich SVG) da interface de terminal (TUI) executada sobre os artefatos reais do Data Lake e da execução OOT validada, apresentando dimensões das camadas e distribuição anonimizada por circuito elétrico.",
   "interpretative_analysis_pt": "A interface TUI materializa os contratos entre engenharia de dados e inferência: antes de acionar modelos, o operador audita cardinalidades de training_dataset, hierarquia elétrica, contexto cadastral e partições da suíte validada sem consultar sistemas externos em tempo de execução."
 }

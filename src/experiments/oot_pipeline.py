@@ -488,9 +488,9 @@ def run_ablation(config: ExperimentConfig, run_dir: Path, *, oot_decisions: pl.D
         "common_m4_m5_unconstrained": len(m4_set & m5_unconstrained_set),
         "exclusive_m4": len(m4_set - m5_unconstrained_set),
         "exclusive_m5_unconstrained": len(m5_unconstrained_set - m4_set),
-        "m4_equals_m5_explanation": "Em 19/11/2026, todas as 4.390 UCs anômalas contextualizadas atenderam aos critérios de elegibilidade de negócio de M5 (instalações maduras sem quarentena de ciclo de vida).",
+        "m4_equals_m5_explanation": f"Em 19/11/2026, todas as {len(m4_set):,} UCs anômalas contextualizadas atenderam aos critérios de elegibilidade de negócio de M5 (instalações maduras sem quarentena de ciclo de vida).".replace(",", "."),
         "outside_topological_funnel_count": len(m5_unconstrained_set - m4_set),
-        "outside_topological_funnel_reason": "1.943 UCs anômalas com cobertura >= 70% não possuem alimentador cadastrado corporativamente (meta__feeder is null), sendo retidas no funil topológico M3 mas preservadas para vistoria individual no OOT geral.",
+        "outside_topological_funnel_reason": f"{len(m5_unconstrained_set - m4_set):,} UCs anômalas com cobertura >= 70% não possuem alimentador cadastrado corporativamente (meta__feeder is null), sendo retidas no funil topológico M3 mas preservadas para vistoria individual no OOT geral.".replace(",", "."),
     }
 
     payload = {
@@ -551,7 +551,8 @@ def run_gating_sensitivity(config: ExperimentConfig, run_dir: Path, *, oot_decis
         top_t = set(elig_idx[np.argsort(-sc_t[elig_idx])[:top_n]].tolist()) if len(elig_idx) > 0 else set()
         jacc = len(top_t & top0) / float(max(1, len(top_t | top0)))
         rho, _ = spearmanr(sc_t, sc0)
-        is_anom_t = (sc_t >= 0.5226)
+        tau_t = float(det_t.frozen_threshold_) if det_t.frozen_threshold_ is not None else 0.5131
+        is_anom_t = (sc_t >= tau_t)
         cands_retained = int(np.sum(is_anom_t & mask))
         cands_intercepted = int(np.sum(is_anom_t & (~mask)))
         rows.append({
