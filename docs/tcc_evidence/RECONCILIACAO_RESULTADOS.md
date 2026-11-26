@@ -86,12 +86,13 @@ O indicador `ref70_diff_count = 1` em `docs/tcc_evidence/p0_audit/p0_summary.jso
 
 - **UC:** `109855540`
 - **Telemetria:** Cobertura de $93,61\%$ (29 dias confiáveis de 30).
+- **Artefato de Auditoria Individual:** `docs/tcc_evidence/p0_audit/uc_boundary_audit_109855540.json`
 - **Decomposição do Escore:**
-  - Ensemble não supervisionado ponderado: $0{,}363082$
-  - Bônus por flag de violação de regra: $+0{,}150000$
-  - Escore elétrico consolidado não arredondado: $S_{elec} = 0{,}513082$
-  - Limiar de corte congelado exato no treino: $\tau_{exact} = 0{,}513072$
-  - Diferença sobre o limiar: $+0{,}000010$ ($10^{-5}$)
+  - Detectores não supervisionados normalizados exatos: IF $0{,}456487$; LOF $0{,}0$; ECOD $0{,}574060$; COPOD $0{,}474655$; HBOS $0{,}343435$; PCA $0{,}329389$.
+  - Ensemble não supervisionado ponderado: $0{,}363066$ (somando com 4 casas do parquet: $0{,}363082$).
+  - Bônus por flag de violação de regra: $+0{,}150000$.
+  - Escore elétrico contínuo: $S_{elec} = 0{,}513066$, serializado com 4 decimais no parquet como **$0{,}5131$**.
+  - Limiar de corte congelado exato no treino: $\tau_{exact} = 0{,}513072$.
 - **Motivo da Diferenciação:**
   - No artefato OOT (`experiments/runs/20261125_134559_972_oot_multiview/decisions.parquet`), a UC foi atribuída à categoria `MUDANCA_CLASSE_COMPORTAMENTAL` (trajetória de queda abrupta de consumo de C3 para C1) e, sob a árvore de decisão operacional, recebeu `IS_CANDIDATO_VISTORIA = False` (retendo 6.037 candidatas).
   - No ensaio de sensibilidade do gating congelado, que avalia estritamente a partição física do filtro de qualidade sobre os escores numéricos elegíveis ($S_{elec} \ge \tau_{frozen}$ com cobertura $\ge 70\%$ e excluindo apenas novas UCs), a unidade satisfez a desigualdade numérica ($0{,}513082 \ge 0{,}513072$) e foi contabilizada entre os 6.038 casos retidos.

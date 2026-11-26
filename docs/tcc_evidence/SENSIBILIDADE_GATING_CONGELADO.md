@@ -23,14 +23,21 @@
 Na auditoria P0 (`20261126_172200_p0_audit_sensitivity`), o indicador `ref70_diff_count` registrou exatamente `1` unidade consumidora de discrepância entre os escores elegíveis retidos a 70% (`6.038`) e a carteira OOT de vistoria (`6.037`, `IS_CANDIDATO_VISTORIA = True`).
 
 ### Registro Direto de Auditoria — UC 109855540
+- **Artefato de Auditoria Dedicado:** `docs/tcc_evidence/p0_audit/uc_boundary_audit_109855540.json`
 - **Identificador:** `id__uc_id = '109855540'` (Alimentador Chapada, SE Araucária)
 - **Cobertura:** $93,61\%$ (`meta__data_quality = 0.9361`, `x__coverage_reliable_days = 29` de 30)
-- **Escore Base Ensemble (6 detectores):**
-  $$S_{base} = 0{,}22 \times 0{,}4565 + 0{,}20 \times 0{,}0 + 0{,}18 \times 0{,}5741 + 0{,}18 \times 0{,}4747 + 0{,}10 \times 0{,}3434 + 0{,}12 \times 0{,}3294 = 0{,}363082$$
+- **Escores dos 6 Detectores (Não Arredondados vs. Arredondados a 4 decimais no Parquet):**
+  - IF: $0{,}456487$ (Parquet: $0{,}4565$, peso $0{,}22 	o 0{,}100427$)
+  - LOF: $0{,}000000$ (Parquet: $0{,}0000$, peso $0{,}20 	o 0{,}000000$)
+  - ECOD: $0{,}574060$ (Parquet: $0{,}5741$, peso $0{,}18 	o 0{,}103331$)
+  - COPOD: $0{,}474655$ (Parquet: $0{,}4747$, peso $0{,}18 	o 0{,}085438$)
+  - HBOS: $0{,}343435$ (Parquet: $0{,}3434$, peso $0{,}10 	o 0{,}034344$)
+  - PCA: $0{,}329389$ (Parquet: $0{,}3294$, peso $0{,}12 	o 0{,}039527$)
+- **Soma Base Ponderada:** $S_{base} = 0{,}363066$ (quando somados os valores de 4 casas: $0{,}363082$)
 - **Bônus de Regra Física:** `rule_violation_flag = True` ($+0{,}150000$)
-- **Escore Elétrico Não Arredondado:** $S_{elec} = 0{,}363082 + 0{,}150000 = 0{,}513082$
-- **Escore no Parquet OOT:** $0{,}5131$ (arredondado a 4 casas decimais)
-- **Limiar de Treino Congelado Exato:** $\tau_{exact} = 0{,}513072445231479$ (armazenado como `0.513072` em `p0_summary.json`)
-- **Margem Numérica:** $S_{elec} - \tau_{exact} = +0{,}00000955$ ($+9{,}55 \times 10^{-6}$)
-- **Diagnóstico no Pipeline OOT Original:** `CATEGORIA_DIAGNOSTICA = MUDANCA_CLASSE_COMPORTAMENTAL`, `SUBTIPO_DIAGNOSTICO = QUEDA_ABRUPTA_CLASSE_SUSPEITA_BYPASS_OU_DESOCUPACAO`, `is_elec_anomaly = False`, `IS_CANDIDATO_VISTORIA = False` (roteada para `DESTINO_OPERACIONAL = NENHUM` por pertencer a transição comportamental sem alarme de fraude física).
-- **Trilha na Auditoria Congelada:** o predicado de corte numérico estrito $(S_{elec} \ge \tau_{frozen}) \land (cov \ge 70\%) \land (\neg \text{UC\_NOVA})$ incluiu a unidade no cômputo matemático dos 6.038 casos, demonstrando que não há qualquer divergência entre os modelos ou conjuntos de dados subjacentes.
+- **Escore Elétrico Consolidado:** $S_{elec} = 0{,}363066 + 0{,}150000 = 0{,}513066$ (armazenado com `round(consensus, 4)` como **$0{,}5131$** em `decisions.parquet`)
+- **Limiar de Treino Congelado Exato:** $\tau_{exact} = 0{,}513072445231479$ (registrado como `0.513072` em `p0_summary.json`)
+- **Trilha da Diferença:**
+  1. No artefato OOT (`decisions.parquet`), a serialização arredonda o escore a 4 casas decimais ($0{,}5131$). Além disso, na árvore diagnóstica, a unidade foi classificada como `MUDANCA_CLASSE_COMPORTAMENTAL` (`IS_CANDIDATO_VISTORIA = False`).
+  2. No ensaio de sensibilidade do gating congelado (`audit_experimental_results.py`), a partição avalia numericamente `s_elec_arr >= tau_frozen` sobre a coluna serializada ($0{,}5131 \ge 0{,}513072 \implies 	ext{True}$), retendo a UC entre os 6.038 casos.
+  3. Com isso, a discrepância de exatamente 1 unidade (`ref70_diff_count = 1`) fica matematicamente e documentalmente auditada.

@@ -1,0 +1,79 @@
+{
+  "target_uc_id": "109855540",
+  "meta_feeder": "Chapada",
+  "meta_subestacao": "Araucária",
+  "data_quality_coverage": 0.9361,
+  "reliable_days": 29,
+  "telecom_status": "CLEAN",
+  "rule_violation_flag": true,
+  "operational_diagnosis": "OPERACAO_REGULAR",
+  "categoria_diagnostica": "MUDANCA_CLASSE_COMPORTAMENTAL",
+  "subtipo_diagnostico": "QUEDA_ABRUPTA_CLASSE_SUSPEITA_BYPASS_OU_DESOCUPACAO",
+  "is_candidato_vistoria_in_parquet": false,
+  "is_elec_anomaly_in_parquet": false,
+  "s_elec_stored_rounded4": 0.5131,
+  "raw_detector_scores_unrounded": {
+    "iso_forest": 0.472230877327744,
+    "lof": 0.0,
+    "ecod": 1.2170551601840771,
+    "copod": 0.962580073726949,
+    "hbos": 0.6277016797620141,
+    "pca": 0.11053013646577678
+  },
+  "normalized_detector_scores_unrounded": {
+    "iso_forest": 0.45648688292444006,
+    "lof": 0.0,
+    "ecod": 0.5740595527591911,
+    "copod": 0.4746554290783542,
+    "hbos": 0.3434350039687424,
+    "pca": 0.3293889494705914
+  },
+  "detector_weights": {
+    "iso_forest": 0.22,
+    "lof": 0.2,
+    "ecod": 0.18,
+    "copod": 0.18,
+    "hbos": 0.1,
+    "pca": 0.12
+  },
+  "weighted_terms_unrounded": {
+    "iso_forest": 0.10042711424337682,
+    "lof": 0.0,
+    "ecod": 0.10333071949665439,
+    "copod": 0.08543797723410375,
+    "hbos": 0.03434350039687424,
+    "pca": 0.03952667393647096
+  },
+  "p01_p99_normalization_anchors": {
+    "iso_forest": {
+      "p01": 0.32411749716233645,
+      "p99": 0.6485811032500584
+    },
+    "lof": {
+      "p01": 0.0,
+      "p99": 0.5537215141202896
+    },
+    "ecod": {
+      "p01": 0.4218609551806819,
+      "p99": 1.8070729966515198
+    },
+    "copod": {
+      "p01": 0.3259342017935919,
+      "p99": 1.6672142818919957
+    },
+    "hbos": {
+      "p01": 0.19921242595290134,
+      "p99": 1.4468699123986088
+    },
+    "pca": {
+      "p01": 0.00015914531120011995,
+      "p99": 0.3352371475695328
+    }
+  },
+  "weighted_base_consensus_unrounded": 0.36306598530748013,
+  "physics_bonus_applied": 0.15,
+  "total_consensus_score_unrounded": 0.5130659853074802,
+  "frozen_training_threshold_elec_exact": 0.513072445231479,
+  "frozen_training_threshold_elec_rounded6": 0.513072,
+  "explanation": "No ensaio de sensibilidade do gating congelado, a particao avaliou s_elec >= tau_frozen diretamente na coluna s_elec armazenada (0,5131 >= 0,513072 = True). Como a UC tem 93,61% de cobertura e nao e UC nova, foi retida entre os 6.038 casos. Na esteira operacional OOT original, a UC foi roteada para CATEGORIA_DIAGNOSTICA = MUDANCA_CLASSE_COMPORTAMENTAL com IS_CANDIDATO_VISTORIA = False e DESTINO_OPERACIONAL = NENHUM, permanecendo fora da carteira final de 6.037."
+}
