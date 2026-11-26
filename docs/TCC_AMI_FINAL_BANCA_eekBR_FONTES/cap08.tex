@@ -200,7 +200,43 @@ No corte de 19/11, a UC 908***00 teve inclinação da energia diária \(b_i=-0{,
 
 Cada configuração é reprodutível apenas quando também se registram: o conjunto usado no \texttt{fit}, os hiperparâmetros, a versão de cada detector, o pré-processamento, o esquema de escores, a coorte de normalização, a política de limiar e as regras físicas executadas. Como o \texttt{fit\_and\_score} multivisão executa ajustes e pontuação no mesmo conjunto passado pelo chamador, sua execução descritiva não constitui, isoladamente, teste de generalização fora da amostra. A avaliação comparativa deve preservar separação temporal e parâmetros treinados congelados.
 
-Os três níveis descrevem operações distintas: consenso elétrico, classificação multivisão por precedência e ponderação hierárquica. Na campanha retrospectiva fora do período de ajuste (\texttt{OOT\_MULTIVIEW}), executou-se o consenso elétrico de seis detectores combinado ao gate de cobertura e às regras diagnósticas de triagem. Os módulos de mudança de regime (CPD), recorrência comportamental, eventos físicos (\(S_{tamper}\)) e roteamento hierárquico por alimentador foram implementados e avaliados separadamente em nível arquitetural e modular, permanecendo a integração simultânea de todos os especialistas em um único escore calibrado como etapa de continuidade. A validação de pesos e limites requer testes de ablação e, para conclusões sobre furto, rótulos externos de inspeção.
+Os três níveis descrevem operações distintas: consenso elétrico, classificação multivisão por precedência e ponderação hierárquica. Na campanha retrospectiva congelada de 25/11/2026 (\texttt{OOT\_MULTIVIEW}), executou-se o consenso elétrico de seis detectores combinado ao gate de cobertura e às regras diagnósticas de triagem. Na campanha complementar de fechamento experimental (P0/P1 e validação multi-corte de 26/11/2026), os módulos de mudança de regime (CPD em lote), recorrência comportamental intradiária de 24h, eventos físicos ($S_{tamper}$ sobre alarmes particionados), roteamento hierárquico MoE sem vazamento por alimentador e filtro espacial de eventos coletivos foram executados de forma integrada sobre a mesma coorte OOT e avaliados em perturbações controladas, quantificando a contribuição marginal de cada visão sob orçamento operacional fixo. A validação de pesos e limites com desfechos reais de inspeção permanece como etapa de continuidade em piloto prospectivo.
+
+\subsection{Decisões algorítmicas e contribuições de engenharia de aprendizado de máquina}\label{inovacoes-ml-codigo}
+
+A implementação concreta da arquitetura multivisão em Python/Polars/scikit-learn introduz mecanismos algorítmicos específicos para evitar modos de falha silenciosos observados quando detectores de anomalias de prateleira são aplicados diretamente à telemetria AMI. A Tabela~\ref{tab:inovacoes-ml} sintetiza as principais diferenças entre abordagens convencionais e as contribuições implementadas no repositório.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2600}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3400}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.4000}}@{}}
+\caption{Inovações algorítmicas e de domínio implementadas no código frente a práticas convencionais}\label{tab:inovacoes-ml}\\
+\toprule\noalign{}
+Componente / Módulo & Prática convencional comum & Contribuição implementada no repositório \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+Componente / Módulo & Prática convencional comum & Contribuição implementada no repositório \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Isolamento de subespaço (\path{composite.py}) & Concatenação de atributos elétricos, cobertura e alarmes na mesma matriz & Barreira programática (\texttt{NON\_ELECTRICAL\_FEATURE\_TOKENS}) que proíbe variáveis de rádio, cobertura, latência e ciclo de vida de entrarem em $S_{elec}$ \\
+Normalização de escores (\path{composite.py}) & \texttt{MinMaxScaler} recalculado no lote de inferência (\emph{batch drift}) & Normalização quantílica congelada no treino ($P_{01}$--$P_{99}$) com cascata de \emph{fallback} ($P_{99} \to P_{99,9} \to \min/\max$), garantindo deslocamento nulo ($0{,}000000$) sob perturbação de outliers \\
+LOF e PCA em dados AMI (\path{composite.py}) & Uso direto de \texttt{LocalOutlierFactor} e \texttt{PCA} sem controle de empates ou escala & Compressão logarítmica $\log(1+\max(-s_{\mathrm{LOF}}-1,0))$ contra explosões ($10^{10}$) por empates $k\text{-NN}=0$; \texttt{StandardScaler} interno em \texttt{RobustPCADetector} \\
+Gate de qualidade (\path{specialized_detectors.py}) & Ausência de filtro ou uso exclusivo da cobertura média nos dias presentes & Gate de duplo critério na variante \texttt{v2} ($q_i \ge 0{,}70$ \textbf{e} dias confiáveis $\ge 18$), fechando a brecha de silêncios consecutivos prolongados \\
+Contraste espacial Telecom (\path{category_reporting.py}) & Tratamento homogêneo de falhas de comunicação sem contexto espacial & Cascata vetorizada em Polars (\texttt{.over}) em três níveis: Posto/Transformador ($\ge 3$ pares) $\to$ grade GPS de $\approx 250\ \mathrm{m}$ ($0{,}0025^\circ$) $\to$ Alimentador, distinguindo falha isolada de gargalo RF Mesh \\
+Roteador MoE e filtro de rede (\path{moe_router.py}, \path{spurious_filter.py}) & Modelo único global ou modelos locais sujeitos a sobreajuste em circuitos pequenos & Encolhimento empírico contínuo por volume de amostras + reforço local ($+0{,}10$) para penetração solar $>5\%$, acoplado à atenuação ($0{,}35\times$) de eventos coletivos ($\ge 60\%$ do transformador) \\
+Mudança de regime (\path{uc_timeseries.py}) & Estatísticas agregadas de 30 dias ou CUSUM sensível a dias sem telemetria & CUSUM mascarado por cobertura ($\ge 70\%$), com margem de borda ($\max(2, n/6)$) e piso duplo de magnitude ($\max(1{,}25\,\mathrm{MAD},\,0{,}25|\tilde{y}_{\mathrm{pre}}|)$) \\
+Validação sem TOI (\path{run_controlled_perturbations.py}) & Curvas puramente sintéticas ou ausência de medição de sensibilidade & Injeção fisicamente coerente em memória sobre séries AMI reais antes da extração de atributos (Lei de Ohm em FA e $I_{L1..L3}$, rotação intradiária com $\Delta\mathrm{kWh}=0$, sino solar diurno) \\
+\end{longtable}
+{\small\noindent Fonte: elaboração própria a partir dos módulos implementados no repositório.\par}
+
+Dois achados descobertos pela auditoria sistemática do próprio código motivaram o endurecimento opcional denominado variante \texttt{v2}, implementada de forma retrocompatível sem sobrescrever a campanha congelada de 25/11 (\texttt{v1}):
+\begin{itemize}
+\item \textbf{Escopo da regra física do bônus $+0{,}15$ (\texttt{strict\_voltage\_imbalance\_rule}):} na \texttt{v1}, o filtro textual \texttt{"IMBALANCE\_MAX"} em \path{src/models/composite.py} incluiu inadvertidamente o desequilíbrio de corrente (\texttt{x\_\_hist\_current\_imbalance\_max > 0,20}), acionando o bônus em 46,73\% da população OOT. Na \texttt{v2}, o modo estrito restringe o gatilho exclusivamente ao desequilíbrio de tensão (conforme a norma PRODIST Módulo~8), afundamentos/elevações críticas de tensão e reversão severa de fluxo, reduzindo os disparos a 0,19\% da coorte.
+\item \textbf{Fechamento da brecha de apagões consecutivos e ativação particionada de alarmes:} na \texttt{v1}, medidores que ficavam 15 dias consecutivos sem transmitir mantinham cobertura média próxima de 99\% nos 15 dias presentes, contornando o filtro baseado apenas em cobertura média; além disso, a rotina de 25/11 consultava um arquivo monolítico \texttt{alarm\_events.parquet} inexistente em vez do diretório particionado \path{output/events/alarm_events/}. Na \texttt{v2}, o gate duplo (\texttt{min\_reliable\_days=18}) elimina o vazamento de blocos consecutivos ausentes e a leitura particionada ativa efetivamente o especialista $S_{tamper}$ sobre mais de 1,7 milhão de eventos físicos reais na janela de 30 dias.
+\end{itemize}
 
 \section{Saídas como padrões de compatibilidade}\label{sauxeddas-como-padruxf5es-de-compatibilidade}
 

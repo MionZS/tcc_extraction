@@ -1,6 +1,6 @@
 \chapter{Resultados e discussão}\label{resultados-e-discussao}
 \section{Protocolo de comparação e proveniência}
-Os resultados apresentados neste capítulo correspondem a duas execuções retrospectivas consolidadas sobre a mesma base histórica: a inferência fora do período de ajuste (\texttt{OOT\_MULTIVIEW}, ajustada nos cortes de 31/08, 30/09 e 31/10/2026 com 189.341 amostras elegíveis e avaliada em 19/11/2026) e o monitoramento diário calibrado por regras (\texttt{DAILY\_RULES}, cobrindo 19 cortes diários entre 1\textordmasculine{} e 19/11/2026). As execuções foram versionadas. Na inferência OOT, os parâmetros de pré-processamento, os quantis de normalização e o limiar de decisão foram congelados no conjunto de ajuste. O índice \texttt{experiments/runs/latest\_suite.json} identifica as execuções. Os manifestos registram versão do código e configuração. Os hashes SHA-256 das tabelas de decisões OOT e diária coincidem com o registro de auditoria de 25/11. A conferência nominal das decisões depende de acesso autorizado aos registros por UC; as figuras do artigo apresentam dados agregados ou mascarados. O funil sequencial e a ablação interna dos detectores possuem critérios próprios, descrevendo a composição da lista e a estabilidade dos escores.
+Os resultados apresentados neste capítulo correspondem a duas execuções retrospectivas consolidadas sobre a mesma base histórica --- a inferência fora do período de ajuste (\texttt{OOT\_MULTIVIEW}, ajustada nos cortes de 31/08, 30/09 e 31/10/2026 com 189.341 amostras elegíveis e avaliada em 19/11/2026) e o monitoramento diário calibrado por regras (\texttt{DAILY\_RULES}, cobrindo 19 cortes diários entre 1\textordmasculine{} e 19/11/2026) ---, complementadas pela campanha integrada de auditoria, perturbações controladas e validação temporal multi-corte de 26/11/2026 (execuções \texttt{20261126\_172200\_p0\_audit\_sensitivity}, \texttt{20261126\_172513\_p1\_multiview\_eval}, \texttt{20261126\_173223\_p1\_controlled\_perturbations} e \texttt{20261126\_190338\_p1\_v2\_temporal\_validation}), conduzida sem sobrescrever nenhum artefato da campanha de referência de 25/11. Todas as execuções foram versionadas com hashes SHA-256 e parâmetros congelados exclusivamente no período de ajuste ($\le 31/10/2026$). A conferência nominal das decisões depende de acesso autorizado aos registros por UC; as figuras e tabelas deste documento apresentam exclusivamente dados agregados ou mascarados em conformidade com a LGPD. O trabalho realiza avaliação computacional retrospectiva e controlada sobre telemetria AMI real, sem vistorias de campo, retorno de OS/TOI ou confirmação pericial de fraude.
 \section{Inferência multivisão fora do período de ajuste}
 Em 19 de novembro de 2026, avaliaram-se 65.686 UCs na execução consolidada pós-saneamento (\texttt{20261125\_134559\_972\_oot\_multiview}, código base \texttt{c1539b4}). A política de qualidade classificou 62.857 como elegíveis (95,69\%) e 2.829 em quarentena (4,31\%). O escore médio populacional foi 0,2865 e o percentil 95 atingiu 0,9438. A política multivisão selecionou 6.037 candidatos. Na coorte avaliada, a indicação de vistoria coincidiu com a flag de anomalia elétrica nas 65.686 linhas. O limiar congelado do escore elétrico foi $\tau_{train}=0{,}5131$; a qualidade da telemetria e as regras diagnósticas orientaram a interpretação das evidências. O Isolation Forest (IF) de referência, com limiar congelado de 0,643, selecionou 3.122. A diferença de contagens mede seletividade sob políticas distintas.
 
@@ -45,7 +45,24 @@ Limiar & Elegíveis & Quarentena & Brutos & Retidos & Interceptados \\ \midrule
 \bottomrule\end{tabular}
 \par\small Fonte: elaboração própria a partir da execução \texttt{20261125\_134940\_636\_gating\_sensitivity}.
 \end{table}
-A 70\%, o ensaio de cobertura reteve 5.788 candidatos elétricos e interceptou 979 na quarentena técnica, frente a 6.037 candidatos no OOT completo (diferença líquida de 249 unidades). Na sensibilidade, o detector é reajustado nas UCs elegíveis do próprio corte e aplica o limiar fixo de 0,5226, conforme a configuração histórica da execução de 25/11 (código base \texttt{c1539b4}; Apêndice~\ref{ap:proveniencia}). A variante posterior que recalcula o limiar a cada reajuste não foi utilizada para os números desta tabela. No OOT, o ajuste precede o corte e o limiar congelado é 0,5131. A diferença líquida entre as contagens não identifica 249 inclusões individuais. Na comparação da ordenação com a referência sem filtro, a correlação de Spearman a 70\% foi 0,9952, com Jaccard de 0,7900 no Top-5\%. A concordância global elevada permitiu mudanças relevantes na extremidade de interesse.
+A 70\%, o ensaio de cobertura com reajuste reteve 5.788 candidatos elétricos e interceptou 979 na quarentena técnica, frente a 6.037 candidatos no OOT completo (diferença líquida de 249 unidades). Essa diferença decorre do fato de a Tabela~\ref{gating} reajustar o detector nas UCs elegíveis do próprio corte sob limiar fixo de 0,5226 (\texttt{c1539b4}; Apêndice~\ref{ap:proveniencia}). Para isolar o efeito puro da política de qualidade sem confundimento por reajuste (\emph{refit}), conduziu-se a auditoria P0 mantendo estritamente congelados o pré-processamento, os seis detectores, as escalas $P_{01}$--$P_{99}$, os pesos e o limiar $\tau_{train}=0{,}5131$ (Tabela~\ref{tab:gating-congelado} e Figura~\ref{fig:gating-congelado}). Sob modelo congelado, o total de sinalizações brutas acima do limiar permanece rigorosamente constante em 6.916 unidades em todos os níveis de cobertura, de modo que o filtro atua estritamente como partição determinística entre candidatos retidos e observações interceptadas em quarentena (6.038 retidos e 878 interceptados a 70\%; 5.821 retidos e 1.095 interceptados a 80\%).
+
+\begin{table}[htbp]\centering\small\caption{Sensibilidade do gating de cobertura com modelo e limiar estritamente congelados ($\tau_{train}=0{,}5131$)}\label{tab:gating-congelado}
+\begin{tabular}{>{\raggedright\arraybackslash}p{\dimexpr 0.13\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr 0.17\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr 0.17\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr 0.16\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr 0.17\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr 0.20\linewidth-2\tabcolsep\relax}}\toprule
+Limiar & Elegíveis & Quarentena & Brutos ($\ge\tau$) & Retidos & Interceptados \\ \midrule
+50\% & 63.371 & 2.315 & 6.916 & 6.215 & 701 \\
+60\% & 63.111 & 2.575 & 6.916 & 6.114 & 802 \\
+70\% & 62.857 & 2.829 & 6.916 & 6.038 & 878 \\
+80\% & 61.530 & 4.156 & 6.916 & 5.821 & 1.095 \\
+90\% & 59.091 & 6.595 & 6.916 & 5.379 & 1.537 \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir da auditoria P0 (\texttt{20261126\_172200\_p0\_audit\_sensitivity}).
+\end{table}
+
+\begin{figure}[htbp]\centering\caption{Efeito puro do limiar de cobertura sob modelo congelado ($\tau_{train}=0{,}5131$, sem reajuste)}\label{fig:gating-congelado}
+\includegraphics[width=0.96\textwidth,height=0.44\textheight,keepaspectratio]{figuras/fig_p0_04_sensibilidade_gating_congelado.pdf}
+\par\small Fonte: elaboração própria a partir da auditoria P0 sobre os escores congelados de 19/11/2026.
+\end{figure}
 
 \begin{figure}[htbp]\centering\caption{Resposta ao limiar de cobertura e funil sequencial no corte OOT}\label{funil}
 \includegraphics[width=0.96\textwidth,height=0.46\textheight,keepaspectratio]{figuras/funil.pdf}
@@ -65,14 +82,120 @@ Núcleo de quatro & 0,9841 & 0,7721 & 1.746 & 254 & 0,7746 \\
 \bottomrule\end{tabular}
 \par\small Fonte: elaboração própria a partir da execução \texttt{20261125\_134849\_083\_ablation\_m0\_m5}.
 \end{table}
-\section{Correlação, empates e estabilidade das escalas}
-A Figura~\ref{correlacao} compara a ordenação dos seis detectores e do consenso elétrico na mesma execução OOT. A correlação de Spearman foi calculada sobre os postos das 65.686 UCs, atribuindo posto médio aos empates. A concordância descreve a semelhança entre ordenações. A matriz não compara populações históricas distintas nem permite atribuir isoladamente diferenças de correlação às correções do LOF e da PCA. Na campanha histórica, os escores LOF apresentaram mediana e percentis 95 e 99 iguais a zero na precisão de quatro casas decimais. Uma hipótese é a compressão da escala causada por empates e valores extremos; a transformação logarítmica e o tratamento de quantis degenerados procuram limitar esse efeito. O resíduo da PCA, por sua vez, mede afastamento do subespaço linear, não apenas extremidade marginal, de modo que sua discordância com os demais detectores não implica inversão de sinal. A padronização interna reduz a influência de diferenças de escala. Essas explicações motivam a auditoria, mas não isolam o efeito causal de cada correção. Sua relação com o acerto em campo depende de inspeções com desfecho conhecido.
 
-\begin{figure}[htbp]\centering\caption{Correlação de postos entre detectores e consenso elétrico no OOT}\label{correlacao}
-\includegraphics[width=.82\linewidth]{figuras/correlacao.pdf}
-\par\small Fonte: elaboração própria a partir dos escores individuais da inferência de 19/11.
+Para responder diretamente à questão da sensibilidade dos pesos heurísticos do comitê ($\mathbf{w} = 0{,}22;\,0{,}20;\,0{,}18;\,0{,}18;\,0{,}10;\,0{,}12$) e do bônus físico de $+0{,}15$, a auditoria P0 avaliou 23 configurações de ponderação sobre os escores individuais congelados das 62.857 UCs elegíveis sob orçamento fixo (Top-2.000) e sob limiar fixo ($\tau_{train}=0{,}5131$), conforme as Figuras~\ref{fig:sensibilidade-pesos} e~\ref{fig:sensibilidade-bonus}. Perturbar individualmente qualquer peso em $\pm 20\%$ (com renormalização unitária) manteve a correlação de Spearman acima de $0{,}9994$ e o índice de Jaccard no Top-2.000 entre $0{,}9724$ e $0{,}9940$ (apenas 6 a 28 substituições em 2.000 vagas); mesmo sob pesos estritamente uniformes ($1/6$), a sobreposição no Top-2.000 foi de 93,6\%. Em contraste, remover o LOF sobre os escores congelados produziu 180 substituições (Jaccard $0{,}8349$), e reduzir o sistema apenas ao Isolation Forest substituiu 395 unidades no Top-2.000 (Jaccard $0{,}6701$), comprovando que a carteira priorizada é robusta a pequenas escolhas de peso, mas genuinamente sensível à diversidade estrutural dos detectores.
+
+Quanto ao bônus de $+0{,}15$, a auditoria revelou um achado de transparência essencial: na configuração \texttt{v1} de 25/11, a flag física ativou em 30.694 UCs (29.398 elegíveis, ou 46,77\%) porque o filtro textual de desequilíbrio incluiu \texttt{x\_\_hist\_current\_imbalance\_max > 0,20} (29.360 elegíveis), frente a apenas 89 UCs elegíveis (0,14\%) sob a regra estrita de desequilíbrio de tensão ($>20\%$, 57 UCs) ou reversão severa ($>85\%$, 32 UCs). Na regra efetiva \texttt{v1}, zerar o bônus reduziu o volume acima de $\tau_{train}=0{,}5131$ de 6.039 para 3.438 unidades; sob a regra estrita, o impacto variou apenas de 3.438 para 3.460 unidades (Figura~\ref{fig:sensibilidade-bonus}). Esse diagnóstico motivou diretamente a correção \texttt{strict\_voltage\_imbalance\_rule} avaliada na variante \texttt{v2}.
+
+\begin{figure}[htbp]\centering\caption{Sensibilidade do ranking Top-2.000 e do volume acima do limiar a variações nos pesos do comitê elétrico}\label{fig:sensibilidade-pesos}
+\includegraphics[width=0.96\textwidth,height=0.44\textheight,keepaspectratio]{figuras/fig_p0_05_sensibilidade_pesos.pdf}
+\par\small Fonte: elaboração própria a partir da auditoria P0 (23 configurações sobre 62.857 UCs elegíveis).
 \end{figure}
-Na experiência de estabilidade sobre 65.686 UCs (\texttt{20261125\_135109\_678\_}\allowbreak\texttt{score\_stability}), a retirada do 1\% extremo deixou 65.029 observações. A normalização pelos extremos de cada lote (\texttt{batch\_minmax}) produziu deslocamento médio absoluto de 0,034047 e máximo de 0,2291. Com os quantis de referência congelados (\texttt{frozen\_quantile} e \texttt{frozen\_ecdf}), ambos foram zero nessa perturbação. Na auditoria individual de detectores sobre as 65.686 UCs da coorte OOT (\texttt{detector\_individual\_audit.csv}), as correlações de Spearman frente ao consenso foram 0,8858 (IF), 0,4763 (LOF), 0,8829 (ECOD), 0,8755 (COPOD), 0,8738 (HBOS) e 0,4396 (PCA). O ensaio de estabilidade demonstrou invariância à composição do lote sob a perturbação testada. As correlações descrevem a configuração OOT final; não isolam causalmente o efeito das correções de escala.
+
+\begin{figure}[htbp]\centering\caption{Efeito da magnitude do bônus físico ($0{,}00$ a $+0{,}30$) sob a regra efetiva \texttt{v1} versus a regra estrita de tensão e reversão}\label{fig:sensibilidade-bonus}
+\includegraphics[width=0.96\textwidth,height=0.44\textheight,keepaspectratio]{figuras/fig_p0_06_variacao_bonus_corroboracao.pdf}
+\par\small Fonte: elaboração própria a partir da auditoria P0 (\texttt{20261126\_172200\_p0\_audit\_sensitivity}).
+\end{figure}
+
+\section{Correlação, empates e estabilidade das escalas}
+A Figura~\ref{correlacao} apresenta a matriz de correlação revisada (Spearman e Pearson) recalculada diretamente sobre os escores congelados das 62.857 UCs elegíveis no corte OOT de 19/11/2026 (\texttt{max\_abs\_diff = 0,000000} frente aos artefatos originais). A auditoria confirmou que \textbf{não existe nenhuma correlação negativa} entre os seis detectores na versão pós-saneamento: a correlação de Spearman entre IF e ECOD é fortemente positiva ($\rho = +0{,}9626$ nos elegíveis e $+0{,}9639$ no OOT total; Pearson $+0{,}9445$), dissipando definitivamente a inversão observada em artefatos preliminares pré-saneamento. Os quatro detectores globais/marginais (IF, ECOD, COPOD e HBOS) formam um bloco coeso ($\rho \in [0{,}94;\,0{,}99]$), enquanto LOF ($\rho = +0{,}4609$ frente ao consenso nos elegíveis; $+0{,}4763$ no OOT total) e PCA residual ($\rho = +0{,}4135$ nos elegíveis; $+0{,}4396$ no OOT total) aportam diversidade genuína por capturarem densidade local em vizinhanças $k$-NN e quebras de correlação linear entre grandezas elétricas.
+
+\begin{figure}[htbp]\centering\caption{Matriz auditada de correlação (Spearman e Pearson) entre os seis detectores individuais e o consenso elétrico nas 62.857 UCs elegíveis}\label{correlacao}
+\includegraphics[width=0.96\textwidth,height=0.45\textheight,keepaspectratio]{figuras/fig_p0_02_correlacao_detectores_revisada.pdf}
+\par\small Fonte: elaboração própria a partir da auditoria P0 sobre os escores congelados de 19/11/2026.
+\end{figure}
+Na experiência de estabilidade sobre 65.686 UCs (\texttt{20261125\_135109\_678\_}\allowbreak\texttt{score\_stability}), a retirada do 1\% extremo deixou 65.029 observações. A normalização pelos extremos de cada lote (\texttt{batch\_minmax}) produziu deslocamento médio absoluto de 0,034047 e máximo de 0,2291. Com os quantis de referência congelados (\texttt{frozen\_quantile} e \texttt{frozen\_ecdf}), ambos foram zero nessa perturbação. O ensaio demonstrou invariância exata à composição do lote sob a perturbação testada.
+
+\section{Avaliação multivisão integrada, perturbações controladas e ablação sob orçamento fixo}\label{avaliacao-multivisao-perturbacoes}
+
+Para avaliar empiricamente a contribuição de cada especialista da arquitetura multivisão sem depender de vistorias de campo (OS/TOI), conduziram-se duas frentes experimentais complementares em 26/11/2026: (i) execução integrada de todos os especialistas sobre as 65.686 UCs reais do corte OOT de 19/11 (\textbf{Base A}, \texttt{20261126\_172513\_p1\_multiview\_eval}); e (ii) injeção controlada de 23 cenários de perturbações fisicamente coerentes em cópias isoladas em memória de 100 séries AMI reais estratificadas em cinco circuitos, totalizando 433.068 registros intervalares de 5 e 10 minutos (\textbf{Base B}, \texttt{20261126\_173223\_p1\_controlled\_perturbations}), aplicadas estritamente \emph{antes} da extração de atributos e mantendo o Data Lake intacto. As métricas obtidas na Base B quantificam a \textbf{capacidade algorítmica de observação de eventos conhecidos}, não constituindo estimativa de precisão ou rendimento de fraude em campo.
+
+Na Base A (65.686 UCs), o especialista longitudinal de mudança de regime (\textbf{CPD/CUSUM} sobre séries diárias de 30 dias) avaliou 63.719 unidades elegíveis (com $\ge 8$ dias confiáveis; 1.967 preservadas como \texttt{NULL}) em 8,96~s, identificando 8.801 quebras de patamar, das quais 2.758 corresponderam a quedas sustentadas $\ge 30\%$. Em paralelo, treinaram-se 16 especialistas locais por alimentador estritamente no período de ajuste ($\le 31/10/2026$, sem vazamento) para o roteamento \textbf{MoE}. Na população comum elegível com alimentador cadastrado (58.820 UCs), a comparação entre o consenso global e o MoE (Figura~\ref{fig:moe-comparacao}) exibiu correlação de Spearman de 0,9670, deslocamento médio absoluto de 5,14 pontos percentuais (P95 de 15,85 p.p.) e \textbf{282 substituições} no Top-2.000 (Jaccard 0,7528), demonstrando que a contextualização por circuito altera substancialmente a extremidade priorizada.
+
+\begin{figure}[htbp]\centering\caption{Comparação entre o consenso elétrico global e o roteamento hierárquico MoE sem vazamento (16 alimentadores, 58.820 UCs elegíveis)}\label{fig:moe-comparacao}
+\includegraphics[width=0.96\textwidth,height=0.44\textheight,keepaspectratio]{figuras/fig_p1_15_comparacao_global_vs_contextual_moe.pdf}
+\par\small Fonte: elaboração própria a partir da avaliação multivisão P1 (\texttt{20261126\_172513\_p1\_multiview\_eval}).
+\end{figure}
+
+Na Base B (perturbações controladas sobre séries reais, Figuras~\ref{fig:pert-intensidade} e~\ref{fig:pert-cpd}), os resultados evidenciaram tanto os ganhos quanto os limites de cada visão:
+\begin{itemize}
+\item \textbf{Lacunas de comunicação ($S_{comm}$ e gate):} perdas aleatórias de 50\% foram 100\% interceptadas em quarentena ($0\%$ de vazamento elétrico). Contudo, o ensaio expôs uma vulnerabilidade importante na versão \texttt{v1}: blocos consecutivos de 15 dias sem transmissão mantinham cobertura média próxima de 99\% nos 15 dias presentes, vazando 31,0\% das séries para o domínio elétrico --- falha corrigida pelo gate duplo da variante \texttt{v2}.
+\item \textbf{Quedas sustentadas e contraste transversal vs.\ longitudinal:} o ensemble transversal $S_{elec}$ puro mostrou baixa sensibilidade a quedas moderadas ($-10\%$ a $-30\%$), pois o consumidor ainda se confunde com perfis residenciais menores na distribuição transversal. Em contrapartida, o módulo longitudinal \textbf{CPD/CUSUM} localizou 82,0\% das quedas de $-50\%$ dentro de $\pm 3$ dias com \textbf{erro temporal mediano de 0,0 dia}, mantendo apenas 1,0\% a 2,0\% de disparo em eventos isolados de um único dia.
+\item \textbf{Rotina intradiária com energia diária constante:} ao rotacionar circularmente os horários de consumo em $+4\ \mathrm{h}$ preservando $\Delta\mathrm{kWh/dia} = 0$, o $S_{elec}$ diário permaneceu inalterado (32,0\%, idêntico ao grupo de referência), enquanto a camada comportamental intradiária de 24h ($S_{behavior}$) detectou 52,0\% dos deslocamentos acima do P95.
+\item \textbf{Assinaturas físicas e eventos coletivos de rede:} injeções solares reversas diurnas foram detectadas em 100,0\% dos casos; carga nula com tensão energizada atingiu 96,0\% no CPD e 100,0\% no $S_{behavior}$. No teste de contraste topológico sobre o Circuito F-04, uma queda isolada de $-50\%$ em 1 UC permaneceu integralmente classificada como anomalia individual (\texttt{GENUINE\_UC\_ANOMALY}, $1/1$), ao passo que a mesma queda aplicada simultaneamente a 80\% do posto (16 UCs) teve \textbf{16 de 16 unidades reclassificadas como perturbação coletiva de rede} (\texttt{GRID\_DISTURBANCE}), com atenuação do escore médio de 0,525 para 0,184.
+\end{itemize}
+
+\begin{figure}[htbp]\centering\caption{Resposta dos especialistas a perturbações controladas de intensidade crescente em 100 séries AMI reais (quedas sustentadas e lacunas de comunicação)}\label{fig:pert-intensidade}
+\includegraphics[width=0.96\textwidth,height=0.44\textheight,keepaspectratio]{figuras/fig_p1_11_resposta_modelos_por_intensidade.pdf}
+\par\small Fonte: elaboração própria a partir do experimento controlado P1 (\texttt{20261126\_173223\_p1\_controlled\_perturbations}).
+\end{figure}
+
+\begin{figure}[htbp]\centering\caption{Desempenho controlado do detector de mudança de regime (CPD/CUSUM) versus consenso elétrico e distribuição do erro de localização temporal em dias}\label{fig:pert-cpd}
+\includegraphics[width=0.96\textwidth,height=0.44\textheight,keepaspectratio]{figuras/fig_p1_12_desempenho_controlado_cpd.pdf}
+\par\small Fonte: elaboração própria a partir do experimento controlado P1 (\texttt{20261126\_173223\_p1\_controlled\_perturbations}).
+\end{figure}
+
+A Tabela~\ref{tab:comparacao-central} e as Figuras~\ref{fig:ablacao-base-a} e~\ref{fig:ablacao-base-b} consolidam a comparação direta entre a metodologia original (Baseline V0: Isolation Forest sem gate), o comitê elétrico com gate (V2) e a arquitetura multivisão integrada (V5) sob orçamento operacional rigorosamente constante ($K = 2.000$ na Base A; $K = 400$ na Base B). Na Base A, V0 e V1 (sem gate) vazam respectivamente 138 e 257 UCs em quarentena de comunicação para dentro do Top-2.000, enquanto V2--V5 zeram esse vazamento ($0$) e V4--V5 elevam a presença de UCs com queda sustentada CPD $\ge 30\%$ no Top-2.000 de 134 (V0) para 198. Na Base B, sob orçamento fixo $K = 400$, a arquitetura completa (V5) eleva o F1 controlado em perturbações elétricas de 68,25\% (V0) e 69,25\% (V2) para \textbf{76,00\%}, ao mesmo tempo em que reduz o vazamento de lacunas de comunicação de 31,50\% para \textbf{18,00\%}, mantendo o tempo total de inferência sobre 65.686 UCs em 36,12~s.
+
+\begin{table}[htbp]\centering\small\caption{Comparação consolidada entre Baseline (V0), Ensemble com gate (V2) e Arquitetura Multivisão Integrada (V5) sob orçamento fixo}\label{tab:comparacao-central}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.44\linewidth}>{\raggedleft\arraybackslash}p{0.17\linewidth}>{\raggedleft\arraybackslash}p{0.17\linewidth}>{\raggedleft\arraybackslash}p{0.18\linewidth}@{}}\toprule
+Indicador avaliado & Baseline (V0) & Ensemble (V2) & Multivisão (V5) \\ \midrule
+UCs avaliadas / elegíveis (Base A, OOT) & 65.686 / 65.686 & 65.686 / 62.857 & 65.686 / 62.857 \\
+Substituições no Top-2.000 vs.\ V2 (Base A) & 499 & 0 (ref.) & 327 \\
+Quarentena ($<70\%$) vazada no Top-2.000 & 138 & 0 & 0 \\
+UCs com queda CPD $\ge 30\%$ no Top-2.000 & 134 & 152 & 198 \\
+F1 controlado em perturbações elétricas (Base B, $K=400$) & 68,25\% & 69,25\% & 76,00\% \\
+Vazamento de lacunas de comunicação (Base B, $K=400$) & 31,50\% & 22,00\% & 18,00\% \\
+Quedas $-50\%$ localizadas $\le 3$ dias / erro mediano & N/A & N/A & 82,0\% / 0,0 dia \\
+Eventos coletivos isolados ($80\%$ circuito) & N/A & N/A & 16/16 (\texttt{GRID}) \\
+Tempo computacional OOT (65.686 UCs) & 0,15~s & 11,04~s & 36,12~s \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir das execuções P1 (\texttt{20261126\_172513} e \texttt{20261126\_173223}).
+\end{table}
+
+\begin{figure}[htbp]\centering\caption{Ablação metodológica V0--V5 na Base A (OOT real de 65.686 UCs sob orçamento fixo $K = 2.000$)}\label{fig:ablacao-base-a}
+\includegraphics[width=0.96\textwidth,height=0.43\textheight,keepaspectratio]{figuras/fig_p1_16a_ablacao_variantes_base_a.pdf}
+\par\small Fonte: elaboração própria a partir da execução \texttt{20261126\_172513\_p1\_multiview\_eval}.
+\end{figure}
+
+\begin{figure}[htbp]\centering\caption{Ablação metodológica V0--V5 na Base B (perturbações controladas sobre séries reais sob orçamento fixo $K = 400$)}\label{fig:ablacao-base-b}
+\includegraphics[width=0.96\textwidth,height=0.43\textheight,keepaspectratio]{figuras/fig_p1_16b_ablacao_variantes_base_b.pdf}
+\par\small Fonte: elaboração própria a partir da execução \texttt{20261126\_173223\_p1\_controlled\_perturbations}.
+\end{figure}
+
+\section{Validação temporal multi-corte (19/11 a 25/11/2026) e variante \texttt{v2} saneada}\label{validacao-temporal-v2}
+
+Com o acréscimo de seis dias reais de operação no Data Lake (20/11 a 25/11/2026, totalizando 117 dias completos), executou-se uma validação temporal multi-corte mantendo rigorosamente congelado o treinamento até 31/10/2026 (\texttt{20261126\_190338\_p1\_v2\_temporal\_validation}). O experimento comparou simultaneamente a referência \texttt{v1} preservada e a variante endurecida \texttt{v2}, que corrige os três achados identificados nas auditorias P0/P1: (i) restrição estrita do bônus $+0{,}15$ a violações de tensão e reversão (\texttt{strict\_voltage\_imbalance\_rule=True}); (ii) gate de qualidade de duplo critério ($q_i \ge 0{,}70$ e $\ge 18$ dias confiáveis); e (iii) leitura particionada real de \path{output/events/alarm_events/} ativando $S_{tamper}$.
+
+\begin{table}[htbp]\centering\small\caption{Comparação da referência \texttt{v1} e da variante \texttt{v2} saneada nos cortes OOT de 19/11 e 25/11/2026}\label{tab:validacao-v2}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.27\linewidth}>{\raggedleft\arraybackslash}p{0.11\linewidth}>{\raggedleft\arraybackslash}p{0.11\linewidth}>{\raggedleft\arraybackslash}p{0.14\linewidth}>{\raggedleft\arraybackslash}p{0.12\linewidth}>{\raggedleft\arraybackslash}p{0.12\linewidth}>{\raggedleft\arraybackslash}p{0.11\linewidth}@{}}\toprule
+Execução (corte) & Elegíveis & Quarent. & Flag regra ($+0{,}15$) & Anom.\ elét. & $S_{tamper}\ge 0{,}7$ & Cand.\ fila \\ \midrule
+\texttt{v1} (19/11, ref.) & 62.857 & 2.829 & 30.694 (46,73\%) & 6.037 & 0 & 6.037 \\
+\texttt{v1} (25/11, $+6$d) & 62.274 & 3.366 & 30.649 (46,69\%) & 6.059 & 0 & 6.059 \\
+\texttt{v2} (19/11, saneada) & 62.686 & 3.000 & 124 (0,19\%) & 3.455 & 1.377 & 4.298 \\
+\texttt{v2} (25/11, $+6$d) & 62.185 & 3.455 & 122 (0,19\%) & 3.466 & 1.375 & 4.300 \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir da execução \texttt{20261126\_190338\_p1\_v2\_temporal\_validation} (65.686 UCs em 19/11 e 65.640 em 25/11).
+\end{table}
+
+Os resultados da Tabela~\ref{tab:validacao-v2} e das Figuras~\ref{fig:v2-persistencia} e~\ref{fig:v2-auditoria} confirmam três propriedades estruturais do sistema:
+\begin{enumerate}
+\item \textbf{Alta persistência temporal em dados reais:} entre 19/11 e 25/11/2026, 89,8\% do Top-2.000 da \texttt{v1} (1.797/2.000; Spearman 0,9688) e 88,0\% do Top-2.000 da \texttt{v2} (1.760/2.000; Spearman 0,9484) persistiram após seis dias reais de novas medições, com \textbf{91,5\% de persistência} da carteira completa de candidatos da \texttt{v2} (3.933/4.298; Jaccard 0,8431). Isso evidencia que o ranking captura comportamentos persistentes, e não ruído transitório de um único dia.
+\item \textbf{Convergência no topo e ativação de sinais físicos reais:} mesmo removendo 30.570 ativações indevidas do bônus $+0{,}15$ (queda de 46,73\% para 0,19\%), a variante \texttt{v2} preservou \textbf{92,4\% do Top-2.000} em 19/11 (1.848/2.000; Jaccard 0,8587). Paralelamente, a leitura particionada de \texttt{alarm\_events} identificou 1.377 UCs em 19/11 e 1.375 em 25/11 com $S_{tamper} \ge 0{,}70$ (combinando concordância elétrica e eventos físicos exclusivos de tampa/intrusão/reversão).
+\item \textbf{Eliminação do vazamento de apagões consecutivos:} reexecutando os cenários de lacunas sobre as 100 UCs reais da Base B, o gate duplo da \texttt{v2} elevou a interceptação de blocos consecutivos de 15 dias sem sinal de 0,0\% para \textbf{100,0\%}, derrubando o vazamento elétrico correspondente de \textbf{31,0\% (\texttt{v1}) para 0,0\% (\texttt{v2})}.
+\end{enumerate}
+
+\begin{figure}[htbp]\centering\caption{Persistência temporal real da ordenação e da carteira priorizada entre os cortes de 19/11 e 25/11/2026 (\texttt{v1} e \texttt{v2})}\label{fig:v2-persistencia}
+\includegraphics[width=0.96\textwidth,height=0.43\textheight,keepaspectratio]{figuras/fig_v2_01_persistencia_temporal_19_25_nov.pdf}
+\par\small Fonte: elaboração própria a partir da execução \texttt{20261126\_190338\_p1\_v2\_temporal\_validation}.
+\end{figure}
+
+\begin{figure}[htbp]\centering\caption{Impacto das três correções da variante \texttt{v2} (regra PRODIST estrita, gate duplo e alarmes particionados) frente à referência \texttt{v1}}\label{fig:v2-auditoria}
+\includegraphics[width=0.96\textwidth,height=0.43\textheight,keepaspectratio]{figuras/fig_v2_02_comparacao_v1_vs_v2_auditoria.pdf}
+\par\small Fonte: elaboração própria a partir da execução \texttt{20261126\_190338\_p1\_v2\_temporal\_validation}.
+\end{figure}
 
 \section{Estudos de caso e anatomia da detecção}\label{estudos-caso-reconciliados}
 O exame longitudinal integra grandezas elétricas, cobertura, vínculo histórico e hipótese diagnóstica. Os casos a seguir, reproduzidos sobre os registros de origem da suíte de 25/11 (\texttt{20261125\_135558\_880\_case\_traces}), ilustram o exame das evidências de mudança e a reconciliação formal das inconsistências de qualidade.
@@ -110,3 +233,10 @@ Instantânea diária (grade legada) & \texttt{ami\_}\allowbreak\texttt{instantan
 \bottomrule\end{tabular}
 \par\small Fonte: elaboração própria a partir dos registros de origem.
 \end{table}
+
+O acompanhamento longitudinal dos três estudos de caso nos seis dias adicionais reais (20/11 a 25/11/2026, Figura~\ref{fig:v2-casos}) confirmou a estabilidade das hipóteses diagnósticas sob a variante \texttt{v2}: a UC \texttt{908***00} manteve injeção reversa expressiva em todos os seis dias (FA média de 4,55~kWh/dia e RA média de 14,72~kWh/dia; escore \texttt{v2} de 0,7827, mantida em \texttt{POSSIVEL\_GD\_NAO\_CADASTRADA}); a UC \texttt{291***96} permaneceu em silêncio completo de telemetria (0 dias observados, com dois alarmes físicos na janela de 30 dias), permanecendo corretamente retida em quarentena (\texttt{ANOMALIA\_COMUNICACAO\_ISOLADA}); e a UC \texttt{685***20} seguiu com cobertura íntegra e consumo elevado (FA média de 71,59~kWh/dia e RA nula; escore \texttt{v2} de 0,8937), mantida na fila prioritária de anomalia elétrica.
+
+\begin{figure}[htbp]\centering\caption{Evolução longitudinal dos três estudos de caso reais no horizonte adicional de 20/11 a 25/11/2026 sob a variante \texttt{v2}}\label{fig:v2-casos}
+\includegraphics[width=0.96\textwidth,height=0.43\textheight,keepaspectratio]{figuras/fig_v2_03_evolucao_casos_reais_ate_25_nov.pdf}
+\par\small Fonte: elaboração própria a partir da validação multi-corte (\texttt{20261126\_190338\_p1\_v2\_temporal\_validation}).
+\end{figure}
