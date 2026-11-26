@@ -1,0 +1,60 @@
+% Notação agrupada por ordem de aparecimento no manuscrito.
+\pretextualchapter{Lista de símbolos}
+\begin{description}[labelsep=4mm,labelwidth=42mm,leftmargin=46mm,align=left]
+  \item[$\mathcal U$] Conjunto de instalações conectadas à fronteira elétrica
+  \item[$E_{\mathrm{res}}$] Energia residual do balanço (kWh)
+  \item[$E_{\mathrm{entrada}}$] Energia de entrada na fronteira (kWh)
+  \item[$E_{\mathrm{FA},u}$, $E_{\mathrm{RA},u}$] Energias ativa direta e reversa da UC $u$ (kWh)
+  \item[$\widehat E_{\mathrm{tec}}$] Estimativa das perdas técnicas (kWh)
+  \item[$E_d$, $\widetilde E$] Energia diária e sua mediana histórica
+  \item[$V$, $V_{u,W}$] Conjunto de dias válidos; conjunto válido da UC na janela
+  \item[$\mathbf{x}_d$] Vetor de observações intradiárias
+  \item[$T$] Número de intervalos do perfil diário
+  \item[$u$, $d$, $t$] Índices da UC, do dia e do instante, respectivamente
+  \item[$I_{u,k}$] Intervalo de vigência do vínculo da UC $u$ com o medidor $k$
+  \item[$Y_k(t)$, $X_u(t)$] Série do medidor e série reconstruída da UC
+  \item[$t_{\mathrm{inst},j}$, $t_{\mathrm{ret},j}$] Instantes ou datas de instalação e retirada do vínculo $j$
+  \item[$\Delta t_{d,c}$] Cadência esperada do canal $c$ no dia $d$ (min)
+  \item[$N_{\mathrm{esp}}$, $N_{\mathrm{obs}}$] Quantidades de observações esperadas e observadas
+  \item[$C(d,c)$] Cobertura do dia e canal (adimensional)
+  \item[$t_c$, $W$] Data de corte e janela histórica
+  \item[$\mathcal H_u$, $\mathcal C_u$] Histórico e contexto da UC
+  \item[$\mathbf{x}_{u,t_c}$] Vetor de atributos da UC no corte
+  \item[$c_{u,d}$, $w$] Arquétipo diário e índice do dia da semana
+  \item[$q^{base}_{u,w}(c)$] Probabilidade de referência do arquétipo $c$ condicionada ao dia da semana
+  \item[$A_{u,d}$] Indicador binário de dia comportamentalmente atípico
+  \item[$R_A$, $\Delta R_A$] Proporção de dias atípicos e sua variação entre janelas
+  \item[$i$, $m$] Índices da observação e do detector nas equações de escores
+  \item[$s_{i,m}$, $z_{i,m}$] Escore bruto e escore normalizado do detector
+  \item[$a_m$, $b_m$] Quantis inferior e superior congelados no ajuste
+  \item[$w_m$] Peso atribuído ao detector ou ao especialista
+  \item[$S_{elec}$] Escore de anomalia elétrica
+  \item[$S_{comm}$] Escore de anomalia de comunicação
+  \item[$S_{tamper}$] Escore heurístico de eventos físicos
+  \item[$S_{behavior}$] Representação analítica comportamental
+  \item[$R_i$] Indicador de ativação da regra elétrica crítica
+  \item[$q_i$, $g$, $G_i$] Qualidade de telemetria, limiar de qualidade e indicador de elegibilidade
+  \item[$\tau$, $D_i$] Limiar do detector e indicador de anomalia elétrica
+  \item[$a_i$, $b_i$, $m_i$] Contagem de alarmes, inclinação temporal e indicador de troca de medidor
+  \item[$\mathbf e_i$, $\kappa_i$] Vetor multivisão de evidências e identificador de classe comportamental (na fusão)
+  \item[$n_f$] Número de registros do alimentador $f$
+  \item[$\mathcal A_i$] Conjunto de especialistas hierárquicos disponíveis
+  \item[$S_i^{MoE}$] Escore da combinação hierárquica de modelos
+  \item[$\varepsilon_i$] Erro de reconstrução por PCA
+  \item[$n$] Mês operacional, nas equações de projeção da carteira
+  \item[$B_n$, $A_n$] Estoque de episódios e entradas únicas no mês $n$
+  \item[$R_n$, $X_n$] Conclusões com inspeção e baixas administrativas sem inspeção no mês $n$
+  \item[$K_n$] Capacidade mensal hipotética de inspeção
+  \item[$D_{\mathrm{novo},n}$] Demanda externa qualificada à carteira convencional
+  \item[$K_{\mathrm{novo},n}$] Vagas reservadas a novos candidatos
+  \item[$K_{\mathrm{legado},n}$] Vagas restantes para a carteira convencional
+  \item[$k$, $y_{(j)}$] Profundidade do ranking e desfecho binário conclusivo do caso $j$
+  \item[$\mathrm{Yield}@k$] Rendimento de inspeções à profundidade $k$
+  \item[$\mathrm{Lift}@k$] Razão entre os rendimentos do modelo e da política de referência
+  \item[$\Delta t_i$] Antecedência da seleção do caso em relação à política convencional
+  \item[$p_i$, $\theta_i$] Probabilidade de confirmação e fração realizável do valor
+  \item[$V_i$, $C_i$] Valor potencial e custo da inspeção (no modelo econômico)
+  \item[$\mathrm{EMV}_i$] Valor monetário esperado do caso $i$
+  \item[$\Delta\mathrm{EMV}$] Valor monetário esperado incremental da substituição
+  \item[$p^*$] Probabilidade de confirmação no ponto de equilíbrio
+\end{description}

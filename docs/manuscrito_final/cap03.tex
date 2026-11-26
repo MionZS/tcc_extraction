@@ -1,0 +1,96 @@
+\chapter{Fundamentação metodológica}\label{fundamentauxe7uxe3o-metodoluxf3gica}
+
+\section{Encadeamento do argumento e lacuna enfrentada}\label{encadeamento-do-argumento-e-lacuna-enfrentada}
+
+Há quatro decisões científicas sucessivas neste problema: definir \textbf{qual observação é confiável}, estabelecer \textbf{com qual histórico e com quais pares a UC deve ser comparada}, identificar \textbf{que forma de desvio ocorreu} e determinar \textbf{quais inferências são permitidas por essa evidência}. Tratar essas decisões como uma única classificação binária gera um atalho conceitual: uma saída numérica passa a representar simultaneamente integridade do canal, diferença estatística, evento elétrico e irregularidade comercial. Essas dimensões não são equivalentes.
+
+Trabalhos sobre perdas não técnicas demonstram que a seleção e a ordenação de consumidores são problemas relevantes, e não apenas a classificação em conjuntos experimentais \autocite{sau2023,han2026}. A literatura de análise de outliers, por sua vez, distingue raridade global, densidade local e desvios em séries temporais, com diferentes hipóteses sobre a distribuição dos dados \autocite{aggarwal2017}. Já a interpretação de distúrbios elétricos requer reconhecer quando regras físicas fornecem informações que não deveriam ser aprendidas cegamente a partir de dados \autocite{bollen2007,bollen2006}.
+
+A lacuna metodológica tratada neste trabalho está na \textbf{articulação dessas três perspectivas sobre dados AMI heterogêneos e temporalmente versionados}. O mesmo registro deve ser visto como medição física, evento temporal, observação estatística e evidência potencial para uma decisão operacional. Por isso, a decomposição multivisão não é somente uma opção de organização de software: evita que uma falha de comunicação seja aprendida como padrão elétrico e que uma troca de medidor seja confundida com uma mudança de regime da instalação.
+
+\section{Anomalia, perda não técnica e confirmação de campo}\label{anomalia-perda-nuxe3o-tuxe9cnica-e-confirmauxe7uxe3o-de-campo}
+
+Neste trabalho, os termos \textbf{anomalia}, \textbf{padrão compatível com perda não técnica} e \textbf{irregularidade confirmada por evidência independente} não são equivalentes. Anomalia corresponde a uma observação, sequência ou regime que se afasta de uma referência estatística ou física. Perda não técnica (PNT) é a parcela das perdas não explicada pelos processos físicos de transporte e transformação; pode envolver irregularidades, defeitos de medição e erros comerciais, não necessariamente furto. Fraude confirmada exige validação por processo de campo ou por fonte corporativa considerada referência independente.
+
+Essa distinção é importante porque os modelos não supervisionados operam sem rótulos de fraude. Um escore elevado indica raridade segundo a representação utilizada, e não probabilidade causal de furto. A metodologia procura, portanto, deslocar a interpretação de um único escore para uma composição de evidências independentes.
+
+\section{Perdas não técnicas, balanço energético e observabilidade}\label{pnt-balanco}
+
+A separação entre perdas técnicas e não técnicas é central para a análise regulatória da distribuição \autocite{aneel2026,aneelren1000,glauner2017}. Um balanço de energia no alimentador, para o mesmo intervalo e convenção de sinais, pode ser representado por
+\begin{equation}\label{balanco}
+E_{\mathrm{res}}=E_{\mathrm{entrada}}-\sum_{u\in\mathcal U}(E_{\mathrm{FA},u}-E_{\mathrm{RA},u})-\widehat E_{\mathrm{tec}}.
+\end{equation}
+As parcelas são energias em kWh referidas à mesma fronteira elétrica; $\widehat E_{\mathrm{tec}}$ é a estimativa de perdas técnicas e $\mathcal U$ é o conjunto de instalações conectadas no período. A diferença residual depende também da cobertura, da sincronização, do cadastro topológico e da incerteza da estimativa. Sem a medição a montante e a estimativa de perdas técnicas, o estudo não calcula PNT por circuito. Mesmo com essas informações, o balanço não identifica sozinho a UC responsável pelo residual.
+
+A análise individual de curvas AMI complementa essa perspectiva ao associar desvios a uma instalação e a um intervalo temporal. As revisões de \textcite{glauner2017} e \textcite{messinis2018} discutem os desafios dos dados e da detecção de PNT em redes de distribuição; \textcite{villar2017}, \textcite{jokar2016} e \textcite{buzau2019} apresentam abordagens baseadas em perfis de carga, classificação de consumo e aprendizado de máquina sobre dados de medidores inteligentes. A ausência de rótulos independentes orienta a escolha por métodos não supervisionados: seu resultado é uma hipótese de investigação e não uma estimativa de probabilidade de fraude. A avaliação futura de rendimento deve considerar que as vistorias selecionadas pela política vigente não constituem amostra aleatória da população.
+
+\section{Resolução temporal dos dados AMI e limite de inferência}\label{resoluuxe7uxe3o-temporal-dos-dados-ami-e-limite-de-inferuxeancia}
+
+A literatura clássica de qualidade da energia trabalha frequentemente com formas de onda de alta frequência, apropriadas para transitórios, afundamentos, elevações e harmônicos \autocite{bollen2006}. Dados AMI em cadência de minutos ocupam outro domínio. Fenômenos subcíclicos que não foram registrados explicitamente como eventos pelo medidor já foram integrados ou filtrados antes de chegar ao Data Lake.
+
+A contribuição da literatura de processamento de sinais para este trabalho é, portanto, principalmente estrutural: segmentação temporal, extração de representações e classificação devem ser tratadas como etapas distintas; métodos determinísticos e estatísticos podem coexistir \autocite{bollen2007}. A análise proposta concentra-se em escalas de horas, dias e semanas, nas quais mudanças de comportamento, persistência e recorrência são observáveis.
+
+\section{Estatística robusta e representação do histórico}\label{estatuxedstica-robusta-e-representauxe7uxe3o-do-histuxf3rico}
+
+Médias simples são sensíveis a picos e podem ocultar heterogeneidade. Por isso, a metodologia utiliza medidas robustas como mediana, MAD e quantis para descrever o comportamento histórico. Essas estatísticas são especialmente úteis quando o interesse é reconhecer uma mudança no patamar ou na dispersão sem permitir que poucos eventos extremos redefinam o próprio baseline.
+
+Para uma série diária de energia \(E_d\), a mediana histórica é dada por:
+
+\[\widetilde E=\operatorname{med}_{d\in V}(E_d),\]
+
+e a dispersão robusta pode ser descrita por:
+
+\[\operatorname{MAD}(E)=\operatorname{med}_{d\in V}|E_d-\widetilde E|.\]
+
+O conjunto $V$ contém apenas dias válidos da UC. Ambas as medidas conservam a unidade de energia diária (kWh/dia). Essas medidas não substituem a série temporal. Elas funcionam como uma representação complementar, utilizada tanto para construir atributos quanto para gerar bandas de referência interpretáveis nos gráficos de acompanhamento.
+
+\section{Detecção de anomalias e raridade multivariada}\label{detecuxe7uxe3o-de-anomalias-e-raridade-multivariada}
+
+A detecção de outliers busca observações incompatíveis com uma distribuição de referência \autocite{aggarwal2017}. Neste trabalho, métodos como Isolation Forest, LOF e PCA residual são avaliados como formas distintas de representar raridade. A abordagem original combinava diferentes detectores sobre um espaço global de atributos. A arquitetura atual mantém esse baseline, mas restringe o subespaço de cada especialista para impedir que o modelo elétrico aprenda, por exemplo, que ausência de pacote é uma propriedade elétrica da UC.
+
+Essa separação é uma mudança de representação, não de objetivo. O escore continua sendo utilizado para localizar casos raros, mas passa a ser interpretado dentro do domínio ao qual os atributos pertencem.
+
+\section{Change Point Detection e mudança de regime}\label{change-point-detection-e-mudanuxe7a-de-regime}
+
+Detecção de mudança de regime (\emph{Change Point Detection} - CPD) responde a uma pergunta diferente da detecção de outliers: \textbf{quando a dinâmica da série mudou?} Métodos de CPD segmentam uma série em regiões com propriedades estatísticas relativamente homogêneas \autocite{truong2020}.
+
+Uma UC pode não ser rara em determinado dia e ainda assim ter migrado para um novo patamar persistente. Da mesma forma, uma fraude ou defeito estabelecido antes da janela de observação pode já parecer estável. Por isso, CPD e anomaly detection são complementares.
+
+Para reduzir falsos alarmes produzidos pela sazonalidade, a detecção de mudança deve preferencialmente operar sobre resíduos ou séries condicionadas por horário e tipo de dia. Em monitoramento causal, somente informações anteriores ao instante de decisão podem compor a referência; em auditoria retrospectiva, janelas posteriores podem ser utilizadas desde que o uso seja explicitamente descrito.
+
+\section{Perfis diários e recorrência comportamental}\label{perfis-diuxe1rios-e-recorruxeancia-comportamental}
+
+O consumo de uma UC possui forma intradiária. Dois consumidores podem apresentar a mesma energia diária e, ainda assim, ter curvas completamente diferentes. Uma representação diária normalizada permite separar \textbf{magnitude} de \textbf{morfologia}.
+
+Para um dia \(d\) com \(T\) intervalos, define-se o vetor:
+
+\[\mathbf{x}_d=[x_{d,1},x_{d,2},\ldots,x_{d,T}].\]
+
+Uma representação de forma pode ser obtida por normalização da curva, enquanto a energia total diária é preservada como feature independente. PCA e clustering podem então construir arquétipos de dia. A sequência dos arquétipos atribuídos à mesma UC permite distinguir um dia isolado de uma alteração persistente na rotina.
+
+Assim, um domingo sempre diferente pode ser parte do padrão normal da instalação; o sinal de interesse aparece quando a frequência, a posição semanal ou a morfologia desses dias começa a mudar. Essa representação comportamental, identificada por \(S_{behavior}\) na arquitetura, complementa o CPD: o primeiro descreve \textbf{qual tipo de dia está ocorrendo e com que frequência}; o segundo procura \textbf{quando a distribuição temporal mudou}.
+
+\section{Determinístico versus estatístico}\label{determinuxedstico-versus-estatuxedstico}
+
+Nem todo fenômeno deve ser aprendido. Grandezas cuja interpretação é diretamente definida pela física ou por critérios regulatórios devem permanecer em uma camada determinística. O PRODIST Módulo 8 é utilizado como referência para contextualização de tensão e qualidade do fornecimento \autocite{aneel2026}, sempre respeitando a diferença entre a cadência disponível no AMI e o procedimento formal de avaliação regulatória.
+
+O papel do ML concentra-se onde a fronteira não é conhecida a priori: comportamento, raridade, combinação de atributos, recorrência e mudança de regime. Essa divisão reduz opacidade e permite que cada evidência tenha significado técnico explícito.
+
+\section{Heterogeneidade topológica e comparação entre pares}\label{heterogeneidade-topoluxf3gica-e-comparauxe7uxe3o-entre-pares}
+
+A população analisada não é homogênea. Consumidores conectados a alimentadores com composição residencial, comercial ou industrial distintas podem apresentar distribuições de consumo igualmente distintas. Por isso, o alimentador e a vizinhança elétrica são usados como contexto de comparação, e não como rótulo causal.
+
+A mesma lógica vale para transformadores: eventos simultâneos entre várias UCs eletricamente próximas aumentam a plausibilidade de causa comum; desvios persistentes restritos a uma única instalação aumentam a relevância de hipóteses individuais. A corroboração topológica deve, portanto, modificar a prioridade e a interpretação, mas não produzir sozinha um veredicto de fraude.
+
+\section{Justificativa comparativa das técnicas escolhidas}\label{justificativa-comparativa-das-tuxe9cnicas-escolhidas}
+
+Isolation Forest é útil para desvios globalmente raros, mas não assegura que uma observação pouco extrema na cidade inteira seja normal entre consumidores semelhantes \autocite{liu2008}. LOF introduz uma referência de densidade local, à custa da sensibilidade à métrica, à dimensionalidade e ao tamanho do conjunto de vizinhos \autocite{breunig2000}. ECOD utiliza extremidades de distribuições marginais; PCA, por outro lado, explicita subespaços dominantes e resíduos de reconstrução. Nenhuma dessas medidas, isoladamente, resolve \emph{quando} um comportamento mudou, motivando o uso separado de métodos de detecção de ponto de mudança \autocite{truong2020}.
+
+O agrupamento de perfis diários com K-Means não é empregado como detector de fraude: seu papel consiste em definir referências comparáveis de forma e, quando há histórico suficiente, estudar alterações na frequência de tipos de dia. Regras elétricas e evidências topológicas funcionam como instrumentos de interpretação e exclusão de hipóteses, preservando a diferença entre uma ocorrência comum de rede e um fenômeno localizado. Assim, o ganho esperado da arquitetura é \textbf{redução de ambiguidade}, não aumento automático de uma métrica de classificação.
+
+A superioridade da metodologia refinada deve ser demonstrada por efeito marginal dos componentes e, quando houver rótulos de inspeção, pelo rendimento operacional. A mera redução do número de UCs sinalizadas não garante melhora: também pode excluir casos relevantes. Essa consequência orienta os experimentos de ablação e sensibilidade apresentados adiante.
+
+
+A escolha do K-Means sobre perfis normalizados conserva a comparação por horário e torna os centroides interpretáveis. Distâncias elásticas como DTW admitem deslocamentos temporais; autoencoders podem representar formas mais complexas. Essas alternativas não foram comparadas experimentalmente, de modo que não se afirma superioridade do K-Means. A opção privilegia uma referência simples e verificável de morfologia.
+
+

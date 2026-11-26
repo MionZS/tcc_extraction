@@ -1015,9 +1015,9 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
     ax_int.plot(hrs, post_fa_med_h, color="#64748b", lw=1.9, linestyle="-.", label="Pós-Evento (03–19/11) FA")
     ax_int.plot(hrs, post_ra_med_h, color="#059669", lw=2.3, linestyle="--", label="Pós-Evento (03–19/11) RA Reversa")
     ax_int.fill_between(hrs, 0, post_ra_med_h, color="#10b981", alpha=0.18)
-    ax_int.set_title("C. Perfil Intradiário Horário Médio (10 min agregado)", fontweight="bold")
+    ax_int.set_title("C. Mediana da energia por hora", fontweight="bold")
     ax_int.set_xlabel("Hora do Dia (h)")
-    ax_int.set_ylabel("Energia Horária Mediana (kWh/h)")
+    ax_int.set_ylabel("Energia em uma hora (kWh)")
     ax_int.set_xticks(range(0, 24, 3))
     ax_int.legend(loc="upper left", fontsize=7.8)
 
@@ -1234,7 +1234,7 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
 
     hrs_ts = [r["hour_ts"] for r in h_rows_685]
     hrs_fa = [r["fa_kwh"] for r in h_rows_685]
-    ax_h.plot(hrs_ts, hrs_fa, color="#0f172a", lw=1.8, label="Consumo Horário Observado FA (kWh/h, 168h)")
+    ax_h.plot(hrs_ts, hrs_fa, color="#0f172a", lw=1.8, label="Consumo Horário Observado FA (kWh por intervalo horário, 168h)")
     # Baseline mediana por hora do dia na janela
     by_hod: dict[int, list[float]] = {h: [] for h in range(24)}
     for r in h_rows_685:
@@ -1242,7 +1242,7 @@ def generate_real_case_study_figures(run_dirs: dict[str, Path], feeder_map: dict
     base_h = [float(np.median(by_hod[r["hour_ts"].hour])) for r in h_rows_685]
     ax_h.plot(hrs_ts, base_h, color="#0284c7", linestyle="--", lw=1.5, label="Referência Mediana por Hora do Dia")
     ax_h.set_title("A. Série Horária Real (29/10 a 04/11/2026) — 168 Horas Contínuas sem Lacunas Físicas (6 leituras/h a Δt=10 min)", fontweight="bold")
-    ax_h.set_ylabel("Energia Ativa FA (kWh/h)")
+    ax_h.set_ylabel("Energia Ativa FA (kWh por intervalo horário)")
     ax_h.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m %Hh"))
     ax_h.legend(loc="upper left", fontsize=8.2)
 
@@ -1522,7 +1522,7 @@ def generate_platform_interface_captures(run_dirs: dict[str, Path], feeder_map: 
 
             # 5. Capturas complementares das outras 2 UCs de estudo no Cockpit real (685***20 e 291***96)
             for uc_raw, uc_mask, period_btn, expected_unit, out_name in [
-                ("68546220", "685***20", "#btnPeriod7h", "kWh/h", "cockpit_raiox_uc_685xxx20.png"),
+                ("68546220", "685***20", "#btnPeriod7h", "kWh por intervalo horário", "cockpit_raiox_uc_685xxx20.png"),
                 ("29113296", "291***96", "#btnPeriod30d", "kWh/dia", "cockpit_raiox_uc_291xxx96.png"),
             ]:
                 page.evaluate("closeDrawer()")
@@ -1638,7 +1638,7 @@ Nos três painéis controlados (\texttt{seed=42}, $N=1.000$), os parâmetros ger
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.98\textwidth]{manuscript_figures/real_case_studies/fig_caso_908xxx00_fa_ra_completo.pdf}
-  \caption{Série temporal completa observada para a UC \texttt{908***00} (02/08 a 19/11/2026, medidor \texttt{NIO-435***63}, \texttt{run\_id = 20261123\_124416\_146\_oot\_multiview}): (A) energia ativa direta FA e reversa RA diárias; (B) cobertura ajustada à cadência de 10~min; (C) perfis horários médios pré e pós-31/10.}
+  \caption{Série temporal completa observada para a UC \texttt{908***00} (02/08 a 19/11/2026, medidor \texttt{NIO-435***63}, \texttt{run\_id = 20261123\_124416\_146\_oot\_multiview}): (A) energia ativa direta FA e reversa RA diárias; (B) cobertura ajustada à cadência de 10~min; (C) medianas horárias antes e depois de 31/10.}
   \label{fig:caso-908xxx00-completo}
 \end{figure}
 

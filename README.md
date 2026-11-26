@@ -2,6 +2,10 @@
 
 ## 1. Visão Geral e Pragmatismo
 
+O manuscrito vigente está em [docs/manuscrito_final/main.tex](docs/manuscrito_final/main.tex).
+Para regenerar os gráficos revisados a partir da campanha congelada de 25/11 e dos extratos mascarados, execute `uv run python scripts/generate_manuscript_figures.py` na raiz.
+Para compilar com pdfLaTeX e Biber, execute `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex` em `docs/manuscrito_final` com abnTeX2 e biblatex-abnt instalados.
+
 Este é o pipeline completo de extração, normalização, engenharia de atributos e modelagem de Machine Learning para detecção de anomalias em medição inteligente (AMI). O **pragmatismo** do TCC reside na convergência absoluta de dados caóticos: medições elétricas (fenômenos), topologia de rede (geográfico) e alarmes operacionais são forçados a convergir em uma única Unidade Analítica rígida (`UC × cutoff_date`). O projeto resolve o problema de treinar algoritmos sobre alimentadores reais da Copel (ex: Fonte Nova), servindo como provador de conceito para modelos especialistas hierárquicos.
 
 ---

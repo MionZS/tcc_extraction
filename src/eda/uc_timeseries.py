@@ -811,7 +811,7 @@ def load_uc_hourly_timeseries(
             "z_score": round(points[s_idx]["z_self"], 2),
             "reason": (
                 f"Mudança de patamar ({step_hourly['delta_pct']:+.1f}%: "
-                f"{step_hourly['pre_median']:.2f} -> {step_hourly['post_median']:.2f} kWh/h)"
+                f"{step_hourly['pre_median']:.2f} -> {step_hourly['post_median']:.2f} kWh por intervalo horário)"
             ),
         })
 
@@ -967,20 +967,20 @@ def plot_uc_interactive(
     labels = [p["label"] for p in pts]
     flags = [p["flag"] for p in pts]
     gran = ts.get("granularity", "daily")
-    unit = "kWh/h" if gran == "hourly" else "kWh/dia"
+    unit = "kWh por intervalo horário" if gran == "hourly" else "kWh/dia"
 
     # Top panel: Band and Baseline
     if gran == "hourly" and "baseline_hod" in pts[0]:
         base_line = np.array([p["baseline_hod"] for p in pts], dtype=np.float64)
         upper_line = np.array([p["upper_hod"] for p in pts], dtype=np.float64)
         lower_line = np.array([p["lower_hod"] for p in pts], dtype=np.float64)
-        ax_top.fill_between(xs, lower_line, upper_line, color="#0284c7", alpha=0.14, label="Banda Operacional MAD (±3.5σ por hora)")
+        ax_top.fill_between(xs, lower_line, upper_line, color="#0284c7", alpha=0.14, label="Faixa horária robusta (−3,0 a +3,5 escalas)")
         ax_top.plot(xs, base_line, color="#0369a1", ls="--", lw=1.3, label="Baseline Mediana Histórica (Hora do Dia)")
     else:
         med = float(ts.get("baseline_median", 0.0))
         up = float(ts.get("upper_band", med))
         lo = float(ts.get("lower_band", 0.0))
-        ax_top.axhspan(lo, up, color="#0284c7", alpha=0.12, label="Banda Operacional MAD (±3.5σ)")
+        ax_top.axhspan(lo, up, color="#0284c7", alpha=0.12, label="Faixa robusta (±3,5 escalas)")
         ax_top.axhline(med, color="#0369a1", ls="--", lw=1.4, label=f"Baseline Mediana ({med:.2f} {unit})")
 
     ax_top.plot(xs, vals, color="#0f172a", lw=1.8, label="Consumo Real Medido (FA)")

@@ -61,9 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--only",
-        choices=["all", "ml", "cases", "platform"],
-        default="all",
-        help="Subconjunto de figuras a gerar (padrão: all).",
+        choices=["article", "all", "ml", "cases", "platform"],
+        default="article",
+        help="Artigo com dados reais (padrão). all e ml reproduzem o material didático histórico.",
     )
     parser.add_argument(
         "--skip-playwright",
@@ -71,6 +71,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Pula as capturas da plataforma via Rich SVG + Playwright Chrome.",
     )
     args = parser.parse_args(argv)
+
+    if args.only == "article":
+        from scripts.generate_final_article_figures import generate_article_figures
+
+        generate_article_figures()
+        return 0
 
     if args.only == "all" and not args.skip_playwright:
         res = generate_all_manuscript_figures()

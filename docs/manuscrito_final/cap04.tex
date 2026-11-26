@@ -1,0 +1,104 @@
+\chapter{Evolução metodológica e comparação com a abordagem original}\label{evoluuxe7uxe3o-metodoluxf3gica-e-comparauxe7uxe3o-com-a-abordagem-original}
+
+\section{Abordagem original como baseline}\label{abordagem-original-como-baseline}
+
+A metodologia original pode ser resumida em quatro etapas:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  agregação do histórico em uma janela fixa;
+\item
+  construção de atributos estatísticos de consumo e grandezas elétricas;
+\item
+  aplicação de modelos não supervisionados globais e ensemble de escores;
+\item
+  ordenação das UCs pela raridade multivariada.
+\end{enumerate}
+
+Essa abordagem continua sendo importante porque fornece um baseline simples, reproduzível e diretamente relacionado ao objetivo original do trabalho. Ela responde à pergunta: \textbf{quais UCs apresentam combinações de atributos incomuns quando toda a população é analisada no mesmo espaço?}
+
+\section{Motivos para o refinamento}\label{motivos-para-o-refinamento}
+
+O refinamento surgiu à medida que a aplicação passou a operar sobre dados reais e históricos mais longos. Foram observadas seis situações que justificam decompor o problema:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{ausência de telemetria pode produzir aparente queda de consumo}, exigindo um especialista de comunicação;
+\item
+  \textbf{troca de medidor pode produzir descontinuidade artificial}, exigindo reconstrução temporal UC--NIO;
+\item
+  \textbf{uma janela fixa pode diluir mudanças recentes ou normalizar regimes antigos}, motivando CPD;
+\item
+  \textbf{consumidores com energia agregada semelhante podem ter formas diárias opostas}, motivando \(S_{behavior}\);
+\item
+  \textbf{alimentadores e vizinhanças possuem distribuições distintas}, motivando comparação contextual;
+\item
+  \textbf{certas regras são físicas ou regulatórias}, e não precisam ser reaprendidas por um detector estatístico.
+\end{enumerate}
+
+Nenhum desses pontos invalida o baseline original. Eles identificam variáveis de confusão e novas fontes de informação que podem ser adicionadas progressivamente.
+
+\section{Arquitetura refinada}\label{arquitetura-refinada}
+
+A abordagem atual preserva a detecção multivariada, mas organiza as evidências em sete subproblemas paralelos a partir da telemetria AMI, do cadastro e da topologia: qualidade e comunicação ($S_{comm}$), mudança de regime (CPD), morfologia diária ($S_{behavior}$), grandezas elétricas ($S_{elec}$), alarmes físicos ($S_{tamper}$), regras determinísticas de tensão e contexto por alimentador. Essas evidências são posteriormente integradas para compor o ranqueamento e a priorização de inspeção.
+
+A principal mudança é epistemológica: cada escore precisa responder a uma pergunta específica. O sistema deixa de exigir que um único modelo aprenda simultaneamente qualidade de dados, comportamento, física e contexto.
+
+\section{Avaliações comparativas e definição dos experimentos}\label{desenho-de-ablauxe7uxe3o}
+
+O estudo distingue \textbf{três execuções com contratos próprios}, não três nomes para a mesma lista. A distinção é necessária porque suas contagens não são intercambiáveis.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}@{}}
+\caption{Produtos experimentais e unidades de comparação}\label{tab:integracao2}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Produto
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Unidade e período
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Regra de geração
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Finalidade
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Produto
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Unidade e período
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Regra de geração
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Finalidade
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{OOT\_MULTIVIEW} & UC no corte de 19/11/2026; treinamento em cortes anteriores & Inferência com pré-processamento, detectores e limiares reportados como congelados & Caracterizar os escores e candidatos do modelo especializado \\
+\texttt{DAILY\_RULES} & UC × dia; 19 cortes de 01 a 19/11/2026 & Regras e critérios próprios, distintos da saída do modelo OOT & Observar entradas, saídas e persistência das listas \\
+\texttt{ABLATION\_M0\_M5} & Mesma coorte de 19/11 para filtros aninhados & Seleção por identidade, qualidade, contexto e hipótese elétrica & Quantificar a passagem entre estados de elegibilidade e candidatura \\
+\end{longtable}
+{\small\noindent Fonte: elaboração própria.\par}
+
+
+O funil \textbf{M0--M5 efetivamente reportado} contém: M0, coorte avaliada; M1, UCs únicas; M2, cobertura elegível; M3, informação topológica disponível; M4, hipótese estatística/elétrica; M5, política de encaminhamento. Ele não representa, isoladamente, a comparação causal de uma metodologia original com cinco arquiteturas ML sucessivas. Essa comparação pode ser investigada por variantes de treinamento sob coortes idênticas, mas não deve ser inferida das contagens do funil.
+
+A exclusão de detectores LOF, PCA ou ambos constitui uma \textbf{segunda ablação}, interna ao ensemble: mede mudança de ranking e interseção de Top-K, sem estimar desempenho de identificação de fraude.
+
+\section{Critério de interpretação}\label{crituxe9rio-de-interpretauxe7uxe3o}
+
+A mudança de elegibilidade, o número de candidatos e a rotatividade no Top-K são propriedades observáveis do processamento. Uma redução de volume não equivale a uma redução de falsos positivos; um aumento de escore não equivale a maior probabilidade de fraude. Sem rótulos de OS/TOI, a avaliação compara consistência computacional, estabilidade de parâmetros, transparência da evidência e comportamento das políticas, sem proclamar superioridade pericial.
+
+\section{Delimitação experimental}\label{delimitacao-experimental}
+
+O objeto observado é a população de unidades consumidoras definida para a área de estudo, com séries históricas reconstruídas a partir dos medidores instalados em cada intervalo. O trabalho \textbf{executou o pipeline e avaliações retrospectivas sobre dados AMI reais}. A comparação entre detectores utilizou os escores individuais registrados para cada UC no corte OOT.
+
+O resultado observável termina na geração, análise e visualização de escores, hipóteses diagnósticas e listas de candidatos. Nenhuma UC foi vistoriada em decorrência do estudo e não foram recebidos resultados de ordens de serviço (OS) ou termos de ocorrência e inspeção (TOI). Desse modo, não são estimadas precisão de identificação de fraude, taxa de confirmação, energia recuperada ou retorno econômico realizado. O cenário operacional apresentado adiante é uma aplicação projetada desses resultados computacionais.

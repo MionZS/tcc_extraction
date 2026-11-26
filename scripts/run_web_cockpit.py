@@ -2209,7 +2209,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         xTicks2 += `<text x="${xOf(i).toFixed(1)}" y="${H2 - 6}" text-anchor="middle" fill="${axisFill}" font-size="9.5">${pts[i].label}</text>`;
       }
 
-      const unit = data.granularity === 'hourly' ? 'kWh/h' : 'kWh/dia';
+      const unit = data.granularity === 'hourly' ? 'kWh por intervalo horário' : 'kWh/dia';
       const avgCovPct = (pts.reduce((acc, p) => acc + (p.coverage || 0), 0) / Math.max(pts.length, 1) * 100).toFixed(1);
       const missingPct = ((missingCount / Math.max(pts.length, 1)) * 100).toFixed(1);
 
@@ -2231,7 +2231,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       box.innerHTML = `
         <div style="font-size:11.5px;color:${metaHeaderColor};margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-          <span>Mediana Base: <b>${data.baseline_median} ${unit}</b> · MAD: <b>${data.baseline_mad}</b> · Slope: <b>${data.slope_kwh_day ?? '-'} kWh/dia</b></span>
+          <span>Mediana Base: <b>${data.baseline_median} ${unit}</b> · MAD: <b>${data.baseline_mad}</b> · Inclinação diária: <b>${data.slope_kwh_day ?? '-'} kWh/dia²</b></span>
           <span style="color:${stepTxtColor}">${stepTxt}</span>
         </div>
 

@@ -385,7 +385,7 @@ def plot_comparison_pair(
         ax2.set_xticks(range(0, 24, 3))
         ax2.set_xticklabels([f"{h:02d}h" for h in range(0, 24, 3)])
         ax2.set_xlabel("Hora do Dia (Dados Reais — Memória de Massa AMI)")
-        ax2.set_ylabel("Consumo Ativo Horário (kWh/h)")
+        ax2.set_ylabel("Consumo Ativo Horário (kWh por intervalo horário)")
         ax2.set_title("Curva de Carga Horária Real (Mediana & Banda P10–P90)")
         ax2.legend(loc="upper left", fontsize=8)
     else:
@@ -440,7 +440,7 @@ def plot_weekly_comparison_pair(
     """
     Plot 7-day (168-hour) real telemetry comparison between the stable and volatile UCs:
       - Top panel: Both 168h curves overlaid on the exact same scale, contrasting the
-        continuous ~0.85 kWh/h flat line vs the 0–7 kWh/h diurnal pulsing mountains.
+        continuous ~0.85 kWh por intervalo horário flat line vs the 0–7 kWh por intervalo horário diurnal pulsing mountains.
       - Bottom panel: Volatile UC with its MAD operational band and detected demand spikes.
     """
     _apply_dark_academic_style()
@@ -470,7 +470,7 @@ def plot_weekly_comparison_pair(
     vals_b = np.array([p["value"] for p in pts_b[:n_pts]], dtype=np.float64)
     labels = [p.get("label", str(i)) for i, p in enumerate(pts_b[:n_pts])]
     gran = ts_b.get("granularity", "hourly")
-    unit = "kWh/h" if gran == "hourly" else "kWh/dia"
+    unit = "kWh por intervalo horário" if gran == "hourly" else "kWh/dia"
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 7.8), dpi=160, sharex=True)
 
@@ -522,13 +522,13 @@ def plot_weekly_comparison_pair(
         base_b = np.array([p["baseline_hod"] for p in pts_b[:n_pts]], dtype=np.float64)
         upper_b = np.array([p["upper_hod"] for p in pts_b[:n_pts]], dtype=np.float64)
         lower_b = np.array([p["lower_hod"] for p in pts_b[:n_pts]], dtype=np.float64)
-        ax2.fill_between(xs, lower_b, upper_b, color="#ea580c", alpha=0.14, label="Banda Operacional MAD (±3.5σ por hora)")
+        ax2.fill_between(xs, lower_b, upper_b, color="#ea580c", alpha=0.14, label="Faixa horária robusta (−3,0 a +3,5 escalas)")
         ax2.plot(xs, base_b, color="#c2410c", ls="--", lw=1.3, label="Baseline Mediana Histórica da UC Volátil")
     else:
         med_b = float(ts_b.get("baseline_median", uc_b["median_kwh_day"]))
         up_b = float(ts_b.get("upper_band", med_b + 3.5 * float(uc_b["mad_kwh_day"])))
         lo_b = float(ts_b.get("lower_band", max(0.0, med_b - 3.5 * float(uc_b["mad_kwh_day"]))))
-        ax2.axhspan(lo_b, up_b, color="#ea580c", alpha=0.12, label="Banda Operacional MAD (±3.5σ)")
+        ax2.axhspan(lo_b, up_b, color="#ea580c", alpha=0.12, label="Faixa robusta (±3,5 escalas)")
         ax2.axhline(med_b, color="#c2410c", ls="--", lw=1.3, label=f"Baseline Mediana ({med_b:.2f} {unit})")
 
     ax2.plot(xs, vals_b, color="#9a3412", lw=1.8, label=f"Consumo Real UC {uc_b['uc_censored']}")
@@ -620,15 +620,15 @@ def plot_real_outlier_timeline(
         base_line = np.array([p["baseline_hod"] for p in pts], dtype=np.float64)
         upper_line = np.array([p["upper_hod"] for p in pts], dtype=np.float64)
         lower_line = np.array([p["lower_hod"] for p in pts], dtype=np.float64)
-        ax_top.fill_between(xs, lower_line, upper_line, color="#0284c7", alpha=0.13, label="Banda Operacional MAD (±3.5σ por hora)")
+        ax_top.fill_between(xs, lower_line, upper_line, color="#0284c7", alpha=0.13, label="Faixa horária robusta (−3,0 a +3,5 escalas)")
         ax_top.plot(xs, base_line, color="#0369a1", ls="--", lw=1.3, label="Baseline Mediana Histórica (Hora do Dia)")
-        unit_lbl = "kWh/h"
+        unit_lbl = "kWh por intervalo horário"
         sub_lbl = f"Série Real Horária (7 dias / {len(pts)}h — ami_interval)"
     else:
         med = float(ts["baseline_median"])
         up = float(ts["upper_band"])
         lo = float(ts["lower_band"])
-        ax_top.axhspan(lo, up, color="#0284c7", alpha=0.12, label="Banda Operacional MAD (±3.5σ)")
+        ax_top.axhspan(lo, up, color="#0284c7", alpha=0.12, label="Faixa robusta (±3,5 escalas)")
         ax_top.axhline(med, color="#0369a1", ls="--", lw=1.4, label=f"Baseline Mediana ({med:.2f} kWh/dia)")
         unit_lbl = "kWh/dia"
         sub_lbl = f"Série Real Diária ({len(pts)} dias — uc_day_features)"

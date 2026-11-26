@@ -1,0 +1,146 @@
+\chapter{Engenharia do pipeline: das fontes ao dataset analítico}\label{engenharia-do-pipeline-das-fontes-ao-dataset-analuxedtico}
+
+\section{Requisitos, restrições e unidade de processamento}\label{requisitos-restriuxe7uxf5es-e-unidade-de-processamento}
+
+A engenharia de dados é um componente científico deste estudo porque erros de identidade, tempo ou persistência modificam diretamente o resultado do detector. Há requisitos simultâneos: extrair a população selecionada sem depender de um arquivo monolítico; suportar interrupções e reexecuções; preservar o grão original das fontes; separar observação ausente de valor físico nulo; reconstruir a relação entre UC e equipamento no instante correto; e produzir um dataset de treinamento reproduzível.
+
+A implementação concentra a aquisição em um orquestrador e reúne módulos de geração de conjuntos analíticos, cálculo de atributos, verificações, modelos e interface de terminal. O script orquestra campanhas de extração; as rotinas de normalização distinguem medições intervalares, instantâneas e registradores; os escritores persistem camadas semanticamente identificadas; a TUI oferece acesso coordenado a extração, auditoria e treinamento. Essa separação torna possível estudar cada estágio sem assumir que sucesso de uma consulta significa qualidade das séries usadas pelos modelos.
+
+O processamento é particionado prioritariamente por \textbf{dia de referência}, com subconjuntos de NIOs consultados por lotes. O grão de armazenamento varia conforme a fonte, enquanto o grão de treinamento é uma UC em uma data de corte. Essa distinção impede que registros de medidores diferentes ou amostras de dias distintos sejam tratados como observações estatisticamente independentes de uma mesma entidade.
+
+\section{Inventário das fontes e seus contratos}\label{inventuxe1rio-das-fontes-e-seus-contratos}
+
+O CIS fornece situação e identidade da UC, vínculos de equipamentos, datas de instalação e retirada e atributos comerciais; GEO fornece alimentador, subestação e hierarquia espacial; MDM/ORCA fornece as observações de medição; eventos do equipamento permitem examinar alarmes. Tabelas de clima e outras informações contextuais podem enriquecer comparações, mas devem manter o carimbo temporal que comprova sua disponibilidade no momento da decisão.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}@{}}
+\caption{Fontes e contratos de aquisição}\label{tab:integracao3}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Camada
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Grão
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Conteúdo
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Verificação essencial
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Camada
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Grão
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Conteúdo
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Verificação essencial
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{uc\_context} & UC e versão/instantâneo & classe, situação, características cadastrais & vigência e duplicidade \\
+\path{meter_installation_history} & UC--NIO--intervalo de validade & instalação, retirada, substituição & sobreposição temporal e identificação \\
+\path{electrical_hierarchy} & UC/nó e referência topológica & alimentador, posto, transformador & chaves e versão da topologia \\
+\texttt{ami\_interval} & NIO--instante & energia intervalar e grandezas médias & cadência, duplicados, faltantes \\
+\texttt{ami\_instantaneous} & NIO--instante & tensão/corrente instantâneas & amostragem, fonte e unidade \\
+\texttt{ami\_registers} & NIO--instante & contadores acumulados & reset e delta por equipamento \\
+\texttt{alarm\_events} & NIO--evento & código, horário de origem e recepção & latência, relógio e duplicidade \\
+\path{meter_day_features} & NIO--dia--versão & descritores diários & fonte e versão da transformação \\
+\path{uc_window_features} & UC--corte--janela & histórico consolidado & censura, vazamento e sobreposição \\
+\texttt{training\_dataset} & UC--corte & matriz e metadados para treino & divisões temporais e rastreabilidade \\
+\end{longtable}
+{\small\noindent Fonte: elaboração própria.\par}
+
+
+A Tabela~\ref{tab:integracao3} explicita por que não é adequado reunir todas essas fontes por uma chave estática. A energia intervalar pertence a um equipamento e a um instante, enquanto a decisão operacional recai sobre a UC. Alarmes exigem atenção especial: horário de ocorrência e horário de chegada ao sistema podem diferir. Um evento recebido depois do instante de corte não deve entrar retroativamente nos atributos de uma decisão operacional passada.
+
+\section{Descoberta da população, seleção por alimentador e vigência}\label{descoberta-da-populauxe7uxe3o-seleuxe7uxe3o-por-alimentador-e-viguxeancia}
+
+A campanha começa com a seleção do universo de UCs e a recuperação dos vínculos com equipamentos e alimentadores. O mecanismo admite a população completa da área de estudo ou a restrição a um alimentador, útil tanto para depuração quanto para modelos contextuais. Uma população filtrada não pode, entretanto, substituir o universo completo na inferência de prevalência de irregularidades.
+
+Para cada UC e instante \(t\), a associação ao medidor exige:
+
+\[t_{\mathrm{inst},j}\le t\quad\land\quad(t_{\mathrm{ret},j}=\varnothing\ \lor\ t\le t_{\mathrm{ret},j}).\]
+
+A igualdade na data de retirada expressa a regra de inclusão do vínculo histórico; quando há troca no mesmo dia, a resolução por data não decide o período intradiário de cada NIO. Nesses casos, timestamps mais precisos ou uma política explícita de desambiguação são necessários. O sistema não deve somar dois registradores acumulados ou tratar o salto de contador entre medidores como energia consumida. Primeiramente são calculadas diferenças válidas \textbf{dentro de cada NIO}; depois, a relação de vigência permite reconstruir a série UC.
+
+Esse tratamento reduz dois erros opostos: excluir telemetria antiga por consultar somente o medidor atual e incorporar medidas de equipamento não mais instalado. Como consequência, alterações no cadastro podem ser representadas como contexto de mudança, não como prova automática de alteração na carga elétrica.
+
+\section{Seleção inteligente de datas e recuperação de lacunas}\label{seleuxe7uxe3o-inteligente-de-datas-e-recuperauxe7uxe3o-de-lacunas}
+
+O motor examina as partições previamente materializadas para descobrir quais dias já possuem arquivo de medição. O módulo verifica as partições diárias de grandezas instantâneas em Parquet ou CSV e identifica tanto os dias posteriores à última partição quanto lacunas internas, até o último dia completo anterior à execução.
+
+É importante distinguir \textbf{presença física de arquivo} de \textbf{integridade semântica de uma partição}. Na implementação histórica, a primeira verificação utiliza existência e tamanho superior a um limite mínimo; por isso, uma partição presente não recebe automaticamente certificado de completude de todas as tabelas e todos os NIOs. O segundo controle é fornecido pelas auditorias do Data Lake, que comparam formatos, datas, contagens e disponibilidade. Essa distinção é central para a interpretação do calendário: uma data marcada como presente não implica que cada medidor esperado tenha transmitido todos os intervalos.
+
+O modo manual aceita dia específico, intervalo histórico ou filtro de alimentador. Isso permite recuperação direcionada, reprocessamento de datas problemáticas e experiências controladas sem descarregar novamente toda a população. A finalidade operacional do auto-backfill é reduzir trabalho repetitivo e conservar uma sequência histórica contínua, sempre respeitando a retenção efetiva da fonte de dados.
+
+\section{Extração Oracle em lotes e paralelismo de consultas}\label{extrauxe7uxe3o-oracle-em-lotes-e-paralelismo-de-consultas}
+
+O script de execução carrega as consultas SQL e divide a lista de identificadores em lotes. O uso do tipo Oracle \texttt{SYS.ODCIVARCHAR2LIST} permite enviar coleções de NIOs como parâmetro de consulta, evitando montar comandos SQL de tamanho variável por concatenação de strings. As conexões de consulta ao MDM são mantidas por worker, reduzindo a necessidade de abrir uma sessão para cada lote. O progresso da fila geral e das tarefas individuais é visualizado com barras do Rich.
+
+Na implementação de aquisição, cada worker executa uma consulta e recebe os resultados do \textbf{lote} com \texttt{fetchall()}, transforma esse lote em Polars e o persiste em Parquet. Consequentemente, a estratégia é \textbf{materialização limitada por lote seguida de processamento lazy de arquivos}, e não um fluxo contínuo byte a byte diretamente do cursor Oracle ao arquivo final. Essa precisão importa: o tamanho do lote controla o pico de memória do estágio de aquisição; o \texttt{sink\_*} controla, sobretudo, a etapa posterior de consolidação/normalização sem concatenar todos os lotes em um único DataFrame residente.
+
+A paralelização concentra-se nas operações de I/O de banco de dados e em tarefas independentes. Ela não elimina limitações do banco, do link ou do Python; aumento indiscriminado de workers pode piorar latência, aumentar sessões concorrentes e pressionar recursos corporativos. Parâmetros como tamanho do lote, workers e formato são, portanto, variáveis de desempenho a medir, não constantes universais.
+
+\section{\texorpdfstring{Persistência intermediária, Polars e \texttt{sink\_*}}{Persistência intermediária, Polars e sink\_*}}\label{persistuxeancia-intermediuxe1ria-polars-e-sink_}
+
+Cada lote MDM concluído produz um arquivo temporário compactado. Depois do término da fila do dia, o sistema constrói um \texttt{LazyFrame} a partir das leituras \path{pl.scan_parquet(...)} e as combina com \texttt{pl.concat} com concatenação vertical flexível. A escrita com \texttt{sink\_parquet} ou \texttt{sink\_csv} permite executar o plano sobre os arquivos de entrada sem exigir a materialização integral do dia como um único objeto de memória. A mesma estratégia aparece na consolidação das três saídas normalizadas.
+
+Há duas formas de parcialidade com consequências diferentes: \textbf{checkpoint de lote}, que evita uma consulta repetida ao retomar parte da campanha, e \textbf{partição diária consolidada}, que serve de entrada auditável para etapas posteriores. A primeira é recuperável, mas pode exigir nova validação; a segunda deve possuir esquema, contagem, janela, formato e manifesto compatíveis. A escrita por sinking, isoladamente, não fornece transação atômica, garantia de ausência de duplicados ou integridade do conteúdo. Essas propriedades exigem verificações adicionais, particularmente quando há falhas durante a escrita ou mudanças de esquema.
+
+Arquivos Parquet comprimidos são favorecidos na computação por coluna, preservação de tipos e leitura seletiva; CSV é útil para inspeção, compatibilidade e intercâmbio. O módulo de conversão permite criar o formato ausente a partir da cópia existente, evitando uma consulta desnecessária à origem. Ainda assim, igualdade de formato não equivale a igualdade de linhas: a auditoria precisa comparar cardinalidade, esquema e, quando aplicável, checksums.
+
+\section{Normalização dos três canais de medição}\label{normalizauxe7uxe3o-dos-truxeas-canais-de-mediuxe7uxe3o}
+
+O MDM entrega curvas que podem estar representadas como mapas ou sequências serializadas em JSON. A função de normalização identifica slots temporais, detecta ou interpreta cadência e produz relações longas com uma observação por instante. Na operação foram consideradas cadências heterogêneas; portanto, não é correto impor 96 amostras por dia a todo medidor. O número esperado deve ser calculado por canal e pela cadência válida:
+
+\[N_{\mathrm{esp}}(d,c)=\frac{1440}{\Delta t_{d,c}},\qquad C(d,c)=\frac{N_{\mathrm{obs}}(d,c)}{N_{\mathrm{esp}}(d,c)}.\]
+
+A razão é uma simplificação para um dia completo em horário local de 24 horas; duplicações, mudanças de horário e diferentes convenções de timestamp exigem política própria. A normalização separa \texttt{ami\_interval}, \texttt{ami\_instantaneous} e \texttt{ami\_registers}, preservando a semântica de cada variável e evitando agregar medidas de natureza diferente como se fossem uma série homogênea.
+
+Um exemplo ilustra o problema: se uma curva intervalar registra 80 pontos válidos de uma grade de 96, a cobertura é \(80/96=0{,}8333\). Oito registros de energia nula continuam sendo \textbf{oito observações válidas}, não oito faltantes. Se a consulta retorna zero pontos, a causa ainda é indeterminada: pode decorrer de retenção, indisponibilidade da fonte, filtro incorreto ou ausência de comunicação. A classificação dessa falta pertence ao especialista de qualidade e aos metadados da extração.
+
+\section{Construção e separação dos datasets de aprendizado}\label{construuxe7uxe3o-e-separauxe7uxe3o-dos-datasets-de-aprendizado}
+
+Depois da normalização, o pipeline calcula descritores diários e agregações por janelas históricas. O contrato recomendado é uma linha por UC e instante de corte \(t_c\). Seu conjunto de entrada contém apenas observações anteriores ou disponíveis em \(t_c\):
+
+\[\mathbf{x}_{u,t_c}=f\big(\mathcal H_u[t_c-W,t_c],\mathcal C_u(t_c)\big),\]
+
+em que \(\mathcal H_u\) representa histórico de medição com vínculo válido, \(\mathcal C_u\) o contexto disponível à época e \(W\) a janela de observação. Colunas \texttt{x\_\_} entram no estimador; \texttt{id\_\_} identifica unidade e observação; \texttt{meta\_\_} fornece contexto, roteamento e rastreabilidade; \texttt{y\_\_} armazena rótulos externos quando existentes.
+
+O mesmo consumidor pode aparecer em cortes sucessivos, de modo que a divisão aleatória de linhas criaria exemplos altamente correlacionados em treino e teste. O experimento deve considerar \textbf{separação temporal}, impedir sobreposição indevida entre janelas e, quando necessário, medir generalização em UCs não vistas. Imputadores, escalonadores, PCA, clusterizadores, escores de referência e limiares precisam ser ajustados no conjunto de treinamento e aplicados posteriormente sem recalcular parâmetros a partir dos dados de avaliação.
+
+\section{Manifestos, saúde do Data Lake e rastreabilidade da execução}\label{manifestos-sauxfade-do-data-lake-e-rastreabilidade-da-execuuxe7uxe3o}
+
+A execução gera identificadores de campanha e utiliza manifestos para registrar operações, arquivos e contagens. A auditoria de integridade pode inspecionar dimensões de tabelas, continuidade diária, versões dos formatos, falhas de execução e divergências entre artefatos. O calendário Rich resume o status visual por dia e permite separar datas completamente ausentes das presentes em apenas um dos formatos. O relatório de saúde amplia essa leitura para a consistência do conjunto.
+
+O controle mínimo reprodutível de uma partição inclui: data e canal, consulta ou versão do SQL, lote ou conjunto de NIOs, momento da extração, esquema, cardinalidade, intervalo temporal e estado do processamento. Para os modelos, acrescentam-se versão do dataset, catálogo de atributos, data de corte, pré-processadores, semente, hiperparâmetros, detector, política de limiar e resultado de pontuação. Sem esse encadeamento, dois rankings produzidos em dias distintos podem divergir sem que se saiba se a causa é mudança do consumo, correção histórica, variação do conjunto de referência ou atualização do código.
+
+\section{Falhas recuperáveis e limites de consistência}\label{falhas-recuperuxe1veis-e-limites-de-consistuxeancia}
+
+O projeto utiliza cache de lotes e partições por dia para evitar perder toda a campanha por uma falha de rede ou interrupção. A utilidade desse mecanismo está na possibilidade de preservar resultados intermediários e reiniciar a partir de arquivos existentes. Entretanto, tolerância a interrupção não significa ausência de risco de arquivos truncados: checkpoints precisam ser validados antes do reaproveitamento. De forma semelhante, uma data sem linhas retornadas não demonstra que nenhuma medição existiu no sistema fonte.
+
+Há também uma restrição de retenção histórica no MDM. A preservação local de dados extraídos é importante para permitir análises em janelas mais longas do que a janela mantida no banco de origem. Isso não autoriza reconstruir medições não coletadas: a lacuna histórica anterior à primeira extração permanece uma limitação do conjunto de evidências.
+
+\section{Encadeamento operacional de uma campanha completa}\label{encadeamento-operacional-de-uma-campanha-completa}
+
+O procedimento reproduzível pode ser descrito por onze estágios: (1) carregar configuração/SQL; (2) selecionar UCs e alimentadores; (3) obter histórico de instalação e hierarquia; (4) calcular datas faltantes; (5) dividir NIOs em lotes; (6) consultar Oracle com sessões por worker; (7) gravar cache Parquet por lote; (8) consolidar e normalizar intervalos, instantâneos e registradores com Polars; (9) extrair alarmes e computar descritores diários; (10) construir janelas UC--corte e auditar integridade; (11) treinar, versionar e pontuar modelos pela TUI. Cada transição possui artefato persistente ou verificação explícita.
+
+A principal contribuição da plataforma não é simplesmente acelerar uma consulta: \textbf{preserva o caminho entre uma medição do equipamento e a evidência exibida ao analista}. O dado anômalo só se torna interpretável quando a unidade, o medidor instalado, o instante, o canal, a qualidade da transmissão e o modelo empregado podem ser recuperados conjuntamente.
+
+
+\section{Organização da matriz e desempenho observado}
+Os atributos elétricos incluíram mediana e MAD da FA, dias com fluxo reverso, razão de reversão, fator de carga, desequilíbrios de tensão e corrente, tendência temporal e dispersão relativa. As colunas \texttt{x\_\_hist\_fa\_sum\_median}, \texttt{x\_\_hist\_fa\_sum\_mad} e \texttt{x\_\_fa\_cv\_window} conservaram tipos numéricos e semânticas distintas. Chaves de UC e NIO, datas e indicadores de cobertura permaneceram identificáveis para reconstrução de cada janela.
+
+No consolidado de quatro cortes, CSV e Parquet contiveram 262.849 linhas cada. Os tamanhos foram 55,89 MB e 7,86 MB, respectivamente. No ensaio de leitura e escrita dessa tabela, a execução com materialização consumiu 0,1487 s e a leitura diferida com escrita direta, 0,1232 s. A vazão observada passou de 1.767.748 para 2.133.447 linhas/s. Essas medidas caracterizam o percurso local de leitura e gravação. A duração da extração corporativa e a latência do treinamento constituem etapas próprias.
+
+
+A redução relativa de volume persistido foi de aproximadamente 85,9\%, enquanto o tempo local de leitura e escrita diminuiu 17,1\%. A comparação utiliza a mesma tabela consolidada; não estima aceleração de consultas Oracle nem o desempenho de outras campanhas.
+
+
