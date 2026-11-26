@@ -110,7 +110,7 @@ Quando \(b_m-a_m<10^{-12}\) (amplitude degenerada por empates em cauda), adota-s
 
 com pesos \(\mathbf w=(0{,}22;0{,}20;0{,}18;0{,}18;0{,}10;0{,}12)\) e \(R_i\in\{0,1\}\) representando a ativação da regra elétrica crítica da política. Os pesos e o bônus são escolhas heurísticas de projeto, não estimativas de parâmetros de um modelo supervisionado. Sua sensibilidade individual é avaliada nos ensaios de ablação. O bônus de \(0{,}15\) não é peso de detector. As regras permanecem condições de triagem e não confirmação de violação regulatória ou fraude.
 
-A validação temporal definiu o limiar de referência \(\tau_{train}=0{,}5131\) na execução consolidada pós-saneamento (frente a \(0{,}5226\) na campanha preliminar), obtido exclusivamente no conjunto de ajuste anterior ao corte. A seleção deve ser lida conjuntamente com qualidade, regras diagnósticas e política operacional; logo, \(S_{elec,i}\ge\tau_{train}\) isoladamente não é sinônimo de candidato final. Esse limiar permanece congelado na avaliação fora do tempo.
+A validação temporal definiu o limiar de referência \(\tau_{train}=0{,}5131\) na execução consolidada pós-saneamento (\texttt{20261125\_134559\_972\_oot\_multiview}), obtido exclusivamente no conjunto de ajuste anterior ao corte. A seleção deve ser lida conjuntamente com qualidade, regras diagnósticas e política operacional; logo, \(S_{elec,i}\ge\tau_{train}\) isoladamente não é sinônimo de candidato final. Esse limiar permanece congelado na avaliação fora do tempo.
 
 A configuração preliminar de quatro detectores pode ser escrita, para comparação, como:
 
@@ -193,11 +193,8 @@ Aqui \(f\), \(r\) e \(g\) representam alimentador, regional/municipal e global. 
 
 Exemplo: com \(n_f\ge1000\) e apenas alimentador/global disponíveis, os pesos nominais \((0{,}70,0{,}20,0{,}10)\) tornam-se efetivamente \(0{,}875\) local e \(0{,}125\) global. O limiar de decisão pode ser obtido por quantis locais sobre registros elegíveis. Isso mostra que o componente ``Mixture of Experts'\,' atualmente implementado é um \textbf{roteador hierárquico heurístico de modelos}, não uma rede neural com \emph{gating network} treinada por gradiente no sentido clássico de \textcite{jacobs1991}. As faixas de 150 e 1.000 registros e os pesos são heurísticas para limitar a influência de coortes pequenas e favorecer referências locais em coortes maiores. A escolha não estabelece suficiência amostral universal e não foi otimizada com desfechos de campo.
 
-\subsection{Exemplo numérico e análise de propagação de evidências}\label{exemplo-numuxe9rico-e-anuxe1lise-de-propagauxe7uxe3o-de-eviduxeancias}
-
-Como ilustração da \textbf{configuração histórica de quatro detectores}, considere uma UC hipotética com quatro escores elétricos normalizados, nesta ordem: \(0{,}80\), \(0{,}60\), \(0{,}30\) e \(0{,}40\). Seu consenso de quatro detectores é \(0{,}545\). Se uma regra física crítica é ativada, o bônus eleva a pontuação a \(0{,}745\). Se, entretanto, a qualidade vale \(q=0{,}65\), a declaração elétrica permanece \textbf{não confiável} pelo gate de \(0{,}70\). O escore existe, mas a fila deve indicar insuficiência de evidência elétrica.
-
-Se houver dois alarmes, inclinação \(b=-2\ \mathrm{kWh/dia^2}\) e troca recente de medidor, o escore heurístico de eventos será aproximadamente \(0{,}737\). Pela precedência literal das regras do código, isso pode levar à categoria interna de investigação de tamper antes do teste de qualidade. Essa decisão deve ser mostrada ao operador como \textbf{sinal físico a investigar com ressalva de telemetria}, não como prova de manipulação. O exemplo evidencia por que explicitar precedência, pesos e estado de confiabilidade é mais importante do que relatar apenas o valor final.
+\subsection{Propagação das evidências em duas UCs observadas}
+No corte de 19/11, a UC 908***00 teve inclinação da energia diária \(b_i=-0{,}4434\)~kWh/dia\(^2\), cobertura de 81,48\% e escore elétrico de 1,0000. A política a encaminhou para investigação de possível GD. A UC 291***96 também apresentou escore elétrico alto (0,8236), mas o indicador de qualidade registrado na decisão foi de 3,33\% (um dia confiável em 30, não a completude intervalar). A política a encaminhou para análise de comunicação. A Seção~\ref{estudos-caso-reconciliados} confronta essas decisões com os registros físicos e cadastrais.
 
 \subsection{Sensibilidade, estabilidade e critérios de reprodutibilidade}\label{sensibilidade-estabilidade-e-crituxe9rios-de-reprodutibilidade}
 
@@ -208,5 +205,3 @@ Os três níveis descrevem operações distintas: consenso elétrico, classifica
 \section{Saídas como padrões de compatibilidade}\label{sauxeddas-como-padruxf5es-de-compatibilidade}
 
 A saída analítica evita diagnósticos causais não sustentados. Em vez de emitir ``irregularidade confirmada por evidência independente'', o sistema utiliza classes descritivas de compatibilidade: padrão compatível com redução abrupta de carga, geração local, problema de medição, degradação de telemetria, comportamento estatisticamente atípico ou comportamento corroborado (ou não) pela vizinhança. A qualificação operacional ocorre por cruzamento de evidências --- por exemplo, queda persistente de FA associada a tensão estável, boa cobertura, ausência de mudança coletiva entre pares e alarme físico próximo ao instante $t^*$, elevando a prioridade de análise humana sem substituir a decisão de campo.
-
-

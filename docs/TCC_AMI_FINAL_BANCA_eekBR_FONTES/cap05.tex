@@ -132,12 +132,11 @@ Além do calendário, a aplicação executa auditorias de saúde do Data Lake. A
 
 A Figura \ref{fig:app_arch} resume o encadeamento entre ingestão, governança, modelagem e uso operacional. A TUI atua como camada de orquestração da engenharia; a interface web é tratada como camada de consumo analítico e acompanhamento das prioridades.
 
-\begin{figure}
+A arquitetura representada na figura separa fontes transacionais, artefatos persistidos, treinamento e apresentação. Essa organização é relevante porque uma anomalia exibida no Cockpit precisa ser reconstituída até o arquivo e o instante de origem; a figura não representa um fluxo único e atômico, pois cada estágio possui seus próprios checkpoints e verificações.
+
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.94\textwidth,height=0.65\textheight,keepaspectratio]{figures/app_architecture.pdf}
+\includegraphics[width=0.94\textwidth,height=0.54\textheight,keepaspectratio]{figures/app_architecture.pdf}
 \caption{Arquitetura geral da aplicação e perspectiva de realimentação por resultados de campo.}\label{fig:app_arch}
 \par\small Fonte: elaboração própria.
 \end{figure}
-
-A arquitetura representada na figura separa fontes transacionais, artefatos persistidos, treinamento e apresentação. Essa organização é relevante porque uma anomalia exibida no Cockpit precisa ser reconstituída até o arquivo e o instante de origem; a figura não representa um fluxo único e atômico, pois cada estágio possui seus próprios checkpoints e verificações.
-

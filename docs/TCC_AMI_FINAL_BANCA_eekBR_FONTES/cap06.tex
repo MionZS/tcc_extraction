@@ -138,9 +138,4 @@ A principal contribuição da plataforma não é simplesmente acelerar uma consu
 \section{Organização da matriz e desempenho observado}
 Os atributos elétricos incluíram mediana e MAD da FA, dias com fluxo reverso, razão de reversão, fator de carga, desequilíbrios de tensão e corrente, tendência temporal e dispersão relativa. As colunas \texttt{x\_\_hist\_fa\_sum\_median}, \texttt{x\_\_hist\_fa\_sum\_mad} e \texttt{x\_\_fa\_cv\_window} conservaram tipos numéricos e semânticas distintas. Chaves de UC e NIO, datas e indicadores de cobertura permaneceram identificáveis para reconstrução de cada janela.
 
-No consolidado de quatro cortes, CSV e Parquet contiveram 262.849 linhas cada. Os tamanhos foram 55,89 MB e 7,86 MB, respectivamente. No ensaio de leitura e escrita dessa tabela, a execução com materialização consumiu 0,1487 s e a leitura diferida com escrita direta, 0,1232 s. A vazão observada passou de 1.767.748 para 2.133.447 linhas/s. Essas medidas caracterizam o percurso local de leitura e gravação. A duração da extração corporativa e a latência do treinamento constituem etapas próprias.
-
-
-A redução relativa de volume persistido foi de aproximadamente 85,9\%, enquanto o tempo local de leitura e escrita diminuiu 17,1\%. A comparação utiliza a mesma tabela consolidada; não estima aceleração de consultas Oracle nem o desempenho de outras campanhas.
-
-
+No consolidado de quatro cortes, CSV e Parquet contiveram 262.849 linhas cada, com tamanhos de 55,89 MB e 7,86 MB, respectivamente (redução de 85,9\%). No ensaio local, a leitura e escrita com materialização consumiram 0,1487 s; a leitura diferida com escrita direta, 0,1232 s (redução de 17,1\%). A vazão passou de 1.767.748 para 2.133.447 linhas/s. O ensaio empregou a mesma tabela consolidada; a extração Oracle e o treinamento são etapas próprias e não foram medidos por esse benchmark local.

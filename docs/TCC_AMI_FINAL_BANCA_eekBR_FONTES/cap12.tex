@@ -153,3 +153,15 @@ Os indicadores do consolidado exploratório (referência histórica de 20/11) co
 
 
 
+
+
+
+\section{Leitura operacional da hierarquia e dos casos}
+A TUI consulta a hierarquia cadastral de 69.895 UCs. Nesse universo, o circuito F-03 reúne 9.278 UCs e 5.290 estão sem alimentador. A distribuição exploratória do Capítulo~\ref{anuxe1lise-exploratuxf3ria-do-conjunto-de-dados} considera as 66.099 UCs do consolidado: 8.810 no maior circuito e 4.694 sem alimentador. Para reproduzir uma contagem é necessário manter a mesma população e a mesma chave de agregação.
+
+\begin{figure}[htbp]\centering\caption{Inventário das camadas e hierarquia cadastral na interface de terminal}\label{fig:tui-auditoria-menu}
+\includegraphics[width=.96\linewidth,height=.44\textheight,keepaspectratio]{figuras/fig_4_4a_tui_menu_governanca.pdf}
+\par\small Fonte: elaboração própria, inventário da interface em 23/11. O arquivo de treino tinha 262.769 linhas nessa captura, 80 a menos que as 262.849 janelas do consolidado exploratório.
+\end{figure}
+
+Na consulta individual da UC 908***00, há dois intervalos temporais distintos. A telemetria esteve ausente em 29 e 30/10. De 31/10 a 19/11 transcorreram 20 dias de calendário, incluindo os extremos. A janela que começa no primeiro dia de silêncio totaliza 22 dias. A decisão OOT final registra 17 no contador de dias consecutivos de anomalia. A Figura~\ref{fig:caso-908xxx00-completo} preserva as lacunas da série de energia e exibe a cobertura correspondente.

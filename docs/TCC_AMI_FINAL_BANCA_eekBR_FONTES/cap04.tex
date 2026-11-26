@@ -99,9 +99,8 @@ A mudança de elegibilidade, o número de candidatos e a rotatividade no Top-K s
 
 \section{Delimitação experimental}\label{delimitacao-experimental}
 
-O objeto observado é a população de unidades consumidoras definida para a área de estudo, com séries históricas reconstruídas a partir dos medidores instalados em cada intervalo. O trabalho \textbf{executou o pipeline e avaliações retrospectivas sobre dados AMI reais}. Para caracterizar os algoritmos isoladamente, também utilizou um experimento sintético controlado, identificado como tal nas figuras correspondentes.
+O objeto observado é a população de unidades consumidoras definida para a área de estudo, com séries históricas reconstruídas a partir dos medidores instalados em cada intervalo. O trabalho \textbf{executou o pipeline e avaliações retrospectivas sobre dados AMI reais}. A comparação entre detectores utilizou os escores individuais registrados para cada UC no corte OOT.
 
 O resultado observável termina na geração, análise e visualização de escores, hipóteses diagnósticas e listas de candidatos. Nenhuma UC foi vistoriada em decorrência do estudo e não foram recebidos resultados de ordens de serviço (OS) ou termos de ocorrência e inspeção (TOI). Desse modo, não são estimadas precisão de identificação de fraude, taxa de confirmação, energia recuperada ou retorno econômico realizado. O cenário operacional apresentado adiante é uma aplicação projetada desses resultados computacionais.
 
-
-
+Como complemento didático à avaliação em dados reais, o Apêndice~\ref{ap:demonstracoes} apresenta um experimento controlado de isolamento, densidade local e contextualização por circuito. Seus parâmetros e resultados são específicos do conjunto sintético e não integram a inferência OOT nem a série diária.

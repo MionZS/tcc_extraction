@@ -1,0 +1,17 @@
+\chapter{Proveniência e rastreabilidade das execuções}\label{ap:proveniencia}
+
+Este apêndice concentra os identificadores de execução, cortes e artefatos congelados da suíte consolidada de 25/11/2026, complementando as referências de execução apresentadas no corpo do texto. Os artefatos de dados brutos permanecem sob custódia controlada devido à confidencialidade das informações da distribuidora. Os identificadores e o estado de validação a seguir foram registrados na documentação da campanha. A Tabela~\ref{gating} refere-se especificamente à execução de sensibilidade aqui identificada, que adotou o limiar fixo de 0,5226; não representa uma reexecução com o limiar recalculado após cada reajuste.
+
+\begin{table}[htbp]\centering\footnotesize\caption{Identificadores de execução da suíte consolidada (semente 42, código base \texttt{c1539b4})}\label{tab:ap-proveniencia}
+\begin{tabular}{@{}p{.18\linewidth}p{.40\linewidth}p{.23\linewidth}p{.10\linewidth}@{}}\toprule
+Estágio & Identificador de execução (\texttt{run\_id}) & Corte / Período & Estado \\ \midrule
+Auditoria & \texttt{20261125\_\allowbreak 134532\_\allowbreak 048\_\allowbreak audit} & 01/08--19/11/2026 & Validado \\
+Regras diárias & \texttt{20261125\_\allowbreak 134535\_\allowbreak 754\_\allowbreak daily\_\allowbreak rules} & 01/11--19/11/2026 & Validado \\
+Inferência OOT & \texttt{20261125\_\allowbreak 134559\_\allowbreak 972\_\allowbreak oot\_\allowbreak multiview} & 19/11/2026 & Validado \\
+Ablação M0--M5 & \texttt{20261125\_\allowbreak 134849\_\allowbreak 083\_\allowbreak ablation\_\allowbreak m0\_\allowbreak m5} & 19/11/2026 & Validado \\
+Sensibilidade & \texttt{20261125\_\allowbreak 134940\_\allowbreak 636\_\allowbreak gating\_\allowbreak sensitivity} & 19/11/2026 & Validado \\
+Estabilidade & \texttt{20261125\_\allowbreak 135109\_\allowbreak 678\_\allowbreak score\_\allowbreak stability} & 19/11/2026 & Validado \\
+Estudos de caso & \texttt{20261125\_\allowbreak 135558\_\allowbreak 880\_\allowbreak case\_\allowbreak traces} & 01/08--19/11/2026 & Validado \\
+\bottomrule\end{tabular}
+\par\small Fonte: elaboração própria a partir dos manifestos da suíte experimental.
+\end{table}
