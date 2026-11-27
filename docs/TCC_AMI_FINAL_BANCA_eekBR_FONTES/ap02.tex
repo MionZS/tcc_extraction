@@ -1,6 +1,7 @@
 \chapter{Demonstrações controladas complementares}\label{ap:demonstracoes}
 Os três painéis deste apêndice foram produzidos em um conjunto sintético de 1.000 observações (semente 42), com grupos geradores conhecidos. Eles complementam a leitura dos escores reais do Capítulo~\ref{demonstracao-experimental-das-tecnicas-de-ml}. No gerador desse ensaio, os atributos sintéticos foram padronizados com \texttt{RobustScaler} e os escores reescalonados pelos quantis $P_{01}$--$P_{99}$ da própria amostra, configuração didática distinta do modelo congelado da campanha OOT.
 
+\raggedbottom
 \section{Isolamento global e densidade local}
 A Figura~\ref{fig:ml-iforest-microcluster} mostra a projeção dos atributos e a distribuição de escores do Isolation Forest (200 árvores, contaminação de 0,078 no ensaio). O grupo normal possui 922 observações; os demais incluem morfologia rara, outliers locais e globais (20 observações cada) e um microagrupamento de 18. Neste cenário, a mediana normalizada do microagrupamento foi 0,500, abaixo do limiar P95 de 0,564, enquanto a dos outliers globais foi 1,000. O agrupamento compacto pode receber menor pontuação de isolamento mesmo quando suas observações são distintas da população dominante. A projeção bidimensional auxilia a visualização, mas não substitui o espaço de atributos utilizado pelo detector.
 
@@ -17,11 +18,11 @@ No LOF (35 vizinhos, número superior ao tamanho do microagrupamento), a compara
 \par\small Fonte: elaboração própria a partir do experimento sintético controlado.
 \end{figure}
 
-\clearpage
+\FloatBarrier
 \section{Contextualização por circuito}
 A Figura~\ref{fig:ml-contextualizacao-percentis} compara percentis empíricos globais e locais nos quatro circuitos simulados. As posições acima e abaixo da diagonal representam, respectivamente, promoção e atenuação no contexto local. No corte percentílico de 95\%, registraram-se sete promoções e seis atenuações, com índice de Jaccard de 0,776 para o Top-5\%; as contagens de entradas e saídas podem diferir em presença de empates no quantil de corte. As diferenças ilustram a mudança de referência estatística quando se compara uma observação com os pares do próprio circuito. Não constituem prova de maior precisão da seleção no parque real.
 
-\begin{figure}[htbp]\centering\caption{Comparação entre percentis globais e locais em quatro circuitos simulados}\label{fig:ml-contextualizacao-percentis}
-\includegraphics[width=\linewidth,height=0.72\textheight,keepaspectratio]{figuras/fig_5_1c_contextualizacao_percentis.pdf}
+\begin{figure}[!ht]\centering\caption{Comparação entre percentis globais e locais em quatro circuitos simulados}\label{fig:ml-contextualizacao-percentis}
+\includegraphics[width=\linewidth,height=0.63\textheight,keepaspectratio]{figuras/fig_5_1c_contextualizacao_percentis.pdf}
 \par\small Fonte: elaboração própria a partir do experimento sintético controlado.
 \end{figure}

@@ -164,7 +164,7 @@
 \ifthenelse{\equal{\terSumario}{Sim}}{
 %\pdfbookmark[0]{\contentsname}{toc}
 \pagestyle{empty}
-\tableofcontents*
+{\setlength{\cftbeforechapterskip}{0pt}\tableofcontents*}
 \thispagestyle{empty}
 %\cleardoublepage
 }{}

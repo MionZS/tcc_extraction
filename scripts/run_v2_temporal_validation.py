@@ -577,25 +577,23 @@ def run_v2_temporal_validation() -> dict[str, Any]:
     figs_v2["fig_v2_02"] = _save_fig(fig, V2_FIG_DIR / "fig_v2_02_comparacao_v1_vs_v2_auditoria")
 
     # Fig V2-3: 3 Real Case Studies Extended Through 25/11/2026
-    fig, axes = plt.subplots(1, 3, figsize=(12.4, 3.9))
-    for ax, (uc_m, sdict) in zip(axes, case_series.items()):
-        ds_l = sdict["dates"]
-        idx_19 = ds_l.index("2026-11-19") if "2026-11-19" in ds_l else len(ds_l) - 1
-        x_d = np.arange(len(ds_l))
-        ax.plot(x_d, sdict["fa"], "o-", color="#1f4e79", markersize=2.8, linewidth=1.4, label="FA (kWh/dia)")
-        if max(sdict["ra"] + [0.0]) > 0.5:
-            ax.plot(x_d, sdict["ra"], "s--", color="#2e7d32", markersize=2.5, linewidth=1.3, label="RA (kWh/dia)")
-        ax.axvline(idx_19, color="#c0392b", linestyle="--", linewidth=1.2, label="Corte 19/11")
-        ax.axvspan(idx_19, len(ds_l) - 1, color="#fadbd8", alpha=0.32)
-        ax.set_title(f"UC {uc_m} (21/10 a 25/11)", fontsize=9.2, fontweight="bold")
-        ax.set_ylabel("Energia diária (kWh/dia)")
-        ticks = [0, max(0, idx_19 // 2), idx_19, len(ds_l) - 1]
-        ax.set_xticks(sorted(set(ticks)))
-        ax.set_xticklabels([ds_l[t][5:] for t in sorted(set(ticks))], fontsize=7.6)
-        ax.legend(fontsize=7.2, loc="best")
+    fig, axes = plt.subplots(1, 3, figsize=(12.4, 3.9), sharex=True, layout="constrained")
+    start, cutoff, end = date(2026, 10, 21), date(2026, 11, 19), date(2026, 11, 25)
+    calendar = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    ticks = [start, date(2026, 11, 5), cutoff, end]
+    for ax, (uc_m, series) in zip(axes, case_series.items(), strict=True):
+        for key, marker, color in [("fa", "o-", "#1f4e79"), ("ra", "s--", "#2e7d32")]:
+            if key == "ra" and max(series[key], default=0.0) <= 0.5:
+                continue
+            by_day = dict(zip(series["dates"], series[key], strict=True))
+            values = [by_day.get(day.isoformat(), np.nan) for day in calendar]
+            ax.plot(calendar, values, marker, color=color, markersize=3, label=key.upper())
+        ax.axvspan(cutoff, end, color="#fadbd8", alpha=0.32)
+        ax.axvline(cutoff, color="#c0392b", linestyle="--", label="Corte 19/11")
+        ax.set(xlim=(start, end), title=f"UC {uc_m}", ylabel="Energia diária (kWh/dia)")
+        ax.set_xticks(ticks, [day.strftime("%d/%m") for day in ticks])
+        ax.legend(fontsize=7.2)
         ax.grid(True, linestyle=":", alpha=0.45)
-    fig.suptitle("Evolução longitudinal dos 3 estudos de caso reais nos +6 dias adicionais (até 25/11/2026)", fontweight="bold")
-    plt.tight_layout()
     figs_v2["fig_v2_03"] = _save_fig(fig, V2_FIG_DIR / "fig_v2_03_evolucao_casos_reais_ate_25_nov")
 
     # =========================================================================

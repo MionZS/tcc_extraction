@@ -4,6 +4,7 @@
 \usepackage[T1]{fontenc}		% Selecao de codigos de fonte.
 \usepackage[utf8]{inputenc}		% Codificacao do documento (conversão automática dos acentos)
 \usepackage{lastpage}			% Usado pela Ficha catalográfica
+\usepackage{placeins}
 \usepackage{indentfirst}		% Indenta o primeiro parágrafo de cada seção.
 
 %\usepackage{microtype} 			% para melhorias de justificação 
@@ -98,6 +99,7 @@
 
 % Para retirar os símbolos <> da URL  
 % ----------------------------------------------------------
+\DeclareFieldFormat[article,inproceedings]{pages}{p\adddot\space#1}
 \DeclareFieldFormat{illustrated}{\addspace #1\isdot}%
 %\DeclareFieldFormat{url}{\bibstring{urlform}\addcolon\addspace<\url{#1}>}%
 %\DeclareFieldFormat{url}{\bibstring{urlfrom}\addcolon\addspace<\url{#1}>}%

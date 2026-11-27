@@ -911,9 +911,9 @@ def run_p0_audit() -> dict[str, Any]:
     ax2.set_xlabel("Número de candidatos sinalizados (Protocolo B)")
     ax2.set_title("(B) Sensibilidade volumétrica à escala do escore", fontweight="bold")
     ax2.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: _fmt_br_int(x)))
-    ax2.legend(loc="upper right", fontsize=7.8, frameon=True)
+    fig.legend(*ax2.get_legend_handles_labels(), loc="upper center", bbox_to_anchor=(0.55, 1.0), ncol=3, fontsize=8, frameon=False)
     ax2.grid(axis="x", linestyle=":", alpha=0.5)
-    plt.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
     figs_generated["fig_p0_05"] = _save_fig(fig, P0_FIG_DIR / "fig_p0_05_sensibilidade_pesos")
 
     # Fig 6: Corroboration Bonus Sensitivity (+0.15)
