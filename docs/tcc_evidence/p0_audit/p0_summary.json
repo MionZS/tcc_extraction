@@ -1,8 +1,8 @@
 {
-  "run_id": "20261126_172200_p0_audit_sensitivity",
-  "git_commit": "06f7f71",
-  "timestamp": "2026-11-26T17:23:00.008236",
-  "runtime_sec": 60.06,
+  "run_id": "20261127_102012_p0_audit_sensitivity",
+  "git_commit": "87e6146",
+  "timestamp": "2026-11-27T10:21:13.935634",
+  "runtime_sec": 61.92,
   "source_suite": {
     "audit": "experiments/runs/20261125_134532_048_audit",
     "daily_rules": "experiments/runs/20261125_134535_754_daily_rules",

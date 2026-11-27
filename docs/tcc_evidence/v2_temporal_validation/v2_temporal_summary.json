@@ -1,8 +1,8 @@
 {
-  "run_id": "20261126_190338_p1_v2_temporal_validation",
-  "git_commit": "05d39cb",
-  "timestamp": "2026-11-26T19:06:05.933477",
-  "runtime_sec": 147.45,
+  "run_id": "20261127_102118_p1_v2_temporal_validation",
+  "git_commit": "87e6146",
+  "timestamp": "2026-11-27T10:24:33.236403",
+  "runtime_sec": 195.0,
   "tau_v1": 0.5131,
   "tau_v2": 0.5131,
   "v1_vs_v2_multicutoff": [
