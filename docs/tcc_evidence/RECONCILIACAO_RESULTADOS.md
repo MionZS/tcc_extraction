@@ -84,9 +84,9 @@
 
 O indicador `ref70_diff_count = 1` em `docs/tcc_evidence/p0_audit/p0_summary.json` isola a única unidade consumidora com comportamento diferenciado entre a partição numérica direta e a carteira de vistoria pós-regras de negócio:
 
-- **UC:** `109855540`
+- **UC:** `109****40`
 - **Telemetria:** Cobertura de $93,61\%$ (29 dias confiáveis de 30).
-- **Artefato de Auditoria Individual:** `docs/tcc_evidence/p0_audit/uc_boundary_audit_109855540.json`
+- **Artefato de Auditoria Individual:** `docs/tcc_evidence/p0_audit/uc_boundary_audit_109****40.json`
 - **Decomposição do Escore:**
   - Detectores não supervisionados normalizados exatos: IF $0{,}456487$; LOF $0{,}0$; ECOD $0{,}574060$; COPOD $0{,}474655$; HBOS $0{,}343435$; PCA $0{,}329389$.
   - Ensemble não supervisionado ponderado: $0{,}363066$ (somando com 4 casas do parquet: $0{,}363082$).
