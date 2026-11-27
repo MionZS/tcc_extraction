@@ -2,25 +2,11 @@
 
 \section{Problema de pesquisa}\label{problema-de-pesquisa}
 
-Dados AMI possibilitam observar alterações que não aparecem no faturamento agregado, mas a mesma riqueza de dados também cria novas fontes de ambiguidade. Uma anomalia pode existir no consumo, na qualidade de comunicação, na relação entre fases, no comportamento temporal ou no próprio cadastro do equipamento. Além disso, a população de consumidores é heterogênea e está distribuída em alimentadores com características distintas.
-
-O problema científico não é, portanto, apenas separar valores normais de valores raros. É necessário \textbf{localizar a discrepância na UC e no período, caracterizar sua natureza e distinguir evidência de anomalia de evidência de causa}. O problema operacional acrescenta uma segunda restrição: mesmo quando muitas UCs apresentam desvios, somente uma parcela pode ser inspecionada.
-
-A pergunta principal do trabalho é:
+Uma queda no consumo registrado em dados AMI admite várias explicações. Na mesma UC, a série de energia pode indicar uma mudança de rotina ou substituição de equipamento, enquanto lacunas de telemetria dificultam determinar quando a alteração começou e consumidores de alimentadores distintos exibem escalas próprias de carga. A análise precisa localizar o desvio no tempo, separar falhas de transmissão ou eventos coletivos de rede das variações individuais da instalação e identificar quais medições sustentam cada hipótese. Como a equipe de campo só pode vistoriar uma fração das unidades sinalizadas, a ordenação também precisa registrar de modo auditável por que cada caso ingressou na fila sob orçamento restrito.
 
 \begin{quote}
-\textbf{Como detectar, localizar e caracterizar padrões anômalos em dados AMI de baixa frequência, combinando evidências temporais, elétricas, comportamentais, de comunicação e contextuais, com ênfase em padrões compatíveis com perdas não técnicas?}
+A questão de pesquisa é como localizar e caracterizar, nos dados AMI de baixa frequência, padrões compatíveis com perdas não técnicas. Para investigá-la, o trabalho combina o histórico de consumo, as grandezas elétricas, a disponibilidade de comunicação e o contexto da unidade e de seu alimentador.
 \end{quote}
-
-Dessa pergunta derivam duas questões auxiliares:
-
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\item
-  \textbf{Como decompor as diferentes fontes de evidência sem confundir falhas de telemetria, eventos de rede, mudanças legítimas de comportamento e potenciais irregularidades?}
-\item
-  \textbf{Como transformar as evidências produzidas pelo modelo em uma priorização rastreável e compatível com a capacidade hipotética de inspeção?}
-\end{enumerate}
 
 \section{Objetivo geral}\label{objetivo-geral}
 
@@ -49,11 +35,9 @@ Desenvolver, implementar e avaliar retrospectivamente uma metodologia e uma plat
   Formular cenários de aproveitamento das listas analíticas sob restrições de capacidade e um protocolo de avaliação posterior com registros independentes de inspeção.
 \end{enumerate}
 
-Os sete primeiros objetivos são examinados por implementações, experimentos e resultados computacionais. O oitavo compreende \textbf{projeção e desenho de avaliação}, não mensuração de rendimento de vistorias: o estudo não executou inspeções nem recebeu registros de OS ou TOI.
-
 \section{Rastreabilidade dos objetivos às evidências}\label{rastreabilidade-dos-objetivos-uxe0s-eviduxeancias}
 
-As evidências do trabalho são separadas pela natureza do resultado, evitando equiparar um escore computacional a um resultado de fiscalização.
+A Tabela~\ref{tab:integracao1} relaciona cada grupo de objetivos aos artefatos avaliados: a engenharia de dados, a modelagem e as interfaces foram verificadas computacionalmente sobre dados AMI reais, enquanto o dimensionamento de capacidade e o protocolo de piloto constituem projeções sem execução de vistorias nem retorno de OS ou TOI.
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}

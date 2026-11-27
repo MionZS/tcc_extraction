@@ -16,7 +16,7 @@ A metodologia original pode ser resumida em quatro etapas:
   ordenação das UCs pela raridade multivariada.
 \end{enumerate}
 
-Essa abordagem continua sendo importante porque fornece um baseline simples, reproduzível e diretamente relacionado ao objetivo original do trabalho. Ela responde à pergunta: \textbf{quais UCs apresentam combinações de atributos incomuns quando toda a população é analisada no mesmo espaço?}
+Essa abordagem fornece a linha de base (\emph{baseline}) reproduzível do estudo ao pontuar todas as UCs conjuntamente em um único espaço de atributos agregados.
 
 \section{Motivos para o refinamento}\label{motivos-para-o-refinamento}
 
@@ -44,7 +44,7 @@ Nenhum desses pontos invalida o baseline original. Eles identificam variáveis d
 
 A abordagem atual preserva a detecção multivariada, mas organiza as evidências em sete subproblemas paralelos a partir da telemetria AMI, do cadastro e da topologia: qualidade e comunicação ($S_{comm}$), mudança de regime (CPD), morfologia diária ($S_{behavior}$), grandezas elétricas ($S_{elec}$), alarmes físicos ($S_{tamper}$), regras determinísticas de tensão e contexto por alimentador. Essas evidências são posteriormente integradas para compor o ranqueamento e a priorização de inspeção.
 
-A principal mudança é epistemológica: cada escore precisa responder a uma pergunta específica. O sistema deixa de exigir que um único modelo aprenda simultaneamente qualidade de dados, comportamento, física e contexto.
+A versão refinada separa a qualidade da comunicação da raridade elétrica antes de ordenar as UCs: falhas de transmissão retêm a série em quarentena técnica, enquanto apenas unidades com cobertura suficiente avançam à combinação entre raridade elétrica, mudança de patamar, rotina horária, alarmes e contexto do alimentador.
 
 \section{Avaliações comparativas e definição dos experimentos}\label{desenho-de-ablauxe7uxe3o}
 

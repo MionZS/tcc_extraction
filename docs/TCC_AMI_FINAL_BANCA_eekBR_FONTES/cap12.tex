@@ -1,6 +1,6 @@
 \chapter{Aplicação operacional e TUI}\label{aplicauxe7uxe3o-operacional-e-tui}
 
-A aplicação constitui parte do produto do TCC e não apenas uma interface auxiliar. Seu papel é tornar executável, auditável e reproduzível a sequência completa de extração, validação, treinamento e comparação dos modelos. A interface atual é uma TUI baseada em Rich, executada em ambiente Python gerenciado por \texttt{uv}.
+Pela interface de terminal (TUI, construída com Rich em ambiente Python gerenciado por \texttt{uv}), o operador seleciona o período ou o alimentador, dispara a extração incremental em lotes, inspeciona a continuidade das partições e executa o ajuste e a comparação versionada dos modelos.
 
 \section{Filosofia da TUI}\label{filosofia-da-tui}
 
@@ -59,7 +59,7 @@ A unidade canônica de modelagem é \texttt{UC~x~cutoff\_date}. Identificadores 
 
 \section{Especialistas locais e distribuição por alimentador}\label{especialistas-locais-e-distribuiuxe7uxe3o-por-alimentador}
 
-A possibilidade de treinar por alimentador tem dois objetivos. O primeiro é científico: verificar se populações topologicamente mais homogêneas produzem limites e arquétipos mais estáveis. O segundo é operacional: permitir que a equipe examine um circuito específico sem reprocessar a cidade inteira.
+O treinamento recortado por alimentador permite testar a hipótese de que consumidores conectados ao mesmo circuito formam referências de carga mais homogêneas do que o conjunto municipal --- avaliada comparando-se as ordenações local e global sobre o mesmo corte temporal ---, além de viabilizar a atualização isolada de um circuito sem reprocessar toda a base.
 
 O modelo local não substitui automaticamente o modelo global. A avaliação deve comparar ambos no mesmo recorte e adotar o local somente quando houver volume suficiente e benefício mensurável. Caso contrário, o modelo global funciona como âncora.
 
@@ -81,7 +81,7 @@ A TUI permanece orientada à engenharia do pipeline. O protótipo funcional do p
 
 A interface analítica foi concebida para apresentar filtros de alimentador, período, categoria, escore e status operacional; presets de investigação; seleção dinâmica de colunas; exportação de listas; e um painel de detalhe contendo série temporal, evidências por especialista, regras acionadas, topologia, histórico do NIO. A associação com o status de inspeção é uma extensão futura.
 
-A distinção entre as interfaces é, portanto, complementar: a \textbf{TUI} destina-se a executar, auditar, treinar e governar os experimentos, enquanto a \textbf{interface Web} destina-se a interpretar, priorizar e acompanhar os resultados computacionais.
+Na divisão de tarefas implementada, a \textbf{TUI} executa os lotes de dados e registra os modelos treinados, enquanto o \textbf{painel Web} filtra a carteira gerada e exibe as séries por UC; o despacho e o retorno de ordens de serviço permanecem apenas projetados.
 
 \section{Cobertura funcional completa da TUI e interfaces associadas}\label{cobertura-funcional-completa-da-tui-e-interfaces-associadas}
 
@@ -147,7 +147,7 @@ A aplicação Web complementa a TUI, mas atende outro usuário: o analista que p
 
 A interface de terminal organizou extração, treinamento, governança do armazenamento, comparação de modelos, diagnóstico de saúde e configuração. O calendário reuniu informações sobre partições, formatos e datas. A investigação pôde distinguir uma cópia ausente em certo formato de um dia sem dados na origem. O registro da versão do modelo, período de ajuste, semente e atributos permitiu associar a inferência à configuração correspondente.
 
-O painel web permitiu consultar a UC, examinar uma janela de energia, comparar o histórico com a referência e inspecionar cobertura e categoria. A tela por UC e a visão de carteira respondem a perguntas diferentes. Na primeira, o analista investiga o instante e a natureza do desvio. Na segunda, seleciona uma população por período e contexto e verifica sua prioridade relativa.
+No painel Web, a tela individual detalha a série temporal, a cobertura e as regras acionadas em uma única UC para localizar o início e a forma do desvio, ao passo que a visão de carteira agrega e ordena as unidades elegíveis segundo o alimentador, a categoria e a política do corte selecionado.
 
 Os indicadores do consolidado exploratório (referência histórica de 20/11) contaram 66.099 UCs distintas, 262.849 janelas e 932 UCs com o indicador binário de anomalia no último corte disponível por unidade (além de 274 UCs marcadas como candidatas à vistoria nessa mesma base). Em contraste, a campanha \texttt{OOT\_MULTIVIEW} (6.037 candidatas na execução consolidada de 25/11) e a série \texttt{DAILY\_RULES} (4.978 candidatas em 19/11) operam sob políticas de limiar e regras de triagem próprias no corte final. Uma seleção baseada em categoria diagnóstica, um escore acima do limiar e a presença na fila final são operações distintas que exigem especificar regra, data de corte e denominador.
 

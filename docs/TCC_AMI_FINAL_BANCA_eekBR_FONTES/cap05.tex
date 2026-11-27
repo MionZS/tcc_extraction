@@ -2,13 +2,7 @@
 
 \section{UC como entidade de análise e NIO como ativo físico}\label{uc-como-entidade-de-anuxe1lise-e-nio-como-ativo-fuxedsico}
 
-A telemetria é produzida por um medidor físico, identificado por NIO, mas o objeto comercial e operacional é a Unidade Consumidora. A hipótese simplificadora
-
-\begin{quote}
-\textbf{Hipótese simplificadora:} \texttt{1~UC~=~1~NIO~=~1~série}.
-\end{quote}
-
-não se mantém ao longo do tempo. Medidores são substituídos, podem mudar de cadência, podem reiniciar registradores e podem ser reutilizados.
+A telemetria é gerada pelo medidor físico (NIO), mas a análise comercial e operacional recai sobre a Unidade Consumidora (UC). A premissa estática \texttt{1~UC~=~1~NIO~=~1~série} falha em janelas longas porque equipamentos são substituídos, mudam de cadência de integração, reiniciam registradores acumulados e podem ser reinstalados em outros pontos.
 
 A série da UC deve, portanto, ser reconstruída a partir do histórico de instalações:
 
@@ -104,7 +98,7 @@ No acesso ao Oracle, os identificadores são divididos em lotes e as conexões d
 
 O volume de telemetria torna inadequado depender de concatenações sucessivas de DataFrames Python materializados integralmente em RAM. O pipeline utiliza Polars para privilegiar operações colunares e um plano de transformação \emph{lazy}. Sempre que a transformação permite, o resultado é materializado diretamente em disco por mecanismos de \emph{sinking}, como \texttt{sink\_parquet()} e \texttt{sink\_csv()}.
 
-O propósito de \texttt{sink} não é apenas acelerar o processamento. Ele altera a tolerância a falhas do sistema. Em vez de exigir que um período completo termine para produzir um único artefato, cada partição diária consolidada torna-se imediatamente persistente e reutilizável. Assim, uma falha de rede, interrupção manual ou reinício da máquina não invalida os dias já concluídos.
+Com a gravação direta por partição diária, cada dia consolidado em disco torna-se imediatamente reutilizável caso a campanha seja interrompida por queda de rede, pausa manual ou reinício da máquina, dispensando a acumulação de todo o histórico em memória antes de persistir o resultado.
 
 Essa estratégia estabelece três propriedades importantes:
 

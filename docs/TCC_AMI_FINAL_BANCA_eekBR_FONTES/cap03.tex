@@ -2,7 +2,7 @@
 
 \section{Encadeamento do argumento e lacuna enfrentada}\label{encadeamento-do-argumento-e-lacuna-enfrentada}
 
-Há quatro decisões científicas sucessivas neste problema: definir \textbf{qual observação é confiável}, estabelecer \textbf{com qual histórico e com quais pares a UC deve ser comparada}, identificar \textbf{que forma de desvio ocorreu} e determinar \textbf{quais inferências são permitidas por essa evidência}. Tratar essas decisões como uma única classificação binária gera um atalho conceitual: uma saída numérica passa a representar simultaneamente integridade do canal, diferença estatística, evento elétrico e irregularidade comercial. Essas dimensões não são equivalentes.
+Uma queda aparente na energia diária de uma UC muda de significado conforme o estado da medição: se faltam intervalos de leitura, o recuo pode refletir apenas perda de pacotes; se a cobertura está íntegra, interessa saber se a mudança ocorreu também nos vizinhos do mesmo circuito ou apenas naquela instalação. Condensar essas verificações em um único classificador binário mistura integridade do canal, raridade estatística, evento elétrico e irregularidade comercial em uma mesma nota.
 
 Trabalhos sobre perdas não técnicas demonstram que a seleção e a ordenação de consumidores são problemas relevantes, e não apenas a classificação em conjuntos experimentais \autocite{sau2023,han2026}. A literatura de análise de outliers, por sua vez, distingue raridade global, densidade local e desvios em séries temporais, com diferentes hipóteses sobre a distribuição dos dados \autocite{aggarwal2017}. Já a interpretação de distúrbios elétricos requer reconhecer quando regras físicas fornecem informações que não deveriam ser aprendidas cegamente a partir de dados \autocite{bollen2007,bollen2006}.
 
@@ -12,7 +12,7 @@ A lacuna metodológica tratada neste trabalho está na \textbf{articulação des
 
 Neste trabalho, os termos \textbf{anomalia}, \textbf{padrão compatível com perda não técnica} e \textbf{irregularidade confirmada por evidência independente} não são equivalentes. Anomalia corresponde a uma observação, sequência ou regime que se afasta de uma referência estatística ou física. Perda não técnica (PNT) é a parcela das perdas não explicada pelos processos físicos de transporte e transformação; pode envolver irregularidades, defeitos de medição e erros comerciais, não necessariamente furto. Fraude confirmada exige validação por processo de campo ou por fonte corporativa considerada referência independente.
 
-Essa distinção é importante porque os modelos não supervisionados operam sem rótulos de fraude. Um escore elevado indica raridade segundo a representação utilizada, e não probabilidade causal de furto. A metodologia procura, portanto, deslocar a interpretação de um único escore para uma composição de evidências independentes.
+Como os detectores não supervisionados operam sem rótulos de inspeção, um escore elevado expressa raridade na representação adotada, e não probabilidade calibrada de furto. Por isso, a metodologia substitui a leitura de um escore isolado pelo cruzamento de fontes de natureza distinta: disponibilidade da telemetria, grandezas elétricas, mudança temporal de regime, alarmes do medidor e comparação com o alimentador.
 
 \section{Perdas não técnicas, balanço energético e observabilidade}\label{pnt-balanco}
 
@@ -28,7 +28,7 @@ A análise individual de curvas AMI complementa essa perspectiva ao associar des
 
 A literatura clássica de qualidade da energia trabalha frequentemente com formas de onda de alta frequência, apropriadas para transitórios, afundamentos, elevações e harmônicos \autocite{bollen2006}. Dados AMI em cadência de minutos ocupam outro domínio. Fenômenos subcíclicos que não foram registrados explicitamente como eventos pelo medidor já foram integrados ou filtrados antes de chegar ao Data Lake.
 
-A contribuição da literatura de processamento de sinais para este trabalho é, portanto, principalmente estrutural: segmentação temporal, extração de representações e classificação devem ser tratadas como etapas distintas; métodos determinísticos e estatísticos podem coexistir \autocite{bollen2007}. A análise proposta concentra-se em escalas de horas, dias e semanas, nas quais mudanças de comportamento, persistência e recorrência são observáveis.
+Da literatura de análise de distúrbios aproveita-se a separação em três operações --- segmentação temporal da série, extração de descritores e combinação entre regras determinísticas e modelos estatísticos \autocite{bollen2007} --- adaptadas às escalas suportadas pela cadência AMI de 5 a 15 minutos: perfis horários de 24 horas, totais diários e janelas de múltiplas semanas.
 
 \section{Estatística robusta e representação do histórico}\label{estatuxedstica-robusta-e-representauxe7uxe3o-do-histuxf3rico}
 
@@ -52,9 +52,7 @@ Essa separação é uma mudança de representação, não de objetivo. O escore 
 
 \section{Change Point Detection e mudança de regime}\label{change-point-detection-e-mudanuxe7a-de-regime}
 
-Detecção de mudança de regime (\emph{Change Point Detection} - CPD) responde a uma pergunta diferente da detecção de outliers: \textbf{quando a dinâmica da série mudou?} Métodos de CPD segmentam uma série em regiões com propriedades estatísticas relativamente homogêneas \autocite{truong2020}.
-
-Uma UC pode não ser rara em determinado dia e ainda assim ter migrado para um novo patamar persistente. Da mesma forma, uma fraude ou defeito estabelecido antes da janela de observação pode já parecer estável. Por isso, CPD e anomaly detection são complementares.
+Uma instalação pode reduzir seu consumo para um novo patamar persistente sem que nenhum dia isolado pareça extremo frente ao restante da cidade; inversamente, uma alteração iniciada antes da janela observada já aparece estabilizada no corte transversal. Métodos de detecção de ponto de mudança (\emph{Change Point Detection} --- CPD) tratam especificamente a transição longitudinal, segmentando a série da própria UC em subperíodos de nível homogêneo para estimar o instante da quebra \autocite{truong2020}.
 
 Para reduzir falsos alarmes produzidos pela sazonalidade, a detecção de mudança deve preferencialmente operar sobre resíduos ou séries condicionadas por horário e tipo de dia. Em monitoramento causal, somente informações anteriores ao instante de decisão podem compor a referência; em auditoria retrospectiva, janelas posteriores podem ser utilizadas desde que o uso seja explicitamente descrito.
 
@@ -72,7 +70,7 @@ Assim, um domingo sempre diferente pode ser parte do padrão normal da instalaç
 
 \section{Determinístico versus estatístico}\label{determinuxedstico-versus-estatuxedstico}
 
-Nem todo fenômeno deve ser aprendido. Grandezas cuja interpretação é diretamente definida pela física ou por critérios regulatórios devem permanecer em uma camada determinística. O PRODIST Módulo 8 é utilizado como referência para contextualização de tensão e qualidade do fornecimento \autocite{aneel2026}, sempre respeitando a diferença entre a cadência disponível no AMI e o procedimento formal de avaliação regulatória.
+Condições definidas diretamente por relações físicas ou referências normativas --- como fluxo reverso persistente de energia ativa ou afundamentos e desequilíbrios severos de tensão inspirados nas faixas do PRODIST Módulo~8 \autocite{aneel2026} --- são avaliadas por regras determinísticas explícitas, respeitando-se a diferença entre a cadência de minutos do AMI e o protocolo regulatório de medição.
 
 O papel do ML concentra-se onde a fronteira não é conhecida a priori: comportamento, raridade, combinação de atributos, recorrência e mudança de regime. Essa divisão reduz opacidade e permite que cada evidência tenha significado técnico explícito.
 

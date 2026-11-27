@@ -6,7 +6,7 @@ A arquitetura atual evita a concentração de todos os sinais em um único escor
 
 O objetivo de \(S_{comm}\) é responder se a telemetria possui integridade suficiente e se o próprio comportamento de comunicação é atípico. Os atributos considerados incluem cobertura, quantidade de gaps, maior gap, concentração noturna de faltantes e latência de eventos.
 
-Essa separação é essencial porque missingness pode ser informativa para comunicação e, ao mesmo tempo, contaminante para uma inferência física. O gating de qualidade deve ser parametrizável. Um valor como 70\% de cobertura em 30 dias pode ser utilizado inicialmente como hipótese de engenharia, mas não deve ser apresentado como limiar validado antes da análise de sensibilidade.
+Uma leitura ausente registra falha ou atraso de comunicação e reduz a amostra disponível para estimar grandezas elétricas na janela; incluí-la diretamente no vetor elétrico faria o detector tratar perda de pacotes como queda de carga. Por isso, o filtro de cobertura mínima é parametrizado (adotando-se 70\% em 30 dias como referência inicial) e submetido a ensaio específico de sensibilidade.
 
 \section{Change Point Engine}\label{change-point-engine}
 
@@ -33,7 +33,7 @@ Esses atributos acrescentam informação que estatísticas agregadas de janelas 
 
 O especialista elétrico utiliza atributos de consumo, corrente, tensão e comportamento temporal. A arquitetura privilegia modelos cuja função possa ser explicada, como Isolation Forest para isolamento multivariado ou PCA residual para erro de reconstrução.
 
-O objetivo não é somar arbitrariamente diversos detectores. Cada escore precisa responder uma pergunta e possuir um plano de validação.
+O módulo opera exclusivamente sobre descritores elétricos e entrega, para cada janela, os escores normalizados de cada detector, o indicador de regra física crítica e o consenso ponderado $S_{\text{elec}} \in [0,1]$, cuja elegibilidade operacional fica condicionada ao filtro de comunicação da etapa anterior.
 
 \section{\texorpdfstring{Especialista comportamental - \(S_{behavior}\)}{Especialista comportamental - S\_\{behavior\}}}\label{especialista-comportamental---s_behavior}
 
@@ -68,7 +68,7 @@ R_A(u,W)=\frac{\sum_{d\in V_{u,W}}A_{u,d}}{|V_{u,W}|},\qquad |V_{u,W}|>0,
 
 \noindent onde $V_{u,W}$ é o conjunto de dias válidos da UC na janela, e $A_{u,d}=1$ para dia comportamentalmente atípico e zero caso contrário. Sem dias válidos, a taxa é indisponível. Trata-se de uma representação de recorrência, e não de um escore calibrado do agrupador.
 
-O sinal de interesse não é apenas \(R_A\) elevado, mas sua mudança:
+Para distinguir uma rotina historicamente heterogênea de uma alteração recente, compara-se a proporção de dias atípicos entre a janela recente e a janela de referência:
 
 \[\Delta R_A=R_A(u,W_{recent})-R_A(u,W_{base}).\]
 
@@ -134,7 +134,7 @@ O especialista de eventos físicos aplica saturação da contagem de alarmes \(a
 
 \[S_{tamper,i}=\operatorname{clip}_{[0,1]}\!\left[0{,}70\min(a_i/3,1)+0{,}30\operatorname{clip}_{[0,1]}\!\left(-\frac{b_i}{5\ \mathrm{kWh/dia^2}}\right)+0{,}15\mathbb{I}(a_i>0)m_i\right].\]
 
-Os valores dos pesos e da escala de \(5\ \mathrm{kWh/dia^2}\) são heurísticos de projeto, não coeficientes estimados de uma distribuição de irregularidades confirmadas. O agrupador comportamental ajusta PCA e K-Means e retorna \textbf{rótulos de cluster}. Portanto, nessa implementação, não existe um \(S_{behavior}\) probabilístico único que possa ser diretamente somado às demais visões. A recorrência de dias atípicos amplia a interpretação comportamental como representação temporal e não deve ser descrita como escore final já calibrado sem uma função e validação próprias.
+Os valores dos pesos e da escala de \(5\ \mathrm{kWh/dia^2}\) são heurísticos de projeto, não coeficientes estimados de uma distribuição de irregularidades confirmadas. No módulo comportamental, a redução por PCA seguida de K-Means atribui rótulos diários de arquétipo cuja sequência temporal descreve mudanças de rotina na janela, sem fornecer um escore probabilístico calibrado para soma direta às demais visões.
 
 A integração multivisão constrói um \textbf{vetor de diagnóstico}:
 
@@ -212,17 +212,17 @@ A implementação concreta da arquitetura multivisão em Python/Polars/scikit-le
   >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.4000}}@{}}
 \caption{Inovações algorítmicas e de domínio implementadas no código frente a práticas convencionais}\label{tab:inovacoes-ml}\\
 \toprule\noalign{}
-Componente / Módulo & Prática convencional comum & Contribuição implementada no repositório \\
+Componente / Módulo & Falha considerada & Tratamento implementado no repositório \\
 \midrule\noalign{}
 \endfirsthead
 \toprule\noalign{}
-Componente / Módulo & Prática convencional comum & Contribuição implementada no repositório \\
+Componente / Módulo & Falha considerada & Tratamento implementado no repositório \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
 Isolamento de subespaço (\path{composite.py}) & Concatenação de atributos elétricos, cobertura e alarmes na mesma matriz & Barreira programática (a lista de bloqueio de atributos não elétricos) que proíbe variáveis de rádio, cobertura, latência e ciclo de vida de entrarem em $S_{elec}$ \\
-Normalização de escores (\path{composite.py}) & \texttt{MinMaxScaler} recalculado no lote de inferência (\emph{batch drift}) & Normalização quantílica congelada no treino ($P_{01}$--$P_{99}$) com cascata de \emph{fallback} ($P_{99} \to P_{99,9} \to \min/\max$), garantindo deslocamento nulo ($0{,}000000$) sob perturbação de outliers \\
+Normalização de escores (\path{composite.py}) & Reescalonamento pelos extremos do lote de inferência (\emph{batch drift}) & Normalização pelos quantis $P_{01}$--$P_{99}$ congelados no treino (com \emph{fallback} $P_{99,9} \to \min/\max$), que resultou em deslocamento nulo ($0{,}000000$) no ensaio de retirada do 1\% extremo \\
 LOF e PCA em dados AMI (\path{composite.py}) & Uso direto de \texttt{LocalOutlierFactor} e \texttt{PCA} sem controle de empates ou escala & Compressão logarítmica $\log(1+\max(-s_{\mathrm{LOF}}-1,0))$ contra explosões ($10^{10}$) por empates $k\text{-NN}=0$; \texttt{StandardScaler} interno em \texttt{RobustPCADetector} \\
 Gate de qualidade (\path{specialized_detectors.py}) & Ausência de filtro ou uso exclusivo da cobertura média nos dias presentes & Gate de duplo critério na variante \texttt{v2} ($q_i \ge 0{,}70$ \textbf{e} dias confiáveis $\ge 18$), fechando a brecha de silêncios consecutivos prolongados \\
 Contraste espacial Telecom (\path{category_reporting.py}) & Tratamento homogêneo de falhas de comunicação sem contexto espacial & Cascata vetorizada em Polars (\texttt{.over}) em três níveis: Posto/Transformador ($\ge 3$ pares) $\to$ grade GPS de $\approx 250\ \mathrm{m}$ ($0{,}0025^\circ$) $\to$ Alimentador, distinguindo falha isolada de gargalo RF Mesh \\
