@@ -421,7 +421,7 @@ def generate_controlled_ml_panels() -> list[dict[str, Any]]:
     # -------------------------------------------------------------------------
     # PAINEL 1 (Seção 5.1 / Fig 05): Isolation Forest com Microagrupamento e Scores Calculados
     # -------------------------------------------------------------------------
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 5.2))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9.2, 10.0))
 
     # Grade de fundo com escore efetivo avaliado via inversa do PCA 2D -> IForest
     x_min, x_max = Z[:, 0].min() - 0.8, Z[:, 0].max() + 0.8
@@ -538,7 +538,7 @@ def generate_controlled_ml_panels() -> list[dict[str, Any]]:
     # -------------------------------------------------------------------------
     # PAINEL 2 (Seção 5.1 / Fig 06): LOF em Escala Própria (Bruto e Quantil [0,1])
     # -------------------------------------------------------------------------
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.8, 5.3))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9.2, 10.0))
 
     # Painel A: Barras comparativas com LOF Bruto em eixo esquerdo (log) + comparação IF vs LOF normalizado P01-P99
     coh_keys = ["Normal", "Outlier Local", "Microagrupamento (n=18)", "Outlier Global"]
@@ -645,7 +645,7 @@ def generate_controlled_ml_panels() -> list[dict[str, Any]]:
     promoted_idx = sorted(top5_local - top5_global)
     attenuated_idx = sorted(top5_global - top5_local)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.8, 5.3))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9.2, 10.0))
     c_colors = {"Circuito Sim-01": "#2563eb", "Circuito Sim-02": "#059669", "Circuito Sim-03": "#d97706", "Circuito Sim-04": "#7c3aed"}
     for c_name, col in c_colors.items():
         m_c = circuits == c_name
