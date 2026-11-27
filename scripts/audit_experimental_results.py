@@ -790,8 +790,8 @@ def run_p0_audit() -> dict[str, Any]:
     # Fig 2: Revised Correlation Matrix (Spearman Eligible Norm vs Pearson Eligible Norm)
     fig, axes = plt.subplots(1, 2, figsize=(11.6, 4.8))
     for ax, mat, ttl in [
-        (axes[0], sp_norm_elig, "(A) Correlação de Spearman (Elegíveis OOT, n = 62.857)"),
-        (axes[1], pe_norm_elig, "(B) Correlação de Pearson (Elegíveis OOT, n = 62.857)"),
+        (axes[0], sp_norm_elig, "(A) Spearman (Elegíveis, n = 62.857)"),
+        (axes[1], pe_norm_elig, "(B) Pearson (Elegíveis, n = 62.857)"),
     ]:
         im = ax.imshow(mat, cmap="RdBu_r", vmin=-1.0, vmax=1.0, aspect="auto")
         ax.set_xticks(range(len(labels_7)))
@@ -911,7 +911,7 @@ def run_p0_audit() -> dict[str, Any]:
     ax2.set_xlabel("Número de candidatos sinalizados (Protocolo B)")
     ax2.set_title("(B) Sensibilidade volumétrica à escala do escore", fontweight="bold")
     ax2.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: _fmt_br_int(x)))
-    ax2.legend(loc="lower right", fontsize=7.8, frameon=True)
+    ax2.legend(loc="upper right", fontsize=7.8, frameon=True)
     ax2.grid(axis="x", linestyle=":", alpha=0.5)
     plt.tight_layout()
     figs_generated["fig_p0_05"] = _save_fig(fig, P0_FIG_DIR / "fig_p0_05_sensibilidade_pesos")

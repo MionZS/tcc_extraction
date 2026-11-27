@@ -530,7 +530,7 @@ def run_v2_temporal_validation() -> dict[str, Any]:
 
     d25_df = pl.DataFrame(daily_25_rows)
     days_x = np.arange(1, 26)
-    ax2.plot(days_x, d25_df["candidatos_regras_25d"].to_numpy(), "o-", color="#1f4e79", linewidth=1.8, markersize=4, label="Candidatos regras calibradas (25 dias)")
+    ax2.plot(days_x, d25_df["candidatos_regras_25d"].to_numpy(), "o-", color="#1f4e79", linewidth=1.8, markersize=4, label="Triagem por regras simplificadas (25 dias)")
     ax2.axvline(19, color="#c0392b", linestyle="--", linewidth=1.3, label="Corte OOT original (19/11)")
     ax2.axvspan(19, 25, color="#fadbd8", alpha=0.35, label="Extensão temporal (+6 dias reais)")
     ax2.set_xlabel("Dia de novembro de 2026")

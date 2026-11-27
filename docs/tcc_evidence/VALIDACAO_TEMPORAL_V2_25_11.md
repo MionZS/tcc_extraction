@@ -1,6 +1,6 @@
 # Validação Temporal Multi-Corte (`19/11 → 25/11/2026`) e Auditoria `v2` Saneada (Opção A)
 
-- **Execução:** `20261126_190338_p1_v2_temporal_validation` | **Commit:** `05d39cb` | **Tempo:** `147,45 s`
+- **Execução:** `20261127_102118_p1_v2_temporal_validation` | **Commit:** `87e6146` | **Tempo:** `195,00 s`
 - **Referência `v1` (19/11) preservada integralmente:** Sim (zero sobrescrita dos artefatos de 25/11).
 - **Treino congelado (sem vazamento):** `<= 31/10/2026` (`189.341` janelas limpas). Limiar congelado `τ_v1 = 0,5131` vs. `τ_v2 = 0,5131`.
 

@@ -22,9 +22,9 @@
 
 Na auditoria P0 (`20261126_172200_p0_audit_sensitivity`), o indicador `ref70_diff_count` registrou exatamente `1` unidade consumidora de discrepância entre os escores elegíveis retidos a 70% (`6.038`) e a carteira OOT de vistoria (`6.037`, `IS_CANDIDATO_VISTORIA = True`).
 
-### Registro Direto de Auditoria — UC 109855540
-- **Artefato de Auditoria Dedicado:** `docs/tcc_evidence/p0_audit/uc_boundary_audit_109855540.json`
-- **Identificador:** `id__uc_id = '109855540'` (Alimentador Chapada, SE Araucária)
+### Registro Direto de Auditoria — UC 109****40
+- **Artefato de Auditoria Dedicado:** `docs/tcc_evidence/p0_audit/uc_boundary_audit_109****40.json`
+- **Identificador:** `id__uc_id = '109****40'` (Alimentador Chapada, SE Araucária)
 - **Cobertura:** $93,61\%$ (`meta__data_quality = 0.9361`, `x__coverage_reliable_days = 29` de 30)
 - **Escores dos 6 Detectores (Não Arredondados vs. Arredondados a 4 decimais no Parquet):**
   - IF: $0{,}456487$ (Parquet: $0{,}4565$, peso $0{,}22 	o 0{,}100427$)
