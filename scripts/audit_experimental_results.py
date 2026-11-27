@@ -902,6 +902,7 @@ def run_p0_audit() -> dict[str, Any]:
     ax1.set_xlim(0, 1.28)
     ax1.set_xlabel("Jaccard Top-2.000 vs. configuração atual (Protocolo A)")
     ax1.set_title("(A) Estabilidade de carteira sob orçamento fixo (K = 2.000)", fontweight="bold")
+    ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: _fmt_br_float(x, 1)))
     ax1.grid(axis="x", linestyle=":", alpha=0.5)
 
     h = 0.36
